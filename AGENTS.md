@@ -39,6 +39,38 @@ See [ADR-0002](docs/adr/ADR-0002.md) for full Beads integration strategy.
 
 ---
 
+## Git Workflow
+
+### Clean Tree Rule
+
+A clean working tree (`git status` shows no changes) is a **hard precondition** for:
+
+- Starting new work (picking up a bead via `mindspec next` or `mindspec pickup`)
+- Switching modes (Spec → Plan → Implement → Done)
+
+If the tree is dirty: **commit or revert**. Never auto-stash.
+
+### Milestone Commits
+
+Mode transitions produce explicit commits:
+
+- **Spec → Plan**: `spec(<bead-id>): <summary>` — spec artifact + bead update
+- **Plan → Implement**: `plan(<bead-id>): <summary>` — plan artifacts + spawned beads
+- **Implement → Done**: `impl(<bead-id>): <summary>` — code, tests, docs, bead closure
+
+Normal commits during a mode are fine. Use `chore(<bead-id>): ...` for cleanup/tooling.
+
+Always co-commit `.beads/` changes alongside the relevant work.
+
+### Preflight (before any forward-progress work)
+
+1. Confirm correct worktree/branch for the active bead
+2. Confirm working tree is clean — if not, commit or revert first
+3. Confirm active bead exists and is in the expected state
+4. Only then proceed
+
+If the tree is dirty when you begin, switch to **recovery mode**: provide commit/revert guidance rather than forward-progress instructions.
+
 ## Worktree Execution
 
 All implementation work runs in **isolated git worktrees**:

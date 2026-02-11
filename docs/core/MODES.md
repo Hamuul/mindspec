@@ -51,6 +51,8 @@ To leave Spec Mode, the spec must:
 2. Declare impacted domains and ADR touchpoints
 3. Have all open questions resolved
 4. Receive **explicit human approval**
+5. **Working tree must be clean** before transition
+6. **Milestone commit**: Commit the spec artifact + bead update (message: `spec(<bead-id>): ...`)
 
 ---
 
@@ -108,6 +110,8 @@ To leave Plan Mode:
 2. Dependencies are explicit
 3. ADRs cited for each bead's architectural assumptions
 4. **Explicit human approval** of the plan
+5. **Working tree must be clean** before transition
+6. **Milestone commit**: Commit plan artifacts + spawned beads (message: `plan(<bead-id>): ...`)
 
 ---
 
@@ -121,6 +125,7 @@ Execute one implementation bead in an isolated worktree.
 
 - An approved plan with implementation beads
 - A worktree created for the target bead
+- **Working tree must be clean** (`git status` shows no changes)
 - Context Pack loaded (mode-specific, budgeted)
 
 ### Output
@@ -163,7 +168,8 @@ A bead is complete when:
 1. All verification steps pass with captured evidence
 2. Documentation is updated
 3. Bead status is updated in Beads with closure notes
-4. Worktree changes are ready for review
+4. **Milestone commit**: Commit code, tests, docs, and bead closure (message: `impl(<bead-id>): ...`)
+5. Worktree changes are ready for review
 
 ---
 

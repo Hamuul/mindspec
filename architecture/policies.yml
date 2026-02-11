@@ -80,6 +80,18 @@ policies:
     mode: implementation
     reference: "docs/core/MODES.md#implementation-mode"
 
+  # --- Git workflow discipline ---
+
+  - id: clean-tree-before-transition
+    description: "Working tree must be clean (no uncommitted changes) before starting new work, picking up a bead, or switching modes. If dirty: commit or revert. Never auto-stash."
+    severity: error
+    reference: "docs/core/CONVENTIONS.md#clean-tree-rule"
+
+  - id: milestone-commit-at-transition
+    description: "Mode transitions must produce a milestone commit: spec(<bead-id>) for Spec→Plan, plan(<bead-id>) for Plan→Implement, impl(<bead-id>) for Implement→Done. .beads/ changes must be co-committed."
+    severity: error
+    reference: "docs/core/CONVENTIONS.md#milestone-commits"
+
   # --- Worktree discipline ---
 
   - id: worktree-required-for-implementation

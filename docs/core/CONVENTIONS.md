@@ -52,6 +52,57 @@ ADR metadata must include: domain(s), status (proposed/accepted/superseded), sup
 - Keep the active workset intentionally small. Regularly clean up completed beads.
 - Rely on git history + documentation for historical traceability, not Beads as archive.
 
+## Git Workflow Conventions
+
+### Clean Tree Rule
+
+A **clean working tree is a hard precondition** for:
+
+- Starting new work (picking up a bead)
+- Switching modes (Spec → Plan → Implement → Done)
+- Running `mindspec next`, `mindspec pickup`, or any mode transition
+
+If the tree is dirty: **commit or revert**. Do not auto-stash (it hides state and breaks determinism).
+
+### Milestone Commits
+
+Mode transitions are marked with explicit commits:
+
+| Transition | What to commit |
+|:-----------|:---------------|
+| **Spec → Plan** | Spec artifact + bead update recording "spec approved" |
+| **Plan → Implement** | Plan artifacts, spawned child beads, bead updates |
+| **Implement → Done** | Code, tests, docs, bead closure notes |
+
+Normal commits during a mode are expected and encouraged (especially in Implementation Mode — tests first, refactor, docs, etc.). The milestone commit marks the boundary cleanly.
+
+### Commit Message Conventions
+
+Use conventional-commit style scoped to the bead ID:
+
+```
+spec(<bead-id>): <summary>
+plan(<bead-id>): <summary>
+impl(<bead-id>): <summary>
+chore(<bead-id>): <summary>
+```
+
+- `spec` — spec artifacts and related documentation
+- `plan` — plan artifacts, bead creation, dependency mapping
+- `impl` — implementation code, tests, doc-sync
+- `chore` — cleanup, formatting, dependency bumps, tooling
+
+### Co-committing `.beads/`
+
+Always commit `.beads/` changes alongside the relevant work in the same commit, unless operating in a mode where Beads is not tracked in git.
+
+### Preflight (before starting any forward-progress work)
+
+1. Confirm you are on the correct worktree/branch for the active bead
+2. Confirm working tree is clean (`git status` shows no changes). If not: commit with an appropriate message, or revert/discard the changes.
+3. Confirm the active bead exists and is in the expected state
+4. Only then proceed
+
 ## Worktree Conventions
 
 - Worktrees are named with the bead ID: `worktree-<bead-id>`

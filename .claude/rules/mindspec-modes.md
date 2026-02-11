@@ -18,6 +18,38 @@ If conditions 1-3 are not met, you are in **Spec Mode** or **Plan Mode** respect
 
 ---
 
+## Preflight (every mode, every transition)
+
+Before starting any forward-progress work — picking up a bead, switching modes, or beginning implementation:
+
+1. **Confirm worktree/branch**: You are on the correct worktree for the active bead
+2. **Confirm clean tree**: `git status` shows no uncommitted changes. If dirty:
+   - Commit with an appropriate scoped message, OR
+   - Revert/discard the changes
+   - **Do NOT auto-stash** — it hides state and breaks determinism
+3. **Confirm active bead**: The bead exists and is in the expected state
+4. Only then proceed with forward-progress work
+
+If the tree is dirty when you begin, emit **recovery instructions** (commit/revert guidance) rather than forward-progress steps.
+
+---
+
+## Milestone Commits
+
+Mode transitions produce explicit, clean commits:
+
+| Transition | Commit prefix | Contents |
+|:-----------|:-------------|:---------|
+| Spec → Plan | `spec(<bead-id>):` | Spec artifact + bead update |
+| Plan → Implement | `plan(<bead-id>):` | Plan artifacts + spawned child beads |
+| Implement → Done | `impl(<bead-id>):` | Code, tests, docs, bead closure |
+
+Normal commits during a mode use the same prefix convention. Use `chore(<bead-id>):` for cleanup, formatting, or tooling.
+
+**Always co-commit `.beads/` changes** alongside the relevant work in the same commit.
+
+---
+
 ## Spec Mode
 
 **When**: No approved spec exists for the current work.
@@ -38,7 +70,10 @@ If conditions 1-3 are not met, you are in **Spec Mode** or **Plan Mode** respect
 - Creating implementation beads in Beads (that's Plan Mode)
 
 ### Transition
-User must explicitly approve the spec via `/spec-approve` or direct confirmation. The spec's Approval section must be updated to `Status: APPROVED`.
+1. User must explicitly approve the spec via `/spec-approve` or direct confirmation
+2. The spec's Approval section must be updated to `Status: APPROVED`
+3. **Working tree must be clean** before transition
+4. **Milestone commit**: `spec(<bead-id>): <summary>` — spec artifact + bead update
 
 ---
 
@@ -76,7 +111,10 @@ If an accepted ADR blocks progress or is unfit:
 4. Resume planning with updated architecture
 
 ### Transition
-User must explicitly approve the plan. All implementation beads must have verification steps and ADR citations.
+1. User must explicitly approve the plan
+2. All implementation beads must have verification steps and ADR citations
+3. **Working tree must be clean** before transition
+4. **Milestone commit**: `plan(<bead-id>): <summary>` — plan artifacts + spawned beads
 
 ---
 
@@ -116,7 +154,8 @@ A bead is complete when:
 1. All verification steps pass with captured evidence
 2. Documentation is updated
 3. Bead status is updated in Beads with closure notes
-4. Worktree changes are ready for review
+4. **Milestone commit**: `impl(<bead-id>): <summary>` — code, tests, docs, bead closure
+5. Worktree changes are ready for review
 
 ---
 
