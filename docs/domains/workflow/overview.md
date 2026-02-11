@@ -28,8 +28,8 @@ Beads is a **passive, execution-oriented tracking substrate** (ADR-0002). The Be
 | File | Purpose |
 |:-----|:--------|
 | `docs/core/MODES.md` | Mode definitions and transitions |
-| `.agent/rules/mindspec-modes.md` | Agent-facing mode enforcement rules |
-| `.agent/workflows/spec-init.md` | Spec initialization workflow |
+| `.claude/rules/mindspec-modes.md` | Agent-facing mode enforcement rules |
+| `.claude/commands/spec-init.md` | Spec initialization workflow |
 
 ## Current State
 

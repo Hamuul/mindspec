@@ -19,7 +19,7 @@
 - [x] Three-mode system (Spec/Plan/Implement) documented in MODES.md
 - [x] ARCHITECTURE.md rewritten for Beads + worktrees + domains + Claude Code
 - [x] AGENTS.md updated for three-mode system + Beads + ADR governance
-- [x] Agent rules (.agent/rules/mindspec-modes.md) aligned with three modes
+- [x] Agent rules (.claude/rules/mindspec-modes.md) aligned with three modes
 - [x] GLOSSARY.md rebuilt with v1 primitives
 - [x] CONVENTIONS.md updated with domain/worktree/Beads conventions
 - [x] policies.yml expanded for Plan mode, ADR governance, domains, Beads, worktrees
