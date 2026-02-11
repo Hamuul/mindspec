@@ -1,6 +1,7 @@
 # MindSpec Product Backlog
 
 > **Principle**: Prioritize features that enable MindSpec to assist in building MindSpec itself (dogfooding).
+> **Language**: Go (per ADR-0004, accepted). All CLI work targets the Go binary.
 
 ## Priority Tiers
 
@@ -24,48 +25,33 @@
 - [x] CONVENTIONS.md updated with domain/worktree/Beads conventions
 - [x] policies.yml expanded for Plan mode, ADR governance, domains, Beads, worktrees
 - [x] ADR-0001: DDD Enablement + DDD-Informed Context Packs (proposed)
-- [x] ADR-0002: Beads Integration Strategy (proposed)
+- [x] ADR-0002: Beads Integration Strategy (proposed → accepted)
+- [x] ADR-0003: Centralized Agent Instruction Emission (proposed → accepted)
+- [x] ADR-0004: Go as v1 CLI Implementation Language (accepted)
 - [x] INIT.md archived (superseded by mindspec.md)
+
+### 000: Repo + Beads Hygiene ✓
+- [x] Beads initialized in repo (`.beads/` with durable state)
+- [x] Selective `.beads/` gitignore (runtime ignored, durable tracked)
+- [x] Packaging excludes (`MANIFEST.in`)
+- [x] `mindspec doctor` Beads hygiene checks (Python prototype)
 
 ---
 
 ## P0: Immediate Value (Use While Building MindSpec)
 
-### 000: Repo + Beads Hygiene
-**Why P0**: Beads is central to the execution model, but runtime artifacts (sockets, locks) leak into repo and build contexts, causing environment/build issues that block all downstream work.
+### 001: Go CLI Skeleton + Doctor
+**Why P0**: Foundation for everything. Establishes Go binary, workspace detection, and project health validation. Ports Python prototype doctor to Go. Stubs ADR-0003 command surface.
 
 **Scope**:
-- Selective `.beads/` tracking rules: commit durable state (issues graph, config), ignore runtime artifacts (`bd.sock`, locks, tmp)
-- Packaging excludes (`.easignore` / equivalent) so sockets and runtime files never get zipped/copied
-- `mindspec doctor` check: durable Beads state present + no runtime artifacts in repo/build contexts
+- Go module scaffolding (`cmd/mindspec/`, `internal/`, `go.mod`)
+- CLI entry point with subcommand routing (cobra)
+- Workspace root detection (`mindspec.md` or `.git`)
+- `mindspec doctor`: validates `docs/core/`, `docs/domains/`, `docs/specs/`, `architecture/`, `GLOSSARY.md`, `.beads/` (durable state + no tracked runtime artifacts)
+- Stub commands: `mindspec instruct`, `mindspec next`, `mindspec validate` (per ADR-0003)
+- Retire Python `src/mindspec/` prototype
 
-**Immediate Use**: Stop tripping over Beads environment issues while dogfooding.
-
-### 001: CLI Skeleton + Init + Doctor
-**Why P0**: Establishes CLI foundation, bootstraps project structure, and provides immediate project health validation.
-
-**Scope**:
-- CLI entry point
-- `mindspec init` (MVP): creates missing docs folders, templates, context-map placeholders; optionally checks for Beads presence and instructs how to init it
-- `mindspec doctor` command for project structure health checks
-- Validate:
-  - `docs/domains/{core,context-system,workflow}/`
-  - `docs/context-map.md`
-  - `docs/templates/`
-  - `GLOSSARY.md`
-  - `docs/specs/` (even if empty)
-  - ADR locations (per current conventions)
-
-**Immediate Use**: Bootstrap and validate MindSpec's own project structure.
-
-### 001a: Fix Workspace Root Detection
-**Why P0**: Hard blocker for any CLI/doctor work. Current `workspace.py` looks for `INIT.md` which was archived.
-
-**Scope**:
-- Replace `INIT.md` detection with `mindspec.md` (and/or robust root detection)
-- Ensure all CLI commands reliably find the workspace root
-
-**Note**: May be folded into 001 if scope is small enough.
+**Immediate Use**: Working `mindspec` binary for project health checks and command surface.
 
 ### 002: Glossary-Based Context Injection
 **Why P0**: Enables deterministic doc retrieval based on keywords.
@@ -94,13 +80,41 @@
 - Include: spec, matched domain docs, accepted ADRs, policies, commit tuple
 - Respect token budgets
 
-**Immediate Use**: Consistent, domain-aware context for every session, with caching/budget/provenance separation built in from the start.
+**Immediate Use**: Consistent, domain-aware context for every session.
 
 ---
 
 ## P1: Core Workflow Support
 
-### 004: Beads Integration Conventions + Tooling
+### 004: `mindspec instruct` — Mode-Aware Guidance Emission
+**Why P1**: Core of ADR-0003. Replaces static CLAUDE.md/AGENTS.md with dynamic, mode-aware guidance.
+
+**Scope**:
+- Detect current mode (Spec/Plan/Implement) from local state (spec status, plan status, worktree)
+- Detect active work item (spec ID, bead ID) from Beads + worktree conventions
+- Emit authoritative operating guidance: current mode, active work, required outputs, hard gates
+- Read-only, no side effects
+- Reduce CLAUDE.md/AGENTS.md to minimal bootstrap pointing to `mindspec instruct`
+
+### 005: `mindspec next` — Work Selection + Claiming
+**Why P1**: Integrates with Beads for ready-work discovery and worktree association.
+
+**Scope**:
+- Query Beads for ready work (`bd ready`)
+- Claim/lock a work item
+- Associate with worktree (create if needed)
+- Emit guidance or instruct to run `mindspec instruct`
+
+### 006: `mindspec validate` — Workflow Checks
+**Why P1**: Consolidates doc-sync, ADR divergence, and structural validation.
+
+**Scope**:
+- `mindspec validate docs`: compare changed files against doc requirements, flag missing updates
+- `mindspec validate spec <id>`: check acceptance criteria quality, section completeness
+- `mindspec validate plan <id>`: verify beads have verification steps, ADR citations, acyclic deps
+- ADR divergence gate checks
+
+### 007: Beads Integration Conventions + Tooling
 **Why P1**: Beads is central to the execution model; conventions must be codified.
 
 **Scope**:
@@ -110,7 +124,7 @@
 - Bead-to-worktree mapping
 - Reference hygiene rules established in 000
 
-### 005: Worktree Lifecycle Management
+### 008: Worktree Lifecycle Management
 **Why P1**: Implementation Mode requires worktree isolation.
 
 **Scope**:
@@ -119,18 +133,17 @@
 - Clean state sync on bead closure
 - List active worktrees: `mindspec worktree list`
 
-### 006: Domain Scaffold + Context Map
+### 009: Domain Scaffold + Context Map
 **Why P1**: DDD primitives need tooling support.
 
 **Scope**:
 - `mindspec domain add <name>`: scaffold `/docs/domains/<domain>/` with template files
 - `mindspec domain list`: show registered domains
-- Context Map template at `/docs/context-map.md`
 - Domain operations produce ADR drafts
 
-**Partial**: Initial domain structure (`docs/domains/{core,context-system,workflow}/`) and `docs/context-map.md` created manually. CLI tooling (`mindspec domain add/list`) still needed.
+**Partial**: Initial domain structure and `docs/context-map.md` created manually.
 
-### 007: ADR Lifecycle Tooling
+### 010: ADR Lifecycle Tooling
 **Why P1**: ADR governance needs tooling support.
 
 **Scope**:
@@ -139,7 +152,7 @@
 - Superseding workflow: create new ADR linking to superseded one
 - Validate ADR citations in plans
 
-### 008: Proof Runner (MVP)
+### 011: Proof Runner (MVP)
 **Why P1**: Foundation for "proof-of-done" invariant.
 
 **Scope**:
@@ -148,34 +161,9 @@
 - Report pass/fail with artifacts
 - CLI: `mindspec proof run <spec-id>`
 
-### 009: Doc Sync Validation
-**Why P1**: Enforce "done includes doc-sync" rule.
-
-**Scope**:
-- CLI: `mindspec validate docs`
-- Compare changed files against doc requirements
-- Flag missing doc updates
-- **Warn by default** until `mindspec init` has been run (avoids noisy failures during bootstrap)
-
 ---
 
 ## P2: Project Health + Memory
-
-### 010: Spec Validation
-**Why P2**: Enables `/spec-approve` to verify acceptance criteria quality.
-
-**Scope**:
-- CLI: `mindspec validate spec <id>`
-- Check: all sections filled, criteria count, measurability, impacted domains declared
-
-### 011: Plan Validation
-**Why P2**: Ensures plan quality before Implementation Mode.
-
-**Scope**:
-- Verify implementation beads have verification steps
-- Verify ADR citations
-- Verify dependency graph is acyclic
-- Verify scope coverage against spec requirements
 
 ### 012: Memory Service (Basic)
 **Why P2**: Persist decisions, gotchas, debugging outcomes across sessions.
@@ -186,39 +174,56 @@
 - Tag by spec-id, domain, keywords
 - Memory entries reference canonical beads or specs (per ADR-0002)
 
+### 013: `mindspec init` — Project Bootstrap
+**Why P2**: Scaffolds a new MindSpec project from scratch.
+
+**Scope**:
+- Create missing docs folders, templates, context-map placeholders
+- Check for Beads presence and instruct how to init
+- Generate starter GLOSSARY.md, AGENTS.md, CLAUDE.md
+
+**Note**: Deferred from P0 — manual setup is fine while dogfooding on MindSpec itself.
+
 ---
 
 ## P3: Advanced Features
 
-### 013: Architecture Divergence Detection
+### 014: Architecture Divergence Detection
 - Compare implementation against documented architecture
 - Auto-trigger ADR divergence protocol when violations detected
 
-### 014: Parallel Task Dispatch
+### 015: Parallel Task Dispatch
 - Identify ready beads (no unresolved dependencies)
 - Generate per-bead context packets for parallel agent execution
 
-### 015: Observability / Telemetry
+### 016: Observability / Telemetry
 - Glossary hit/miss rates
 - Token budgets and cache rates
 - OTel-friendly event shaping for future Agent Mind Visualization
+
+### 017: Cross-Platform Release Automation
+- CI/CD pipeline for Go binary builds
+- Multi-arch binaries (darwin/linux, amd64/arm64)
+- GitHub Releases or homebrew tap
 
 ---
 
 ## Implementation Order
 
 ```
-P0: 000 → 001 (+001a) → 002 → 003a → 003b (hygiene → CLI+init → glossary → pack manifest → renderer)
-P1: 004 → 005 → 006 → 007 → 008 → 009 (Beads → worktrees → domains → ADRs → proofs → doc-sync)
-P2: 010 → 011 → 012 (spec validation → plan validation → memory)
+P0: 000 ✓ → 001 (Go skeleton + doctor)
+    → 002 (glossary) → 003a (pack manifest) → 003b (renderer)
+
+P1: 004 (instruct) → 005 (next) → 006 (validate)
+    → 007 (Beads tooling) → 008 (worktrees) → 009 (domains) → 010 (ADRs) → 011 (proofs)
+
+P2: 012 (memory) → 013 (init)
 ```
 
 **Rationale**:
-- Beads hygiene + root detection must be stable first — without them, you trip over environment/build issues while dogfooding
-- `mindspec init` bootstraps the structure that `doctor` validates
-- Glossary + context packs are immediately useful once the CLI foundation is solid
-- Context pack split (manifest vs renderer) enables caching, budgets, and provenance from the start
-- Beads and worktree conventions codify the execution model from ADR-0002
-- Domain scaffold enables the DDD model from ADR-0001
-- ADR tooling supports the governance model
-- Proof runner and doc-sync enforce core invariants
+- Go CLI skeleton is the new foundation — everything builds on it
+- Glossary + context packs are immediately useful once doctor works
+- ADR-0003 commands (`instruct`, `next`, `validate`) move to P1 since they require mode detection and Beads integration that benefits from having the basic CLI solid first
+- `mindspec init` demoted to P2 — manual project setup is fine while dogfooding
+- 001a (workspace root fix) folded into 001 — Go rewrite handles it naturally
+- Former 009 (doc-sync) and 010/011 (spec/plan validation) consolidated into 006 (`validate`)

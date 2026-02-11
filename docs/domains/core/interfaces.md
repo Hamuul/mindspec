@@ -4,26 +4,45 @@
 
 ### Workspace
 
-```python
-class Workspace:
-    find_project_root() -> Path
-    get_docs_dir() -> Path
-    get_glossary_path() -> Path
+```go
+package workspace
+
+// FindRoot walks up from startDir looking for mindspec.md or .git.
+func FindRoot(startDir string) (string, error)
+
+// DocsDir returns the docs directory path under root.
+func DocsDir(root string) string
+
+// GlossaryPath returns the GLOSSARY.md path under root.
+func GlossaryPath(root string) string
 ```
 
 Used by context-system (for glossary location) and workflow (for spec/bead resolution).
 
 ### Health Check Report
 
-```python
-DocParser.check_health() -> dict
-# Returns: docs_dir_exists, glossary_exists, term_count, broken_links, warnings, beads
-# beads: { dir_exists, durable_state, durable_files_found, tracked_runtime_artifacts }
+```go
+package doctor
+
+type Status int // OK, Missing, Error, Warn
+
+type Check struct {
+    Name    string
+    Status  Status
+    Message string
+}
+
+type Report struct {
+    Checks []Check
+}
+
+func (r *Report) HasFailures() bool  // true if any Error or Missing
+func Run(root string) *Report        // execute all checks
 ```
 
 ### CLI Command Registration
 
-Other domains register subcommands via the CLI module. Core owns the top-level `mindspec` command group.
+Other domains register subcommands via cobra in `cmd/mindspec/`. Core owns the top-level `mindspec` command group.
 
 ## Consumed Interfaces
 

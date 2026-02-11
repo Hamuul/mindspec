@@ -4,7 +4,7 @@
 
 The **core** domain owns the foundational infrastructure of MindSpec:
 
-- **CLI entry point** (`python -m mindspec`) and command routing
+- **CLI entry point** (`mindspec`) and command routing via cobra
 - **Project health validation** (`mindspec doctor`) — structure checks, broken-link detection, Beads hygiene
 - **Policy framework** — loading and evaluating machine-readable policies from `architecture/policies.yml`
 - **Workspace resolution** — finding the project root, locating standard directories
@@ -21,15 +21,17 @@ Core provides the CLI shell and health infrastructure that other domains plug in
 
 | File | Purpose |
 |:-----|:--------|
-| `src/mindspec/__main__.py` | CLI entry point |
-| `src/mindspec/cli.py` | Command definitions |
-| `src/mindspec/doctor.py` | Health check logic |
-| `src/mindspec/workspace.py` | Project root detection |
+| `cmd/mindspec/main.go` | CLI entry point |
+| `cmd/mindspec/root.go` | Root command + subcommand registration |
+| `cmd/mindspec/doctor.go` | Doctor command wiring |
+| `cmd/mindspec/stubs.go` | Stub commands (instruct, next, validate) |
+| `internal/workspace/workspace.go` | Project root detection |
+| `internal/doctor/` | Health check logic (docs, beads) |
 | `architecture/policies.yml` | Machine-checkable policies |
 
 ## Current State
 
-Skeleton implementation exists (Spec 001). CLI entry point and basic doctor command are in progress.
+Go CLI skeleton implemented (Spec 001). Doctor command validates docs structure and Beads hygiene.
 
 ### Doctor Checks (Spec 000)
 

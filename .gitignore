@@ -25,6 +25,10 @@ ENV/
 *.swp
 *.swo
 
+# Go
+bin/
+*.exe
+
 # OS
 .DS_Store
 Thumbs.db

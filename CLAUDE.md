@@ -39,7 +39,9 @@ All behavioral rules for agents (including Claude Code) are defined in [AGENTS.m
 ## Project Layout
 
 ```
-src/mindspec/          Python package (src layout)
+cmd/mindspec/          CLI entry point (Go)
+internal/workspace/    Project root detection
+internal/doctor/       Health check logic
 docs/core/             Permanent architectural context
 docs/domains/          Domain-scoped documentation (DDD)
 docs/specs/            Versioned feature specifications
@@ -51,6 +53,8 @@ architecture/          Machine-readable policies
 ## Build & Run
 
 ```bash
-python -m mindspec doctor    # Project health check
-python -m mindspec --help    # CLI usage
+make build                   # Build binary to ./bin/mindspec
+./bin/mindspec --help        # CLI usage
+./bin/mindspec doctor        # Project health check
+make test                    # Run all tests
 ```
