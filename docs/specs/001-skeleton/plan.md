@@ -5,7 +5,6 @@ version: "1.0"
 last_updated: 2026-02-11
 approved_at: 2026-02-11T00:00:00Z
 approved_by: user
-approved_sha: 703db85
 bead_ids:
   - mindspec-u6o   # 001-A: Go scaffolding + CLI entry point
   - mindspec-8zk   # 001-B: Workspace detection

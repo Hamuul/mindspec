@@ -6,7 +6,6 @@ last_updated: YYYY-MM-DD
 # Fields below are populated on approval:
 # approved_at: YYYY-MM-DDTHH:MM:SSZ
 # approved_by: <human>
-# approved_sha: <git commit SHA>
 # bead_ids:
 #   - beads-xxx      # spec bead
 #   - beads-xxx.1    # first implementation bead

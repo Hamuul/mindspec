@@ -5,7 +5,6 @@ version: "1.0"
 last_updated: 2026-02-11
 approved_at: 2026-02-11
 approved_by: user
-approved_sha: pending
 bead_ids:
   - mindspec-97r   # 002-A: Glossary parsing package
   - mindspec-epu   # 002-B: Term matching

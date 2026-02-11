@@ -88,7 +88,6 @@ The plan is iteratively edited during Plan Mode — always readable on disk. On 
 status: Approved
 approved_at: YYYY-MM-DDTHH:MM:SSZ
 approved_by: <human>
-approved_sha: <git commit SHA>
 bead_ids: [beads-xxx, beads-yyy]
 adr_citations: [ADR-NNNN]
 ```
