@@ -1,4 +1,5 @@
 import re
+import subprocess
 from pathlib import Path
 
 class DocParser:
@@ -66,5 +67,52 @@ class DocParser:
         # In strict mode, warnings become errors
         if strict and report["warnings"]:
             report["strict_failures"] = list(report["warnings"])
+
+        # Beads hygiene checks
+        beads_report = self.check_beads_hygiene(project_root)
+        report["beads"] = beads_report
+
+        return report
+
+    def check_beads_hygiene(self, project_root):
+        """Check Beads directory health: existence, durable state, runtime leaks."""
+        beads_dir = project_root / ".beads"
+        report = {
+            "dir_exists": beads_dir.exists(),
+            "durable_state": False,
+            "tracked_runtime_artifacts": [],
+        }
+
+        if not beads_dir.exists():
+            return report
+
+        # Check for durable state files
+        durable_files = ["issues.jsonl", "config.yaml", "metadata.json"]
+        found_durable = [f for f in durable_files if (beads_dir / f).exists()]
+        report["durable_state"] = len(found_durable) > 0
+        report["durable_files_found"] = found_durable
+
+        # Check for runtime artifacts tracked by git
+        runtime_patterns = {
+            "bd.sock", "daemon.lock", "daemon.log", "daemon.pid",
+            "sync-state.json", "last-touched", ".local_version",
+            "db.sqlite", "bd.db", "redirect", ".sync.lock",
+        }
+        runtime_extensions = {".db", ".db-wal", ".db-shm", ".db-journal"}
+
+        try:
+            result = subprocess.run(
+                ["git", "ls-files", ".beads/"],
+                capture_output=True, text=True, cwd=project_root
+            )
+            tracked_files = result.stdout.strip().splitlines() if result.stdout.strip() else []
+            for tracked in tracked_files:
+                filename = Path(tracked).name
+                if filename in runtime_patterns:
+                    report["tracked_runtime_artifacts"].append(tracked)
+                elif any(filename.endswith(ext) for ext in runtime_extensions):
+                    report["tracked_runtime_artifacts"].append(tracked)
+        except FileNotFoundError:
+            pass  # git not available
 
         return report

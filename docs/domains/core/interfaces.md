@@ -17,7 +17,8 @@ Used by context-system (for glossary location) and workflow (for spec/bead resol
 
 ```python
 DocParser.check_health() -> dict
-# Returns: docs_dir_exists, glossary_exists, term_count, broken_links, warnings
+# Returns: docs_dir_exists, glossary_exists, term_count, broken_links, warnings, beads
+# beads: { dir_exists, durable_state, durable_files_found, tracked_runtime_artifacts }
 ```
 
 ### CLI Command Registration

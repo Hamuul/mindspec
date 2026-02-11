@@ -5,7 +5,7 @@
 The **core** domain owns the foundational infrastructure of MindSpec:
 
 - **CLI entry point** (`python -m mindspec`) and command routing
-- **Project health validation** (`mindspec doctor`) — structure checks, broken-link detection
+- **Project health validation** (`mindspec doctor`) — structure checks, broken-link detection, Beads hygiene
 - **Policy framework** — loading and evaluating machine-readable policies from `architecture/policies.yml`
 - **Workspace resolution** — finding the project root, locating standard directories
 
@@ -30,3 +30,11 @@ Core provides the CLI shell and health infrastructure that other domains plug in
 ## Current State
 
 Skeleton implementation exists (Spec 001). CLI entry point and basic doctor command are in progress.
+
+### Doctor Checks (Spec 000)
+
+The `doctor` command validates:
+- **Docs structure**: `docs/` directory, `GLOSSARY.md`, domain directories
+- **Glossary links**: broken link detection for glossary targets
+- **Beads hygiene**: `.beads/` exists, durable state present (`issues.jsonl`, `config.yaml`, `metadata.json`), no runtime artifacts (`bd.sock`, `*.db`, locks) tracked by git
+  - Exits non-zero if runtime artifacts are git-tracked

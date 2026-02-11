@@ -1,7 +1,8 @@
 # Mindspec local state (not version-controlled)
 .mindspec/
 
-# Beads runtime artifacts (sockets must not end up in build contexts)
+# Beads runtime artifacts are handled by .beads/.gitignore
+# This rule catches any stray runtime files outside .beads/
 **/bd.sock
 
 # Python
