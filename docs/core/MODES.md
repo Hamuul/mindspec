@@ -29,13 +29,13 @@ A **Spec Bead** (parent bead in Beads) containing:
 
 ### Permitted Artifacts
 
-| Artifact | Location | Purpose |
-|:---------|:---------|:--------|
-| Spec files | `docs/specs/<id>/spec.md` | Formal specification |
-| Domain docs | `docs/domains/<domain>/` | Domain documentation |
-| Glossary entries | `GLOSSARY.md` | New term definitions |
-| Architecture docs | `docs/core/` | Context/rationale |
-| ADR drafts | `docs/adr/` or `docs/domains/<domain>/adr/` | Proposed decisions |
+| Artifact | Location | Template | Purpose |
+|:---------|:---------|:---------|:--------|
+| Spec files | `docs/specs/<id>/spec.md` | [`docs/templates/spec.md`](../templates/spec.md) | Formal specification |
+| Domain docs | `docs/domains/<domain>/` | [`docs/templates/domain/`](../templates/domain/) | Domain documentation |
+| Glossary entries | `GLOSSARY.md` | — | New term definitions |
+| Architecture docs | `docs/core/` | — | Context/rationale |
+| ADR drafts | `docs/adr/` or `docs/domains/<domain>/adr/` | [`docs/templates/adr.md`](../templates/adr.md) | Proposed decisions |
 
 ### Forbidden Actions
 

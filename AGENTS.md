@@ -8,6 +8,7 @@ All work follows a three-phase approach:
 
 ### Spec Mode (Default)
 - **Permitted**: Markdown files only (specs, domain docs, glossary, ADR drafts)
+- **Templates**: Use [`docs/templates/spec.md`](docs/templates/spec.md) for new specs, [`docs/templates/adr.md`](docs/templates/adr.md) for ADR drafts, [`docs/templates/domain/`](docs/templates/domain/) for new domain docs
 - **Focus**: User value, acceptance criteria, impacted domains, ADR touchpoints, open questions
 - **Exit**: Explicit user approval via `/spec-approve`
 

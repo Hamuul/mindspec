@@ -55,13 +55,13 @@ Normal commits during a mode use the same prefix convention. Use `chore(<bead-id
 **When**: No approved spec exists for the current work.
 
 ### Permitted Actions
-- Create/update `docs/specs/<id>/spec.md`
+- Create/update `docs/specs/<id>/spec.md` (use template: `docs/templates/spec.md`)
 - Define acceptance criteria
 - Declare impacted domains and ADR touchpoints
 - Document open questions
-- Update documentation in `docs/core/`, `docs/domains/`, or `docs/features/`
+- Update documentation in `docs/core/`, `docs/domains/`, or `docs/features/` (use templates in `docs/templates/domain/` for new domain docs)
 - Modify `GLOSSARY.md`
-- Draft ADR proposals in `docs/adr/`
+- Draft ADR proposals in `docs/adr/` (use template: `docs/templates/adr.md`)
 - Request human review when spec is ready
 
 ### Forbidden Actions
