@@ -12,6 +12,7 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(doctorCmd)
+	rootCmd.AddCommand(glossaryCmd)
 	rootCmd.AddCommand(instructCmd)
 	rootCmd.AddCommand(nextCmd)
 	rootCmd.AddCommand(validateCmd)

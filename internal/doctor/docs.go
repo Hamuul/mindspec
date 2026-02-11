@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
+
+	"github.com/mindspec/mindspec/internal/glossary"
 )
 
 // requiredDirs are directories that must exist under docs/ or project root.
@@ -22,12 +23,6 @@ var requiredDirs = []struct {
 // expectedDomains and their expected files.
 var expectedDomains = []string{"core", "context-system", "workflow"}
 var domainFiles = []string{"overview.md", "architecture.md", "interfaces.md", "runbook.md"}
-
-// termPattern matches glossary table rows: | **Term** | [Link](Target) |
-var termPattern = regexp.MustCompile(`\|\s*\*\*([^*]+)\*\*\s*\|`)
-
-// linkPattern extracts the target from a glossary link: [text](target)
-var linkPattern = regexp.MustCompile(`\[[^\]]+\]\(([^)]+)\)`)
 
 func checkDocs(r *Report, root string) {
 	// Check required directories
@@ -64,8 +59,7 @@ func checkDocs(r *Report, root string) {
 }
 
 func checkGlossary(r *Report, root string) {
-	glossaryPath := filepath.Join(root, "GLOSSARY.md")
-	data, err := os.ReadFile(glossaryPath)
+	entries, err := glossary.Parse(root)
 	if err != nil {
 		r.Checks = append(r.Checks, Check{
 			Name:    "GLOSSARY.md",
@@ -75,42 +69,21 @@ func checkGlossary(r *Report, root string) {
 		return
 	}
 
-	content := string(data)
-
-	// Count terms (lines matching | **Term** |)
-	terms := termPattern.FindAllString(content, -1)
 	r.Checks = append(r.Checks, Check{
 		Name:    "GLOSSARY.md",
 		Status:  OK,
-		Message: fmt.Sprintf("(%d terms)", len(terms)),
+		Message: fmt.Sprintf("(%d terms)", len(entries)),
 	})
 
-	// Check for broken links
-	lines := strings.Split(content, "\n")
+	// Check for broken links using parsed entries
 	var broken []string
-	for _, line := range lines {
-		if !termPattern.MatchString(line) {
+	for _, e := range entries {
+		if e.FilePath == "" {
 			continue
 		}
-		linkMatch := linkPattern.FindStringSubmatch(line)
-		if linkMatch == nil {
-			continue
-		}
-		target := linkMatch[1]
-		// Strip anchor for file existence check
-		pathPart := strings.SplitN(target, "#", 2)[0]
-		if pathPart == "" {
-			continue
-		}
-		fullPath := filepath.Join(root, pathPart)
+		fullPath := filepath.Join(root, e.FilePath)
 		if !fileExists(fullPath) {
-			// Extract term name
-			termMatch := termPattern.FindStringSubmatch(line)
-			term := ""
-			if termMatch != nil {
-				term = strings.TrimSpace(termMatch[1])
-			}
-			broken = append(broken, fmt.Sprintf("%s -> %s", term, target))
+			broken = append(broken, fmt.Sprintf("%s -> %s", e.Term, e.Target))
 		}
 	}
 

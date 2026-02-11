@@ -27,9 +27,9 @@ MindSpec uses a glossary (`GLOSSARY.md`) to map keywords/concepts to specific do
 ## Scope
 
 ### In Scope
-- `src/mindspec/glossary.py` (parsing and matching logic)
-- `src/mindspec/docs.py` (section extraction from markdown)
-- CLI integration for glossary commands
+- `internal/glossary/` (parsing and matching logic)
+- `internal/docs/` (section extraction from markdown)
+- CLI integration via cobra (`cmd/mindspec/`) for glossary commands
 
 ### Out of Scope
 - Full context pack generation (see Spec 003)
@@ -52,9 +52,9 @@ MindSpec uses a glossary (`GLOSSARY.md`) to map keywords/concepts to specific do
 
 ## Validation Proofs
 
-- `python -m mindspec glossary list`: Should list all terms from GLOSSARY.md
-- `python -m mindspec glossary match "spec mode approval"`: Should match "Spec Mode" and related terms
-- `python -m mindspec glossary show "Context Pack"`: Should display the linked doc section
+- `mindspec glossary list`: Should list all terms from GLOSSARY.md
+- `mindspec glossary match "spec mode approval"`: Should match "Spec Mode" and related terms
+- `mindspec glossary show "Context Pack"`: Should display the linked doc section
 
 ## Open Questions
 
@@ -62,7 +62,7 @@ MindSpec uses a glossary (`GLOSSARY.md`) to map keywords/concepts to specific do
 
 ## Approval
 
-- **Status**: DRAFT
-- **Approved By**: —
-- **Approval Date**: —
-- **Notes**: Extracted from original 001-skeleton scope.
+- **Status**: APPROVED
+- **Approved By**: user
+- **Approval Date**: 2026-02-11
+- **Notes**: Approved via /spec-approve workflow. Updated scope to Go paths per Spec 001.

@@ -4,35 +4,39 @@
 
 ### Glossary Parsing
 
-```python
-DocParser.parse_glossary() -> dict[str, str]
-# Returns: {term: target_path_with_anchor}
+```go
+// internal/glossary/glossary.go
+glossary.Parse(root string) ([]glossary.Entry, error)
+// Returns all glossary entries with Term, Label, Target, FilePath, Anchor
 ```
 
-### Glossary Matching (Planned — Spec 002)
+### Glossary Matching
 
-```python
-GlossaryMatcher.match(text: str) -> list[GlossaryMatch]
-# Returns matched terms with their targets
+```go
+// internal/glossary/match.go
+glossary.Match(entries []glossary.Entry, text string) []glossary.Entry
+// Returns matched terms, longest-match-first, case-insensitive
+```
+
+### Section Extraction
+
+```go
+// internal/glossary/section.go
+glossary.ExtractSection(root, filePath, anchor string) (string, error)
+// Extracts a specific section from a markdown file by anchor
 ```
 
 ### Context Pack Generation (Planned — Spec 003)
 
-```python
-ContextPackBuilder.build(spec_id: str, mode: str) -> ContextPack
-# Assembles a context pack for the given spec and mode
-```
-
-### Section Extraction (Planned)
-
-```python
-DocParser.extract_section(file_path: Path, anchor: str) -> str
-# Extracts a specific section from a markdown file
+```go
+// Planned: internal/context/
+contextpack.Build(specID string, mode string) (*ContextPack, error)
+// Assembles a context pack for the given spec and mode
 ```
 
 ## Consumed Interfaces
 
-- **core**: `Workspace.find_project_root()`, `Workspace.get_glossary_path()`, `Workspace.get_docs_dir()`
+- **core**: `workspace.FindRoot()`, `workspace.GlossaryPath()`, `workspace.DocsDir()`
 - **workflow**: Spec bead metadata (impacted domains, ADR citations) for context pack routing
 
 ## Events

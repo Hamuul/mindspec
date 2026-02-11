@@ -5,20 +5,27 @@
 ### List Glossary Terms
 
 ```bash
-python -m mindspec glossary list
+mindspec glossary list
 ```
 
 ### Match Terms in Text
 
 ```bash
-python -m mindspec glossary match "spec mode approval"
+mindspec glossary match "spec mode approval"
+```
+
+### Show Documentation for a Term
+
+```bash
+mindspec glossary show "Context Pack"
 ```
 
 ### Generate Context Pack
 
 ```bash
-python -m mindspec context pack <spec-id>
-python -m mindspec context pack 001 --mode plan
+# Planned (Spec 003)
+mindspec context pack <spec-id>
+mindspec context pack 001 --mode plan
 ```
 
 ### Add a Glossary Entry
@@ -33,7 +40,7 @@ Use relative paths from the project root. Ensure the target anchor exists.
 ### Validate Glossary Links
 
 ```bash
-python -m mindspec doctor
+mindspec doctor
 ```
 
 The doctor command checks for broken glossary links as part of health validation.
