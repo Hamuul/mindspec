@@ -6,7 +6,11 @@ last_updated: 2026-02-11
 approved_at: 2026-02-11
 approved_by: user
 approved_sha: a6cf9810bdc0142862a2c95ce444b7be0ca5016d
-bead_ids: []
+bead_ids:
+  - mindspec-kj8      # spec bead
+  - mindspec-kj8.1    # 000-A: init + gitignore
+  - mindspec-kj8.2    # 000-B: packaging excludes
+  - mindspec-kj8.3    # 000-C: doctor checks
 adr_citations:
   - id: ADR-0002
     sections: ["A (responsibility boundaries)", "C (active workset discipline)"]
