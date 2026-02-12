@@ -83,11 +83,10 @@ If user approves:
    > You are now in **Implementation Mode**.
    >
    > **Next steps:**
-   > 1. Pick the first bead with no unresolved dependencies
-   > 2. Create a worktree for the bead
-   > 3. Load the context pack
-   > 4. Implement within the bead's scope
-   > 5. Verify, update docs, and close the bead
+   > 1. Run `mindspec next` to claim the first ready bead and get guidance
+   > 2. Implement within the bead's scope
+   > 3. Verify, update docs, and close the bead
+   > 4. Run `mindspec next` again for the next bead
 
 ### 7. On Rejection
 

@@ -39,9 +39,14 @@ All behavioral rules for agents (including Claude Code) are defined in [AGENTS.m
 ## Project Layout
 
 ```
-cmd/mindspec/          CLI entry point (Go)
+cmd/mindspec/          CLI entry point (Go, cobra)
 internal/workspace/    Project root detection
 internal/doctor/       Health check logic
+internal/glossary/     Glossary parsing and matching
+internal/contextpack/  Context pack generation
+internal/state/        Workflow state management (.mindspec/state.json)
+internal/instruct/     Mode-aware guidance emission (embedded templates)
+internal/next/         Work selection, claiming, mode resolution
 docs/core/             Permanent architectural context
 docs/domains/          Domain-scoped documentation (DDD)
 docs/specs/            Versioned feature specifications
@@ -56,5 +61,8 @@ architecture/          Machine-readable policies
 make build                   # Build binary to ./bin/mindspec
 ./bin/mindspec --help        # CLI usage
 ./bin/mindspec doctor        # Project health check
+./bin/mindspec next          # Claim next ready bead and get guidance
+./bin/mindspec state show    # Check current mode/spec/bead
+./bin/mindspec instruct      # Emit mode-aware guidance
 make test                    # Run all tests
 ```
