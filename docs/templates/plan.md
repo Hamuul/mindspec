@@ -12,6 +12,24 @@ last_updated: YYYY-MM-DD
 # adr_citations:
 #   - id: ADR-NNNN
 #     sections: ["<relevant sections>"]
+work_chunks:
+  - id: 1
+    title: "<Short title for first chunk>"
+    scope: "<Files or components this chunk delivers>"
+    verify:
+      - "<Specific, testable verification step>"
+    depends_on: []
+  - id: 2
+    title: "<Short title for second chunk>"
+    scope: "<Files or components>"
+    verify:
+      - "<Verification step>"
+    depends_on: [1]
+# Machine-generated metadata (written by `mindspec bead plan`):
+# generated:
+#   bead_ids:
+#     "1": beads-xxx
+#     "2": beads-yyy
 ---
 
 # Plan: Spec <NNN> — <Title>

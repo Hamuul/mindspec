@@ -102,6 +102,53 @@ ADR metadata must include: domain(s), status (proposed/accepted/superseded), sup
 - Keep the active workset intentionally small. Regularly clean up completed beads.
 - Rely on git history + documentation for historical traceability, not Beads as archive.
 
+### Bead Title Conventions
+
+Bead titles use bracketed prefixes for idempotent lookup and convention enforcement:
+
+- **Spec beads**: `[SPEC <spec-id>] <title>` — e.g., `[SPEC 006-validate] Workflow Validation`
+- **Impl beads**: `[IMPL <spec-id>.<chunk-id>] <chunk-title>` — e.g., `[IMPL 007-beads-tooling.1] bdcli wrapper`
+
+`mindspec bead spec` and `mindspec bead plan` create beads using these conventions. The bracket prefix enables reliable search-based idempotency.
+
+### Structured Descriptions
+
+- **Spec bead descriptions** (≤400 chars): `Summary: <goal>\nSpec: docs/specs/<id>/spec.md\nDomains: <list>`
+- **Impl bead descriptions** (≤800 chars): `Scope: <scope>\nVerify:\n- <step>\nPlan: docs/specs/<id>/plan.md`
+
+### Plan `work_chunks` Format
+
+Plans must include a `work_chunks` block in YAML frontmatter for machine-readable decomposition:
+
+```yaml
+work_chunks:
+  - id: 1
+    title: "Short chunk title"
+    scope: "internal/pkg/file.go"
+    verify:
+      - "Specific verification step"
+    depends_on: []
+  - id: 2
+    title: "Second chunk"
+    scope: "internal/pkg/other.go"
+    verify:
+      - "Verification step"
+    depends_on: [1]
+```
+
+Each chunk has a stable `id` (integer), `title`, `scope`, `verify` (list), and `depends_on` (list of chunk IDs).
+
+### `generated.bead_ids` Convention
+
+When `mindspec bead plan` creates implementation beads, it writes bead IDs into the plan frontmatter under `generated.bead_ids`. This machine-written metadata does not invalidate plan approval:
+
+```yaml
+generated:
+  bead_ids:
+    "1": beads-abc
+    "2": beads-def
+```
+
 ## Git Workflow Conventions
 
 ### Clean Tree Rule
@@ -199,5 +246,6 @@ The primary interface is the Go CLI binary. Key commands:
 - `mindspec context pack <spec-id>`: Generate context for an agent session
 - `mindspec state set|show`: Manage workflow state (ADR-0005)
 - `mindspec instruct`: Emit mode-appropriate operating guidance (ADR-0003)
-- `mindspec validate spec|plan|docs`: Check artifact quality (planned — Spec 006)
-- `mindspec next`: Select and claim next ready work (planned — Spec 005)
+- `mindspec bead spec|plan|worktree|hygiene`: Beads lifecycle tooling (Spec 007)
+- `mindspec validate spec|plan|docs`: Check artifact quality (Spec 006)
+- `mindspec next`: Select and claim next ready work (Spec 005)

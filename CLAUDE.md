@@ -46,6 +46,7 @@ internal/glossary/     Glossary parsing and matching
 internal/contextpack/  Context pack generation
 internal/state/        Workflow state management (.mindspec/state.json)
 internal/instruct/     Mode-aware guidance emission (embedded templates)
+internal/bead/         Beads integration (spec/plan bead creation, worktree, hygiene)
 internal/next/         Work selection, claiming, mode resolution
 docs/core/             Permanent architectural context
 docs/domains/          Domain-scoped documentation (DDD)
@@ -64,6 +65,10 @@ make build                   # Build binary to ./bin/mindspec
 ./bin/mindspec next          # Claim next ready bead and get guidance
 ./bin/mindspec state show    # Check current mode/spec/bead
 ./bin/mindspec instruct      # Emit mode-aware guidance
+./bin/mindspec bead spec <id>        # Create spec bead from approved spec
+./bin/mindspec bead plan <id>       # Create impl beads from approved plan
+./bin/mindspec bead worktree <id>   # Show/create worktree for a bead
+./bin/mindspec bead hygiene         # Audit workset hygiene
 ./bin/mindspec validate spec <id>   # Validate spec quality
 ./bin/mindspec validate plan <id>   # Validate plan quality
 ./bin/mindspec validate docs        # Check doc-sync compliance
