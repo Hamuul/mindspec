@@ -16,33 +16,23 @@ User invokes `/plan-approve` or expresses readiness to implement.
 
 Find the active spec and its associated implementation beads. If unclear, ask the user.
 
-### 2. Validate Plan Quality
+### 2. Run Automated Validation
 
-Check each quality criterion:
-
-| Criterion | Check |
-|:----------|:------|
-| **Beads defined** | At least one implementation bead exists |
-| **Scope bounded** | Each bead has a small, defined scope |
-| **Micro-plans** | Each bead has 3-7 step micro-plan |
-| **Verification steps** | Each bead has explicit verification steps |
-| **Dependencies explicit** | Inter-bead dependencies are declared |
-| **ADRs cited** | Each bead cites the ADRs it relies on |
-| **Coverage** | All spec requirements are covered by at least one bead |
-
-### 3. Handle Validation Failure
-
-If any checks fail:
+Run `mindspec validate plan <id>` to check structural quality. If there are errors:
 
 > **Plan not ready for approval**
 >
-> The following issues need to be addressed:
-> - <Issue 1>
-> - <Issue 2>
+> <paste validate output>
 >
 > Please update the plan and try again.
 
 Remain in Plan Mode.
+
+### 3. Review Plan and Check Coverage
+
+Read the plan and verify:
+- All spec requirements are covered by at least one bead
+- Each bead has bounded scope (the automated checks cover steps/verification/deps)
 
 ### 4. Present Plan Summary
 

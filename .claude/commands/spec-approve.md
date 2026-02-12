@@ -16,49 +16,23 @@ User invokes `/spec-approve` or expresses readiness to plan.
 
 Find the active spec. If unclear, ask the user which spec they want to approve.
 
-### 2. Read and Parse Spec
+### 2. Run Automated Validation
 
-Read `docs/specs/<id>/spec.md` and extract:
-- Goal section
-- Impacted domains
-- ADR touchpoints
-- Requirements list
-- Scope boundaries
-- Acceptance Criteria
-- Open Questions
-- Current Approval status
-
-### 3. Validate Spec Quality
-
-Check each quality criterion:
-
-| Criterion | Check |
-|:----------|:------|
-| **Goal defined** | Goal section is not empty or placeholder |
-| **Domains declared** | At least one impacted domain listed |
-| **ADR touchpoints** | Relevant ADRs identified (or explicitly "none") |
-| **Requirements listed** | At least 2 concrete requirements |
-| **Scope bounded** | In Scope and Out of Scope sections filled |
-| **Criteria count** | At least 3 acceptance criteria defined |
-| **Criteria quality** | Each criterion is specific and measurable |
-| **Not vague** | No criteria like "works correctly" or "is fast" |
-| **Open questions resolved** | All open questions are resolved or removed |
-
-### 4. Handle Validation Failure
-
-If any checks fail:
+Run `mindspec validate spec <id>` to check structural quality. If there are errors:
 
 > **Spec not ready for approval**
 >
-> The following issues need to be addressed:
-> - <Issue 1>
-> - <Issue 2>
+> <paste validate output>
 >
 > Please update `docs/specs/<id>/spec.md` and try again.
 
 Remain in Spec Mode.
 
-### 5. Present Spec Summary
+### 3. Read and Review Spec
+
+Read `docs/specs/<id>/spec.md` and review the content for completeness (the automated checks cover structure; you review substance).
+
+### 4. Present Spec Summary
 
 If validation passes, present a summary:
 
@@ -79,13 +53,13 @@ If validation passes, present a summary:
 >
 > **Ready to approve and begin planning?**
 
-### 6. Request Explicit Approval
+### 5. Request Explicit Approval
 
 Ask the user:
 
 > Do you approve this spec for planning? (yes/no)
 
-### 7. On Approval
+### 6. On Approval
 
 If user approves:
 
@@ -116,7 +90,7 @@ If user approves:
    > 4. Define verification steps for each bead
    > 5. When ready, use `/plan-approve` to request plan approval
 
-### 8. On Rejection
+### 7. On Rejection
 
 If user declines:
 

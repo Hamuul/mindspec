@@ -18,6 +18,7 @@ If these are not met, you are in **Spec Mode** or **Plan Mode**. Only proceed to
 - **Check state**: `mindspec state show` or `mindspec instruct`
 - **Set state**: `mindspec state set --mode=<mode> --spec=<id> [--bead=<id>]`
 - **Pick up work**: `mindspec next` — queries ready beads, claims one, sets state, emits guidance
+- **Pre-check**: `mindspec validate spec|plan|docs` — structural quality checks before approval
 - **Spec Mode**: Markdown only. No code. Use `/spec-approve` to transition.
 - **Plan Mode**: Plan + beads only. No code. Use `/plan-approve` to transition.
 - **Implementation Mode**: Code within bead scope. Doc-sync mandatory. ADR compliance required.
