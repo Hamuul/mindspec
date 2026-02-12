@@ -17,6 +17,7 @@ This document outlines the file organization, naming, and structural conventions
 | `AGENTS.md` | Agent behavioral instructions |
 | `CLAUDE.md` | Claude Code project instructions |
 | `mindspec.md` | Product specification (source of truth) |
+| `.mindspec/state.json` | Workflow state: current mode, active spec/bead (ADR-0005) |
 
 ## Domain Doc Structure
 
@@ -141,9 +142,9 @@ chore(<bead-id>): <summary>
 - `impl` — implementation code, tests, doc-sync
 - `chore` — cleanup, formatting, dependency bumps, tooling
 
-### Co-committing `.beads/`
+### Co-committing `.beads/` and `.mindspec/`
 
-Always commit `.beads/` changes alongside the relevant work in the same commit, unless operating in a mode where Beads is not tracked in git.
+Always commit `.beads/` and `.mindspec/state.json` changes alongside the relevant work in the same commit. State writes (`mindspec state set`) must happen **before** the milestone commit so state is co-committed with transition artifacts (ADR-0005).
 
 ### Preflight (before starting any forward-progress work)
 
@@ -170,11 +171,33 @@ Always commit `.beads/` changes alongside the relevant work in the same commit, 
 Use stable Markdown header anchors for deterministic section retrieval:
 `## Component X {#component-x}`
 
-## Tooling Interface (Tentative)
+## State File Convention {#state-file}
 
-The primary interface will be a CLI. Usage pattern:
+`.mindspec/state.json` is the **primary source of truth** for current mode and active work (ADR-0005).
 
-- `mindspec context pack <spec-id>`: Generate context for an agent session
-- `mindspec validate spec <id>`: Check acceptance criteria quality
-- `mindspec validate docs`: Verify doc-sync compliance
+- **Committed to git** — project-level workflow state, not personal
+- **Written via CLI only** — `mindspec state set --mode=X --spec=Y [--bead=Z]`
+- **Co-committed with transitions** — state writes happen before milestone commits
+- **Cross-validated** — `mindspec instruct` checks state against artifact state and warns on drift
+
+Schema:
+```json
+{
+  "mode": "idle|spec|plan|implement",
+  "activeSpec": "004-instruct",
+  "activeBead": "beads-xxx",
+  "lastUpdated": "2026-02-12T10:00:00Z"
+}
+```
+
+## Tooling Interface
+
+The primary interface is the Go CLI binary. Key commands:
+
 - `mindspec doctor`: Project structure health check
+- `mindspec glossary list|match|show`: Glossary-based context injection
+- `mindspec context pack <spec-id>`: Generate context for an agent session
+- `mindspec state set|show`: Manage workflow state (ADR-0005)
+- `mindspec instruct`: Emit mode-appropriate operating guidance (ADR-0003)
+- `mindspec validate spec|plan|docs`: Check artifact quality (planned — Spec 006)
+- `mindspec next`: Select and claim next ready work (planned — Spec 005)

@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./bin/mindspec instruct 2>/dev/null || echo 'mindspec instruct unavailable — run make build'",
+            "statusMessage": "Loading mode guidance..."
+          }
+        ]
+      }
+    ]
+  }
+}

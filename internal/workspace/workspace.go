@@ -70,6 +70,16 @@ func DomainDir(root, domain string) string {
 	return filepath.Join(root, "docs", "domains", domain)
 }
 
+// MindspecDir returns the path to the .mindspec directory under root.
+func MindspecDir(root string) string {
+	return filepath.Join(root, ".mindspec")
+}
+
+// StatePath returns the path to .mindspec/state.json under root.
+func StatePath(root string) string {
+	return filepath.Join(root, ".mindspec", "state.json")
+}
+
 func exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil

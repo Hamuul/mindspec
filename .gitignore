@@ -1,5 +1,6 @@
-# Mindspec local state (not version-controlled)
-.mindspec/
+# Mindspec local state — state.json is committed (project-level workflow state)
+# Only ignore runtime/temp files if any are added later
+.mindspec/current-spec.json
 
 # Beads runtime artifacts are handled by .beads/.gitignore
 # This rule catches any stray runtime files outside .beads/

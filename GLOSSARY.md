@@ -21,4 +21,5 @@ Maps key concepts to their primary documentation sections for deterministic cont
 | **Responsibility Boundaries** | [docs/core/ARCHITECTURE.md#responsibility-boundaries](docs/core/ARCHITECTURE.md#responsibility-boundaries) |
 | **Spec Bead** | [docs/core/ARCHITECTURE.md#beads](docs/core/ARCHITECTURE.md#beads) |
 | **Spec Mode** | [docs/core/MODES.md#spec-mode](docs/core/MODES.md#spec-mode) |
+| **State File** | [docs/core/CONVENTIONS.md#state-file](docs/core/CONVENTIONS.md#state-file) |
 | **Worktree** | [docs/core/ARCHITECTURE.md#worktrees](docs/core/ARCHITECTURE.md#worktrees) |

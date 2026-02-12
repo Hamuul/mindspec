@@ -33,7 +33,17 @@ docs/specs/<id>/
 
 Copy `docs/templates/spec.md` to `docs/specs/<id>/spec.md` and fill in the `<ID>` and `<Title>` placeholders.
 
-### 4. Inform User
+### 4. Update MindSpec State
+
+Run the following command to set the workflow state to Spec Mode:
+
+```bash
+mindspec state set --mode=spec --spec=<id>
+```
+
+This must happen **before** any milestone commit so that `.mindspec/state.json` is co-committed with the spec artifacts.
+
+### 5. Inform User
 
 Tell the user:
 
@@ -48,7 +58,7 @@ Tell the user:
 > 4. Resolve all Open Questions
 > 5. When ready, use `/spec-approve` to request approval
 
-### 5. Open Spec for Editing
+### 6. Open Spec for Editing
 
 If possible, open the spec file in the editor for the user.
 

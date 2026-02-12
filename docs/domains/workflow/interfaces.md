@@ -2,42 +2,80 @@
 
 ## Provided Interfaces
 
-### Mode State (Planned)
+### State Management (Spec 004)
 
-```python
-ModeManager.current_mode() -> Mode  # spec | plan | implementation
-ModeManager.can_transition(target: Mode) -> bool
-ModeManager.transition(target: Mode) -> Result
+```go
+package state
+
+// State represents the MindSpec workflow state at .mindspec/state.json.
+type State struct {
+    Mode        string // idle | spec | plan | implement
+    ActiveSpec  string // e.g. "004-instruct"
+    ActiveBead  string // e.g. "beads-001"
+    LastUpdated string // RFC3339 timestamp
+}
+
+// Read loads state from .mindspec/state.json.
+func Read(root string) (*State, error)
+
+// Write persists state to .mindspec/state.json.
+func Write(root string, s *State) error
+
+// SetMode validates and writes a new state.
+func SetMode(root, mode, spec, bead string) error
+
+// CrossValidate checks state against artifact state, returns warnings.
+func CrossValidate(root string, s *State) []Warning
 ```
 
-### Spec Lifecycle (Planned)
+### Guidance Emission (Spec 004)
 
-```python
-SpecManager.init(spec_id: str, title: str) -> Path
-SpecManager.approve(spec_id: str) -> Result
-SpecManager.status(spec_id: str) -> SpecStatus
+```go
+package instruct
+
+// BuildContext creates a rendering context from state and project root.
+func BuildContext(root string, s *state.State) *Context
+
+// Render produces markdown guidance for the given context.
+func Render(ctx *Context) (string, error)
+
+// RenderJSON produces structured JSON output.
+func RenderJSON(ctx *Context) (string, error)
+
+// CheckWorktree verifies the current worktree matches the active bead.
+func CheckWorktree(activeBead string) string
 ```
 
-### Worktree Lifecycle (Planned — Spec 005)
+### Worktree Lifecycle (Planned — Spec 008)
 
-```python
-WorktreeManager.create(bead_id: str) -> Path
-WorktreeManager.list() -> list[Worktree]
-WorktreeManager.cleanup(bead_id: str) -> Result
+```go
+// WorktreeManager (planned)
+// Create(beadID string) (string, error)
+// List() ([]Worktree, error)
+// Cleanup(beadID string) error
 ```
 
-### Beads Adapter (Planned — Spec 004)
+### Beads Adapter (Planned — Spec 007)
 
-```python
-BeadsAdapter.create_spec_bead(spec_id: str, summary: str) -> BeadId
-BeadsAdapter.create_impl_bead(spec_bead: BeadId, scope: str) -> BeadId
-BeadsAdapter.close_bead(bead_id: BeadId, evidence: Evidence) -> Result
+```go
+// BeadsAdapter (planned)
+// CreateSpecBead(specID, summary string) (string, error)
+// CreateImplBead(specBead, scope string) (string, error)
+// CloseBead(beadID string, evidence Evidence) error
 ```
 
 ## Consumed Interfaces
 
-- **core**: `Workspace.find_project_root()` for locating specs and beads
-- **context-system**: `ContextPackBuilder.build()` for loading mode-appropriate context
+- **core**: `workspace.FindRoot()`, `workspace.StatePath()`, `workspace.MindspecDir()` for locating state and specs
+- **context-system**: `ContextPackBuilder.Build()` for loading mode-appropriate context
+
+## CLI Commands
+
+| Command | Purpose |
+|:--------|:--------|
+| `mindspec state set` | Set current mode and active work (ADR-0005) |
+| `mindspec state show` | Display current state |
+| `mindspec instruct` | Emit mode-appropriate operating guidance (ADR-0003) |
 
 ## Agent Commands
 

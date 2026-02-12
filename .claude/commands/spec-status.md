@@ -12,77 +12,31 @@ User invokes `/spec-status` or asks about current mode/spec.
 
 ## Steps
 
-### 1. Determine Current State
+### 1. Read MindSpec State
 
-Check for:
-- Active spec files in `docs/specs/`
-- Spec approval status
-- Implementation beads in Beads (if any)
-- Plan approval status
-- Active worktrees
+Run the following commands to get the current state:
 
-### 2. Determine Mode
+```bash
+mindspec state show
+mindspec instruct
+```
 
-| Condition | Mode |
-|:----------|:-----|
-| No approved spec | **Spec Mode** |
-| Approved spec, no approved plan | **Plan Mode** |
-| Approved spec + approved plan + active bead | **Implementation Mode** |
+`mindspec state show` prints the raw state (mode, active spec, active bead).
+`mindspec instruct` provides full mode-appropriate guidance including any drift warnings.
 
-### 3. Report Status
+### 2. Report Status
 
-#### If in Spec Mode:
+Present the output from `mindspec instruct` to the user. If there are warnings (state drift, worktree mismatch), highlight them prominently.
 
-> **Mode**: Spec Mode
->
-> **Active Spec**: `<id>` — <goal summary>
->
-> **Approval Status**: <DRAFT | PENDING_REVIEW>
->
-> **Impacted Domains**: <domain list>
->
-> **Acceptance Criteria**: <N> defined
->
-> ---
->
-> **Next steps**:
-> - Complete requirements, domains, and acceptance criteria
-> - Use `/spec-approve` when ready for planning
+### 3. Quick Summary
 
-#### If in Plan Mode:
+Provide a brief summary:
 
-> **Mode**: Plan Mode
+> **Mode**: <mode from state show>
 >
-> **Active Spec**: `<id>` — <goal summary> (APPROVED)
+> **Active Spec**: `<activeSpec>` (or "none")
 >
-> **Implementation Beads**: <N> defined
->
-> **ADRs Cited**: <list>
->
-> ---
->
-> **Next steps**:
-> - Define implementation beads with verification steps
-> - Use `/plan-approve` when ready for implementation
-
-#### If in Implementation Mode:
-
-> **Mode**: Implementation Mode
->
-> **Active Spec**: `<id>` — <goal summary> (APPROVED)
->
-> **Active Bead**: <bead-id> — <scope summary>
->
-> **Worktree**: <worktree path>
->
-> **Verification Steps**: <completed>/<total> complete
->
-> ---
->
-> **Reminders**:
-> - Stay within bead scope
-> - Update docs alongside code
-> - Mark verification steps as complete when done
+> **Active Bead**: `<activeBead>` (or "none")
 
 ### 4. List Recent Specs (Optional)
 
@@ -90,14 +44,15 @@ If user asks, list specs in `docs/specs/`:
 
 | Spec ID | Status | Domains | Criteria |
 |:--------|:-------|:--------|:---------|
-| 001-skeleton | DRAFT | core | 5 defined |
-| 002-glossary | DRAFT | context-system | 5 defined |
+| 001-skeleton | APPROVED | core | 5 defined |
+| 002-glossary | APPROVED | context-system | 5 defined |
 
 ---
 
 ## Notes
 
 - This workflow is read-only; it doesn't change state
+- If `state.json` is missing, `mindspec instruct` will fall back gracefully with a warning
 - Use `/spec-init` to start a new spec
-- Use `/spec-approve` to transition Spec → Plan
-- Use `/plan-approve` to transition Plan → Implementation
+- Use `/spec-approve` to transition Spec -> Plan
+- Use `/plan-approve` to transition Plan -> Implementation

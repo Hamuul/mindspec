@@ -16,5 +16,6 @@ func init() {
 	rootCmd.AddCommand(glossaryCmd)
 	rootCmd.AddCommand(instructCmd)
 	rootCmd.AddCommand(nextCmd)
+	rootCmd.AddCommand(stateCmd)
 	rootCmd.AddCommand(validateCmd)
 }

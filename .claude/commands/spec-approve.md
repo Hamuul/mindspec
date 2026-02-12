@@ -99,7 +99,12 @@ If user approves:
    - **Notes**: Approved via /spec-approve workflow
    ```
 
-2. Inform user:
+2. Update MindSpec state to Plan Mode (**before** the milestone commit):
+   ```bash
+   mindspec state set --mode=plan --spec=<id>
+   ```
+
+3. Inform user:
    > **Spec approved!**
    >
    > You are now in **Plan Mode**.

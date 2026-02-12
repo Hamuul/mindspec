@@ -71,7 +71,13 @@ Ask the user:
 
 If user approves:
 
-1. Inform user:
+1. Update MindSpec state to Implementation Mode (**before** the milestone commit):
+   ```bash
+   mindspec state set --mode=implement --spec=<id> --bead=<first-bead-id>
+   ```
+   Use the first bead with no unresolved dependencies as the initial active bead.
+
+2. Inform user:
    > **Plan approved!**
    >
    > You are now in **Implementation Mode**.
