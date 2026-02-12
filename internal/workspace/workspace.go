@@ -45,6 +45,31 @@ func GlossaryPath(root string) string {
 	return filepath.Join(root, "GLOSSARY.md")
 }
 
+// SpecDir returns the path to a specific spec directory under root.
+func SpecDir(root, specID string) string {
+	return filepath.Join(root, "docs", "specs", specID)
+}
+
+// ContextMapPath returns the path to docs/context-map.md under root.
+func ContextMapPath(root string) string {
+	return filepath.Join(root, "docs", "context-map.md")
+}
+
+// ADRDir returns the path to docs/adr/ under root.
+func ADRDir(root string) string {
+	return filepath.Join(root, "docs", "adr")
+}
+
+// PoliciesPath returns the path to architecture/policies.yml under root.
+func PoliciesPath(root string) string {
+	return filepath.Join(root, "architecture", "policies.yml")
+}
+
+// DomainDir returns the path to a specific domain's doc directory under root.
+func DomainDir(root, domain string) string {
+	return filepath.Join(root, "docs", "domains", domain)
+}
+
 func exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
