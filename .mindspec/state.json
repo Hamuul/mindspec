@@ -1,6 +1,6 @@
 {
-  "mode": "plan",
-  "activeSpec": "011-domain-scaffold",
-  "activeBead": "",
-  "lastUpdated": "2026-02-13T17:15:41Z"
+  "mode": "implement",
+  "activeSpec": "010-spec-init-cmd",
+  "activeBead": "mindspec-ov9.2",
+  "lastUpdated": "2026-02-13T17:16:13Z"
 }
