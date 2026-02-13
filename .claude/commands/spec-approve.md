@@ -78,17 +78,16 @@ If user approves:
    mindspec state set --mode=plan --spec=<id>
    ```
 
-3. Inform user:
-   > **Spec approved!**
-   >
-   > You are now in **Plan Mode**.
-   >
-   > **Next steps:**
-   > 1. Review domain docs and accepted ADRs for impacted domains
-   > 2. Check Context Map for neighboring context contracts
-   > 3. Decompose spec into implementation beads (bounded work chunks)
-   > 4. Define verification steps for each bead
-   > 5. When ready, use `/plan-approve` to request plan approval
+3. Inform user briefly:
+   > **Spec approved!** Entering Plan Mode — beginning plan draft.
+
+4. **Immediately begin planning** — do NOT ask "shall I proceed?" or wait for further confirmation. The spec approval IS the authorization to start planning. Proceed directly to:
+   - Review domain docs and accepted ADRs for impacted domains
+   - Check Context Map for neighboring context contracts
+   - Decompose spec into implementation beads (bounded work chunks)
+   - Define verification steps for each bead
+   - Draft `docs/specs/<id>/plan.md`
+   - When the plan draft is complete, inform the user and advise them to use `/plan-approve` when ready
 
 ### 7. On Rejection
 
@@ -104,7 +103,8 @@ Remain in Spec Mode.
 
 ## Notes
 
-- This is a human gate — the user must explicitly confirm
+- This is a human gate — the user must explicitly confirm spec approval
+- Once approved, planning starts automatically (no second confirmation needed)
 - Approval is recorded in git (the spec file itself)
 - Re-approval is required if the spec is modified after approval
-- This transitions to Plan Mode, not Implementation Mode
+- This transitions to Plan Mode and immediately begins plan drafting

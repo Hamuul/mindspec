@@ -40,98 +40,57 @@
 
 ## P0: Immediate Value (Use While Building MindSpec)
 
-### 001: Go CLI Skeleton + Doctor
-**Why P0**: Foundation for everything. Establishes Go binary, workspace detection, and project health validation. Ports Python prototype doctor to Go. Stubs ADR-0003 command surface.
-
-**Scope**:
-- Go module scaffolding (`cmd/mindspec/`, `internal/`, `go.mod`)
-- CLI entry point with subcommand routing (cobra)
-- Workspace root detection (`mindspec.md` or `.git`)
-- `mindspec doctor`: validates `docs/core/`, `docs/domains/`, `docs/specs/`, `architecture/`, `GLOSSARY.md`, `.beads/` (durable state + no tracked runtime artifacts)
-- Stub commands: `mindspec instruct`, `mindspec next`, `mindspec validate` (per ADR-0003)
-- Retire Python `src/mindspec/` prototype
-
-**Immediate Use**: Working `mindspec` binary for project health checks and command surface.
-
-### 002: Glossary-Based Context Injection
-**Why P0**: Enables deterministic doc retrieval based on keywords.
-
-**Scope**:
-- Parse `GLOSSARY.md` into keyword-to-target mapping
-- Match keywords from input text
-- Extract targeted documentation sections
-- CLI: `mindspec glossary list|match|show`
-
-**Immediate Use**: Agent can pull architectural context when working on specs.
-
-### 003: Context Pack Generation (with DDD Routing)
-**Why P0**: Reproducible context bundles for agent sessions.
-
-**Scope** (split into two deliverables):
-
-**003a: Pack Manifest Builder**
-- Determine which files/sections to include and why
-- DDD-informed assembly: start from impacted domains, 1-hop neighbor expansion via Context Map (per ADR-0001)
-- Provenance tracking: record why each piece was included
-- Output: structured manifest (JSON or equivalent)
-
-**003b: Renderer**
-- Turn manifest into `context-pack.md` in spec directory
-- Include: spec, matched domain docs, accepted ADRs, policies, commit tuple
-- Respect token budgets
-
-**Immediate Use**: Consistent, domain-aware context for every session.
+### 001: Go CLI Skeleton + Doctor ✓
+### 002: Glossary-Based Context Injection ✓
+### 003: Context Pack Generation (with DDD Routing) ✓
 
 ---
 
 ## P1: Core Workflow Support
 
-### 004: `mindspec instruct` — Mode-Aware Guidance Emission
-**Why P1**: Core of ADR-0003. Replaces static CLAUDE.md/AGENTS.md with dynamic, mode-aware guidance.
+### 004: `mindspec instruct` — Mode-Aware Guidance Emission ✓
+### 005: `mindspec next` — Work Selection + Claiming ✓
+### 006: `mindspec validate` — Workflow Checks ✓
+### 007: Beads Integration Conventions + Tooling ✓
+
+### 008: Worktree Lifecycle Management ← **NEXT**
+**Why P1**: Implementation Mode requires worktree isolation. Workflow commands should handle worktrees implicitly.
+
+**Status**: Spec APPROVED (draft), Plan in progress. ADR-0006 (branch protection) and ADR-0007 (per-worktree state) drafted as Proposed.
 
 **Scope**:
-- Detect current mode (Spec/Plan/Implement) from local state (spec status, plan status, worktree)
-- Detect active work item (spec ID, bead ID) from Beads + worktree conventions
-- Emit authoritative operating guidance: current mode, active work, required outputs, hard gates
-- Read-only, no side effects
-- Reduce CLAUDE.md/AGENTS.md to minimal bootstrap pointing to `mindspec instruct`
+- `mindspec next` creates worktree via `bd worktree create` after claiming bead
+- New `mindspec complete` command: close bead + `bd worktree remove` + advance state
+- Delegate all worktree CRUD to Beads (`bd worktree create/list/remove/info`)
+- Update `implement.md` template to use `mindspec complete` as single close-out step
+- Deprecate `mindspec bead worktree`
 
-### 005: `mindspec next` — Work Selection + Claiming
-**Why P1**: Integrates with Beads for ready-work discovery and worktree association.
-
-**Scope**:
-- Query Beads for ready work (`bd ready`)
-- Claim/lock a work item
-- Associate with worktree (create if needed)
-- Emit guidance or instruct to run `mindspec instruct`
-
-### 006: `mindspec validate` — Workflow Checks
-**Why P1**: Consolidates doc-sync, ADR divergence, and structural validation.
+### 008a: Molecule-Based Plan Decomposition
+**Why P1**: `bead plan` reimplements Beads molecule DAG creation. Beads formulas and `bd mol pour` handle this natively.
 
 **Scope**:
-- `mindspec validate docs`: compare changed files against doc requirements, flag missing updates
-- `mindspec validate spec <id>`: check acceptance criteria quality, section completeness
-- `mindspec validate plan <id>`: verify beads have verification steps, ADR citations, acyclic deps
-- ADR divergence gate checks
+- Replace `internal/bead/plan.go` (`CreatePlanBeads()`) with Beads molecule creation
+- Convert plan `work_chunks` YAML to a Beads formula (or call `bd mol pour` with equivalent structure)
+- Leverage `bd mol show --parallel` for DAG visualization
+- `bd mol ready` replaces custom ready-work filtering for plan beads
 
-### 007: Beads Integration Conventions + Tooling
-**Why P1**: Beads is central to the execution model; conventions must be codified.
-
-**Scope**:
-- Spec bead creation from approved spec (concise summary + link)
-- Implementation bead creation from plan
-- Active workset hygiene commands
-- Bead-to-worktree mapping
-- Reference hygiene rules established in 000
-
-### 008: Worktree Lifecycle Management
-**Why P1**: Implementation Mode requires worktree isolation.
+### 008b: Human Gates for Approval Workflow
+**Why P1**: Spec-approve and plan-approve are human gates tracked only in markdown frontmatter. Beads has first-class `human` gate support.
 
 **Scope**:
-- Create worktree for a bead: `mindspec worktree create <bead-id>`
-- Naming convention: `worktree-<bead-id>`
-- Clean state sync on bead closure
-- List active worktrees: `mindspec worktree list`
+- Model spec approval as a Beads human gate on the spec bead
+- Model plan approval as a Beads human gate on the plan molecule
+- `bd gate resolve <id>` becomes the execution signal (complements frontmatter as document record)
+- `bd ready` naturally shows work unblocked by resolved gates
+- Update `/spec-approve` and `/plan-approve` skills to resolve Beads gates alongside frontmatter update
+
+### 008c: Compose `bd prime` into `mindspec instruct`
+**Why P1**: `bd prime` provides Beads workflow context (~1-2k tokens), `mindspec instruct` provides spec-driven process guidance. Composing them gives agents a complete picture.
+
+**Scope**:
+- `mindspec instruct` embeds or appends `bd prime` output
+- Avoids agents needing two separate context sources
+- Respect token budgets — `bd prime` is already compact
 
 ### 009: Domain Scaffold + Context Map
 **Why P1**: DDD primitives need tooling support.
@@ -211,19 +170,21 @@
 ## Implementation Order
 
 ```
-P0: 000 ✓ → 001 (Go skeleton + doctor)
-    → 002 (glossary) → 003a (pack manifest) → 003b (renderer)
+P0: 000 ✓ → 001 ✓ (Go skeleton + doctor)
+    → 002 ✓ (glossary) → 003 ✓ (context packs)
 
-P1: 004 (instruct) → 005 (next) → 006 (validate)
-    → 007 (Beads tooling) → 008 (worktrees) → 009 (domains) → 010 (ADRs) → 011 (proofs)
+P1: 004 ✓ (instruct) → 005 ✓ (next) → 006 ✓ (validate) → 007 ✓ (Beads tooling)
+    → 008 (worktree lifecycle + mindspec complete)  ← NEXT
+    → 008a (molecule-based plan decomposition)
+    → 008b (human gates for approval)
+    → 008c (compose bd prime into instruct)
+    → 009 (domains) → 010 (ADRs) → 011 (proofs)
 
 P2: 012 (memory) → 013 (init)
 ```
 
 **Rationale**:
-- Go CLI skeleton is the new foundation — everything builds on it
-- Glossary + context packs are immediately useful once doctor works
-- ADR-0003 commands (`instruct`, `next`, `validate`) move to P1 since they require mode detection and Beads integration that benefits from having the basic CLI solid first
-- `mindspec init` demoted to P2 — manual project setup is fine while dogfooding
-- 001a (workspace root fix) folded into 001 — Go rewrite handles it naturally
-- Former 009 (doc-sync) and 010/011 (spec/plan validation) consolidated into 006 (`validate`)
+- 001–007 are done. 008 is the next priority.
+- 008a/b/c deepen Beads integration before adding new MindSpec features. Molecules replace custom DAG code, gates formalize approval tracking, prime composition unifies agent context.
+- 008a/b/c can be done in any order after 008 lands (they're independent of each other).
+- 009+ resume after Beads integration is solid.
