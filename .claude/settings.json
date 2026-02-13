@@ -11,6 +11,28 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "state=$(cat .mindspec/state.json 2>/dev/null | jq -r '.mode // empty'); if [ \"$state\" = \"plan\" ]; then echo 'MindSpec plan mode is active. Do NOT exit plan mode directly. Run /plan-approve to validate the plan, create beads, and transition to implementation.' >&2; exit 2; fi",
+            "statusMessage": "Checking MindSpec plan gate..."
+          }
+        ]
+      },
+      {
+        "matcher": "EnterPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "state=$(cat .mindspec/state.json 2>/dev/null | jq -r '.mode // empty'); if [ \"$state\" = \"plan\" ]; then echo '{\"additionalContext\": \"MindSpec plan mode is active. Write your plan to docs/specs/*/plan.md. When complete, use /plan-approve — do NOT use ExitPlanMode directly.\"}'; fi",
+            "statusMessage": "Checking MindSpec plan gate..."
+          }
+        ]
+      }
     ]
   }
 }
