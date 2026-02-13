@@ -69,7 +69,7 @@ make build                   # Build binary to ./bin/mindspec
 ./bin/mindspec next          # Claim next ready bead and get guidance
 ./bin/mindspec complete      # Close bead, remove worktree, advance state
 ./bin/mindspec state show    # Check current mode/spec/bead
-./bin/mindspec instruct      # Emit mode-aware guidance
+./bin/mindspec instruct      # Emit mode-aware guidance (includes Beads workflow context)
 ./bin/mindspec bead spec <id>        # Create spec bead from approved spec
 ./bin/mindspec bead plan <id>       # Create impl beads from approved plan
 ./bin/mindspec bead worktree <id>   # Show/create worktree for a bead

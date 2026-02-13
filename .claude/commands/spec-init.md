@@ -70,3 +70,7 @@ If possible, open the spec file in the editor for the user.
 - The slug should be descriptive: `004-beads-integration`, `005-worktree-lifecycle`
 - All work in Spec Mode is markdown-only; no code changes permitted
 - Specs must declare impacted domains and ADR touchpoints before approval
+
+## Known Gaps
+
+- **Context pack is a placeholder at init time**: Step 2 creates an empty `context-pack.md` because the spec template has no goal/domains to extract yet. The real context pack should be generated after the spec has content — either on-demand (`mindspec context pack <id>`) or automatically as part of `/spec-approve`. Currently the agent must remember to run the command manually.

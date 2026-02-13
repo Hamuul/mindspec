@@ -295,3 +295,9 @@ Every state-changing command emits `mindspec instruct` output as its tail. This 
 - **`mindspec complete`** — emits guidance for the new mode (next bead, plan, or idle)
 
 The session-start hook (`mindspec instruct`) covers cold-start. The instruct-tail covers all subsequent transitions. Together, the agent never lacks context about its operating mode.
+
+### Composed Beads Context
+
+`mindspec instruct` shells out to `bd prime` and appends the Beads workflow context after mode guidance. This means a single `mindspec instruct` SessionStart hook replaces both the old `mindspec instruct` and `bd prime` hooks. A separate `bd prime` hook is no longer necessary.
+
+If `bd prime` is unavailable (Beads not installed or not initialized), `mindspec instruct` emits a warning but continues with MindSpec-only guidance — Beads context is additive, not required.
