@@ -1,61 +1,78 @@
 ---
-status: Draft
+status: Approved
+approved_at: 2026-02-13T08:00:00Z
+approved_by: user
 spec_id: 008-worktree-lifecycle
-version: "1.0"
-last_updated: 2026-02-12
+version: "2.0"
+last_updated: 2026-02-13
 adr_citations:
   - id: ADR-0002
     sections: ["Parallelism Compatibility"]
   - id: ADR-0003
-    sections: ["MindSpec owns worktree conventions"]
+    sections: ["MindSpec owns worktree conventions", "CLI Contract"]
   - id: ADR-0005
-    sections: ["Completion and Reset"]
+    sections: ["Completion and Reset", "Commit Ordering"]
 work_chunks:
   - id: 1
-    title: "Core worktree package extraction"
-    scope: "internal/worktree/worktree.go, internal/worktree/worktree_test.go, internal/bead/worktree.go"
+    title: "bd worktree and bd mol wrappers in bdcli.go"
+    scope: "internal/bead/bdcli.go, internal/bead/bdcli_test.go"
     verify:
-      - "ParseList() parses multi-worktree porcelain output correctly"
-      - "FindByBead() matches by path suffix or branch convention"
-      - "Create() validates in_progress status and clean tree"
-      - "internal/bead/worktree.go delegates to internal/worktree/"
+      - "WorktreeCreate() calls bd worktree create with correct name and branch args"
+      - "WorktreeList() parses bd worktree list output"
+      - "WorktreeRemove() calls bd worktree remove"
+      - "WorktreeInfo() calls bd worktree info --json"
+      - "MolPour() calls bd mol pour with formula or parent args"
+      - "MolReady() calls bd mol ready --json and parses output"
+      - "MolShow() calls bd mol show --json"
       - "make test passes"
     depends_on: []
   - id: 2
-    title: "Worktree list with bead enrichment"
-    scope: "internal/worktree/list.go, internal/worktree/list_test.go"
+    title: "Molecule-based plan decomposition"
+    scope: "internal/bead/plan.go, internal/bead/plan_test.go"
     verify:
-      - "EnrichedList() extracts bead ID from path/branch naming convention"
-      - "EnrichedList() looks up bead status via bd show"
-      - "Worktrees with no matching bead are flagged as orphaned"
-      - "FormatList() produces readable tabular output"
+      - "CreatePlanBeads() creates a molecule parent with spec bead as parent"
+      - "Work chunks become molecule children with correct dependencies"
+      - "Idempotent: re-run does not create duplicates"
+      - "WriteGeneratedBeadIDs() writes molecule child IDs to plan frontmatter"
+      - "bd mol show displays the work DAG"
       - "make test passes"
     depends_on: [1]
   - id: 3
-    title: "Worktree cleanup"
-    scope: "internal/worktree/clean.go, internal/worktree/clean_test.go"
+    title: "mindspec next — worktree creation + mol ready"
+    scope: "cmd/mindspec/next.go, internal/next/beads.go, internal/next/beads_test.go"
     verify:
-      - "Clean() refuses if bead is not closed"
-      - "Clean() refuses if worktree has uncommitted changes"
-      - "Clean() runs git worktree remove + git branch -d"
-      - "CleanAll() iterates worktrees and cleans only those with closed beads"
-      - "CleanAll() is dry-run by default; only executes when dryRun=false"
+      - "QueryReady() uses bd mol ready when molecule beads exist, falls back to bd ready"
+      - "After claiming, creates worktree via bd worktree create"
+      - "Reuses existing worktree if one exists for the bead"
+      - "Prints worktree path and cd instruction"
       - "make test passes"
     depends_on: [1]
   - id: 4
-    title: "CLI wiring + template update + doc-sync"
-    scope: "cmd/mindspec/worktree.go, cmd/mindspec/root.go, internal/instruct/templates/implement.md, CLAUDE.md, docs/core/CONVENTIONS.md"
+    title: "mindspec complete — close + clean + advance"
+    scope: "cmd/mindspec/complete.go, internal/complete/complete.go, internal/complete/complete_test.go"
     verify:
-      - "./bin/mindspec worktree --help shows create, list, clean subcommands"
-      - "Exit codes: 0 success, 1 validation, 2 git/bd error"
-      - "implement.md template includes worktree clean in completion checklist"
+      - "Refuses if worktree has uncommitted changes (exit 1)"
+      - "Closes bead via bd close"
+      - "Removes worktree via bd worktree remove"
+      - "Advances state: next bead, plan, or idle"
+      - "Defaults to activeBead from state when no arg provided"
+      - "make test passes"
+    depends_on: [1]
+  - id: 5
+    title: "Template update + deprecation + doc-sync"
+    scope: "internal/instruct/templates/implement.md, internal/instruct/worktree.go, cmd/mindspec/bead.go, cmd/mindspec/root.go, CLAUDE.md, docs/core/CONVENTIONS.md"
+    verify:
+      - "implement.md completion checklist uses mindspec complete"
+      - "CheckWorktree() uses bd worktree info"
+      - "mindspec bead worktree prints deprecation notice"
+      - "mindspec bead plan prints deprecation notice"
+      - "complete command registered in root.go"
       - "CLAUDE.md and CONVENTIONS.md updated"
-      - "mindspec bead worktree still works (backward compatibility)"
       - "make build && make test passes"
-    depends_on: [2, 3]
+    depends_on: [2, 3, 4]
 ---
 
-# Plan: Spec 008 — Worktree Lifecycle Management
+# Plan: Spec 008 — Workflow Lifecycle: Worktrees + Molecules
 
 **Spec**: [spec.md](spec.md)
 
@@ -63,176 +80,228 @@ work_chunks:
 
 ## Design Notes
 
-### Package Architecture
+### Beads Primitive Delegation
 
-New `internal/worktree/` package owns all git worktree operations. This extracts and extends logic currently in `internal/bead/worktree.go`.
+MindSpec calls Beads commands for all CRUD. New wrappers in `internal/bead/bdcli.go`:
 
-The `internal/bead/worktree.go` file becomes a thin delegation layer — its exported functions (`ParseWorktreeList`, `FindWorktree`, `CreateWorktree`) call through to `internal/worktree/` to preserve backward compatibility for `mindspec bead worktree`.
+| Wrapper | Beads command | Purpose |
+|:--------|:-------------|:--------|
+| `WorktreeCreate(name, branch)` | `bd worktree create <name> --branch <branch>` | Create worktree with redirect |
+| `WorktreeList()` | `bd worktree list --json` | List worktrees |
+| `WorktreeRemove(name)` | `bd worktree remove <name>` | Remove worktree |
+| `WorktreeInfo()` | `bd worktree info --json` | Current worktree info |
+| `MolPour(parent, children)` | `bd mol pour` or `bd create --parent` | Create molecule |
+| `MolReady()` | `bd mol ready --json` | Ready molecule children |
+| `MolShow(id)` | `bd mol show <id> --json` | Molecule structure |
 
-Import direction: `internal/bead/` → `internal/worktree/` (bead depends on worktree, not the reverse). The worktree package has no dependency on bead.
+These follow the existing `execCommand` pattern for testability.
 
-### Bead Status Lookups
+### Molecule Creation Strategy
 
-The worktree package needs bead status for list enrichment and clean validation. Rather than importing `internal/bead/` (which would create a circular dependency), the worktree package shells out to `bd show <id> --json` directly through its own `execCommand` variable. This is the same pattern used in `internal/bead/bdcli.go` and keeps the package self-contained.
+The spec leaves formula vs direct creation as a planning decision. **Direct creation** is the right choice for v1:
 
-### execCommand Pattern
+1. Create the molecule parent: `bd create "[PLAN <spec-id>] <title>" --type=epic --parent=<spec-bead-id>`
+2. For each work chunk: `bd create "[IMPL <spec-id>.<chunk-id>] <title>" --type=task --parent=<mol-parent-id>`
+3. Wire dependencies: `bd dep add <blocked> <blocker>`
 
-Same testability pattern as `internal/bead/`:
+This is nearly identical to the current `CreatePlanBeads()` flow but uses an epic as the molecule parent. The key difference: Beads now knows the parent-child relationship natively, enabling `bd mol ready` and `bd mol show`.
 
-```go
-var execCommand = exec.Command
+Formula creation is a future enhancement once the pattern stabilizes.
+
+### Molecule-Aware Ready Work
+
+`mindspec next` currently calls `bd ready --json`. The change:
+
+1. Try `bd mol ready --json` first — returns unblocked molecule children
+2. If no results (no molecules exist), fall back to `bd ready --json`
+3. Parse results through existing `ParseBeadsJSON()`
+
+The `BeadInfo` struct doesn't change — molecule children are beads.
+
+### `mindspec complete` Flow
+
+```
+mindspec complete [bead-id]
+  │
+  ├─ 1. Read state → get activeBead if no arg
+  ├─ 2. Find worktree → bd worktree list, match by bead ID
+  ├─ 3. Validate clean → git -C <wt-path> status --porcelain
+  ├─ 4. Close bead → bd close <bead-id>
+  ├─ 5. Remove worktree → bd worktree remove worktree-<bead-id>
+  ├─ 6. Advance state:
+  │     ├─ bd mol ready → more children ready? → set next bead
+  │     ├─ bd mol ready → none ready but open? → set mode=plan
+  │     └─ all closed? → set mode=idle
+  └─ 7. Print summary
 ```
 
-Tests override this to capture arguments or return canned output. The worktree package needs both `git` and `bd` command execution.
+The state advancement logic from ADR-0005's "Completion and Reset" section is built into this command, so agents no longer need to remember to advance state manually.
 
-### Enriched List Model
+### Worktree Naming
 
-`ListEntry` extends `WorktreeEntry` with bead-specific metadata:
+Passed to `bd worktree create` as arguments:
+- Name: `worktree-<bead-id>` (e.g., `worktree-bd-a1b2`)
+- Branch: `bead/<bead-id>` (e.g., `bead/bd-a1b2`)
+- Location: Beads places worktrees as siblings to the project root by default
+
+### Deprecation Strategy
+
+`beadWorktreeCmd` and `beadPlanCmd` in `cmd/mindspec/bead.go` get a deprecation wrapper:
 
 ```go
-type ListEntry struct {
-    WorktreeEntry
-    BeadID     string // extracted from path/branch convention
-    BeadStatus string // from bd show, or "" if lookup fails
-    IsOrphan   bool   // true if no bead ID could be extracted
-    IsMain     bool   // true if this is the main worktree (not bead-associated)
+RunE: func(cmd *cobra.Command, args []string) error {
+    fmt.Fprintln(os.Stderr, "DEPRECATED: use 'bd worktree list' or 'mindspec complete' instead")
+    // ... existing logic for backward compat during transition ...
 }
 ```
 
-The main worktree (project root) is always present in `git worktree list` output but isn't bead-associated — it gets `IsMain: true` and is excluded from orphan detection.
+The underlying `internal/bead/worktree.go` functions are replaced with `bd worktree` calls. The custom `git worktree list --porcelain` parsing is removed.
 
-### Clean Safety
+### Exit Codes
 
-`Clean()` has three safety checks before removing:
-
-1. **Bead is closed** — refuses if bead is open/in_progress (prevents accidental deletion of active work)
-2. **Worktree is clean** — runs `git -C <path> status --porcelain` to check for uncommitted changes in the worktree itself
-3. **Worktree exists** — `FindByBead()` must locate the worktree path
-
-Removal sequence: `git worktree remove <path>` then `git branch -d bead/<bead-id>`. The `-d` flag (not `-D`) ensures the branch is only deleted if fully merged, providing an additional safety net.
-
-### CleanAll Dry-Run
-
-`CleanAll(root, dryRun)` iterates all worktrees from `EnrichedList()`, filters to those where `BeadStatus == "closed"`, and either reports what would be removed (dry-run) or executes removal. Returns a list of action strings for reporting.
-
-### Exit Code Convention
-
-Consistent with Spec 007:
-
+Consistent with existing conventions:
 - 0: success
-- 1: validation failure (bead not in correct state, dirty tree, etc.)
-- 2: git or bd CLI error
+- 1: validation failure (dirty tree, bead not in expected state)
+- 2: Beads CLI error (`bd` command failed)
 
 ---
 
-## Bead 008-1: Core worktree package extraction
+## Bead 008-1: bd worktree and bd mol wrappers
 
-**Scope**: `internal/worktree/worktree.go`, `internal/worktree/worktree_test.go`, `internal/bead/worktree.go`
+**Scope**: `internal/bead/bdcli.go`, `internal/bead/bdcli_test.go`
 
 **Steps**:
-1. Create `internal/worktree/worktree.go` with `var execCommand`, `WorktreeEntry` struct, `ParseList()`, `parseWorktreePorcelain()` — extracted from `internal/bead/worktree.go`
-2. Add `FindByBead(beadID string) (string, error)` — same logic as current `FindWorktree()`
-3. Add `Create(root, beadID string) (string, error)` — same logic as current `CreateWorktree()`, but calls `bd show` directly for bead status validation
-4. Add `CheckCleanTree(dir string) error` — generalized to accept a directory (worktree path or project root)
-5. Update `internal/bead/worktree.go` to import `internal/worktree/` and delegate all exported functions
-6. Write tests: porcelain parsing, find by path/branch, create argument construction, clean tree check, delegation from bead package
+1. Define `WorktreeInfo` struct (Path, Branch, BeadID, IsMain). Add worktree wrappers: `WorktreeCreate(name, branch)`, `WorktreeList()`, `WorktreeRemove(name)`, `WorktreeInfo()` — each shells out to the corresponding `bd worktree` subcommand
+2. Add molecule wrappers: `MolReady()` (returns `[]BeadInfo`), `MolShow(id)` (returns raw output) — shells out to `bd mol ready --json` and `bd mol show`
+3. Add `Close(id string) error` — runs `bd close <id>` (currently missing from bdcli.go)
+4. Write tests: argument construction via execCommand mock, JSON parsing for new structs, WorktreeList output format
 
 **Verification**:
-- [ ] `ParseList()` parses multi-worktree porcelain output correctly
-- [ ] `FindByBead()` matches by path suffix or branch convention
-- [ ] `Create()` validates `in_progress` status and clean tree
-- [ ] `CheckCleanTree()` works for both project root and worktree paths
-- [ ] `internal/bead/worktree.go` delegates to `internal/worktree/` without behavior change
+- [ ] All new wrappers construct correct `bd` arguments
+- [ ] JSON parsing handles `bd worktree list` output format
+- [ ] `MolReady()` returns `[]BeadInfo` compatible with existing `SelectWork()`
 - [ ] `make test` passes
 
 **Depends on**: nothing
 
 ---
 
-## Bead 008-2: Worktree list with bead enrichment
+## Bead 008-2: Molecule-based plan decomposition
 
-**Scope**: `internal/worktree/list.go`, `internal/worktree/list_test.go`
+**Scope**: `internal/bead/plan.go`, `internal/bead/plan_test.go`
 
 **Steps**:
-1. Define `ListEntry` struct (embeds `WorktreeEntry`, adds `BeadID`, `BeadStatus`, `IsOrphan`, `IsMain`)
-2. Implement `extractBeadID(entry WorktreeEntry) string` — extracts from `worktree-<id>` path suffix or `bead/<id>` branch
-3. Implement `lookupBeadStatus(beadID string) string` — calls `bd show <id> --json`, returns status or `"unknown"` on error
-4. Implement `EnrichedList() ([]ListEntry, error)` — calls `ParseList()`, enriches each entry, flags orphans (non-main entries with no bead ID)
-5. Implement `FormatList(entries []ListEntry) string` — tabular output: path, branch, bead ID, status, flags
-6. Write tests: bead ID extraction from path and branch, orphan detection, main worktree exclusion, format output
+1. Modify `CreatePlanBeads()` — instead of creating flat beads, create a molecule parent first: `Create("[PLAN <spec-id>] <title>", desc, "epic", 2, specBeadID)`
+2. Create children under the molecule: `Create("[IMPL <spec-id>.<id>] <chunk-title>", desc, "task", 2, molParentID)` — same as current but `parent` is the molecule, not the spec bead
+3. Wire dependencies with `DepAdd()` — same as current loop
+4. Update idempotency: search for `[PLAN <spec-id>]` to find existing molecule parent; search for `[IMPL <spec-id>.<id>]` for existing children
+5. `WriteGeneratedBeadIDs()` — add molecule parent ID alongside child IDs in `generated` block
+6. Update tests: verify molecule parent creation, child-parent relationship, dep wiring, idempotency
 
 **Verification**:
-- [ ] `EnrichedList()` extracts bead ID from path/branch naming convention
-- [ ] `EnrichedList()` looks up bead status via `bd show`
-- [ ] Worktrees with no matching bead are flagged as orphaned
-- [ ] Main worktree is not flagged as orphaned
-- [ ] `FormatList()` produces readable tabular output
+- [ ] Creates epic bead as molecule parent with spec bead as its parent
+- [ ] Work chunks become children of the molecule parent
+- [ ] Dependencies wired correctly between children
+- [ ] Idempotent on re-run
+- [ ] `WriteGeneratedBeadIDs()` includes molecule parent ID
 - [ ] `make test` passes
 
-**Depends on**: 008-1
+**Depends on**: 008-1 (needs `Close()` wrapper; molecule parent uses `Create()` with type=epic)
 
 ---
 
-## Bead 008-3: Worktree cleanup
+## Bead 008-3: mindspec next — worktree creation + mol ready
 
-**Scope**: `internal/worktree/clean.go`, `internal/worktree/clean_test.go`
+**Scope**: `cmd/mindspec/next.go`, `internal/next/beads.go`, `internal/next/beads_test.go`
 
 **Steps**:
-1. Implement `Clean(root, beadID string) error` — find worktree via `FindByBead()`, validate bead closed via `bd show`, check worktree clean via `CheckCleanTree(wtPath)`, run `git worktree remove <path>`, run `git branch -d bead/<beadID>`
-2. Implement `CleanAll(root string, dryRun bool) ([]string, error)` — call `EnrichedList()`, filter to `BeadStatus == "closed"`, iterate and clean (or report if dry-run), return action descriptions
-3. Handle edge cases: worktree not found (already removed), branch not found (already deleted), bead lookup failure (skip with warning)
-4. Write tests: refuses non-closed bead, refuses dirty worktree, correct git commands for removal, dry-run returns descriptions without executing, already-removed worktree handled gracefully
+1. Modify `QueryReady()` — try `bead.MolReady()` first; if empty result, fall back to `bead.ListOpen()` filtered to ready (current `bd ready` call)
+2. After `ClaimBead()` in `next.go`, add worktree creation:
+   - Check for existing worktree: `bead.WorktreeList()` → match by bead ID
+   - If not found: `bead.WorktreeCreate("worktree-"+beadID, "bead/"+beadID)`
+   - Print worktree path and `cd` instruction
+3. If worktree already exists, print existing path
+4. Update `ClaimBead()` to use the `bead` package's `Update()` instead of its own exec call (reduce duplication)
+5. Write tests: mol ready preference, fallback to bd ready, worktree creation after claim, existing worktree reuse
 
 **Verification**:
-- [ ] `Clean()` refuses if bead is not closed
-- [ ] `Clean()` refuses if worktree has uncommitted changes
-- [ ] `Clean()` runs `git worktree remove` + `git branch -d`
-- [ ] `CleanAll()` iterates worktrees and cleans only those with closed beads
-- [ ] `CleanAll()` is dry-run by default; only executes when `dryRun=false`
-- [ ] Edge cases handled gracefully (missing worktree, missing branch)
+- [ ] Uses `bd mol ready` when molecule beads exist
+- [ ] Falls back to `bd ready` for standalone beads
+- [ ] Creates worktree via `bd worktree create` after claiming
+- [ ] Reuses existing worktree, prints path
 - [ ] `make test` passes
 
-**Depends on**: 008-1 (uses `FindByBead`, `CheckCleanTree`); also uses `EnrichedList` from 008-2
+**Depends on**: 008-1 (needs `WorktreeCreate`, `WorktreeList`, `MolReady`)
 
 ---
 
-## Bead 008-4: CLI wiring + template update + doc-sync
+## Bead 008-4: mindspec complete
 
-**Scope**: `cmd/mindspec/worktree.go`, `cmd/mindspec/root.go`, `internal/instruct/templates/implement.md`, `CLAUDE.md`, `docs/core/CONVENTIONS.md`
+**Scope**: `cmd/mindspec/complete.go`, `internal/complete/complete.go`, `internal/complete/complete_test.go`
 
 **Steps**:
-1. Create `cmd/mindspec/worktree.go`: parent `worktreeCmd` + three child commands, following `bead.go` pattern
-2. Wire `worktreeCreateCmd` (ExactArgs(1)): findRoot → Preflight → `worktree.Create()` → print path
-3. Wire `worktreeListCmd` (NoArgs): findRoot → Preflight → `worktree.EnrichedList()` → `worktree.FormatList()` → print
-4. Wire `worktreeCleanCmd` (0 or 1 args, `--all`, `--yes` flags): findRoot → Preflight → if `--all`: `CleanAll(root, !yes)`, else `Clean(root, args[0])`
-5. Register `worktreeCmd` in `root.go` init()
-6. Update `internal/instruct/templates/implement.md`: add `mindspec worktree clean <bead-id>` to the completion checklist between bead closure and state advancement
-7. Update `CLAUDE.md`: add `mindspec worktree` commands to Build & Run and command table
-8. Update `docs/core/CONVENTIONS.md`: document worktree lifecycle (create on bead start, clean on bead close)
+1. Create `internal/complete/complete.go` with `Run(root, beadID string) error`:
+   - Read state → use `activeBead` if beadID is empty
+   - Find worktree via `bead.WorktreeList()` matching bead ID
+   - Check clean tree: `git -C <wt-path> status --porcelain`
+   - Close bead: `bead.Close(beadID)`
+   - Remove worktree: `bead.WorktreeRemove("worktree-" + beadID)`
+   - Advance state: check `bead.MolReady()` for next work; set mode accordingly
+   - Return summary of actions
+2. Create `cmd/mindspec/complete.go` — cobra command, 0 or 1 args, calls `complete.Run()`
+3. Handle edge cases: no worktree found (bead worked on main), worktree already removed, bead already closed
+4. Write tests: clean flow, dirty tree refusal, state advancement logic, no-worktree case
 
 **Verification**:
-- [ ] `./bin/mindspec worktree --help` shows `create`, `list`, `clean` subcommands
-- [ ] Exit codes: 0 success, 1 validation, 2 git/bd error
-- [ ] `implement.md` template includes `mindspec worktree clean` in completion checklist
+- [ ] Refuses on dirty worktree (exit 1)
+- [ ] Closes bead via `bd close`
+- [ ] Removes worktree via `bd worktree remove`
+- [ ] Advances state correctly (next bead / plan / idle)
+- [ ] Defaults to `activeBead` from state
+- [ ] Handles edge cases gracefully
+- [ ] `make test` passes
+
+**Depends on**: 008-1 (needs `Close`, `WorktreeList`, `WorktreeRemove`, `MolReady`)
+
+---
+
+## Bead 008-5: Template update + deprecation + doc-sync
+
+**Scope**: `internal/instruct/templates/implement.md`, `internal/instruct/worktree.go`, `cmd/mindspec/bead.go`, `cmd/mindspec/root.go`, `CLAUDE.md`, `docs/core/CONVENTIONS.md`
+
+**Steps**:
+1. Update `implement.md` completion checklist — replace multi-step checklist with `mindspec complete`
+2. Simplify `internal/instruct/worktree.go` `CheckWorktree()` — use `bead.WorktreeInfo()` instead of custom `git worktree list` parsing
+3. Add deprecation notices to `beadWorktreeCmd` and `beadPlanCmd` in `cmd/mindspec/bead.go`
+4. Register `completeCmd` in `root.go` init()
+5. Update `CLAUDE.md` — add `mindspec complete` to command table and Build & Run section
+6. Update `docs/core/CONVENTIONS.md` — document molecule conventions, worktree lifecycle via `bd worktree`
+7. Remove `internal/bead/worktree.go` custom git parsing (replaced by `bd worktree` wrappers)
+
+**Verification**:
+- [ ] `implement.md` uses `mindspec complete` as single close-out step
+- [ ] `CheckWorktree()` uses `bd worktree info`
+- [ ] Deprecation notices printed for `bead worktree` and `bead plan`
+- [ ] `complete` command registered and accessible
 - [ ] `CLAUDE.md` and `CONVENTIONS.md` updated
-- [ ] `mindspec bead worktree` still works (backward compatibility)
 - [ ] `make build && make test` passes
 
-**Depends on**: 008-2, 008-3
+**Depends on**: 008-2, 008-3, 008-4
 
 ---
 
 ## Dependency Graph
 
 ```
-008-1 (core worktree package)
-  ├── 008-2 (list with bead enrichment)
-  └── 008-3 (worktree cleanup)
-        ↓ both
-      008-4 (CLI wiring + template + doc-sync)
+008-1 (bd worktree + bd mol wrappers)
+  ├── 008-2 (molecule-based plan decomposition)
+  ├── 008-3 (mindspec next — worktree + mol ready)
+  └── 008-4 (mindspec complete)
+        ↓ all three
+      008-5 (template + deprecation + doc-sync)
 ```
 
-008-2 and 008-3 are parallelizable after 008-1. Note: 008-3's `CleanAll` uses `EnrichedList` from 008-2, so while they can be developed in parallel, 008-3 has a soft dependency on 008-2's `EnrichedList()` being available.
+008-2, 008-3, and 008-4 are parallelizable after 008-1.
 
 ---
 
@@ -240,9 +309,20 @@ Consistent with Spec 007:
 
 ```bash
 make build && make test
-./bin/mindspec worktree --help
-./bin/mindspec worktree list
-./bin/mindspec worktree clean --all         # dry-run
-./bin/mindspec worktree clean --all --yes   # execute
-./bin/mindspec bead worktree <id>           # backward compat
+
+# Create plan beads as molecule
+./bin/mindspec bead plan 008-worktree-lifecycle
+bd mol show <molecule-id>
+
+# Claim and start work
+./bin/mindspec next
+# → creates worktree, prints path
+
+# Complete work
+./bin/mindspec complete
+# → closes bead, removes worktree, advances state
+
+# Inspect
+bd worktree list
+./bin/mindspec state show
 ```

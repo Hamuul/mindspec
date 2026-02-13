@@ -53,26 +53,17 @@
 ### 006: `mindspec validate` — Workflow Checks ✓
 ### 007: Beads Integration Conventions + Tooling ✓
 
-### 008: Worktree Lifecycle Management ← **NEXT**
-**Why P1**: Implementation Mode requires worktree isolation. Workflow commands should handle worktrees implicitly.
+### 008: Workflow Lifecycle — Worktrees + Molecules ← **NEXT**
+**Why P1**: Implementation Mode requires worktree isolation. Plan decomposition reimplements Beads molecules. Both modify `mindspec next`, so they're merged.
 
-**Status**: Spec APPROVED (draft), Plan in progress. ADR-0006 (branch protection) and ADR-0007 (per-worktree state) drafted as Proposed.
+**Status**: Spec DRAFT (pending approval). ADR-0006 (branch protection) and ADR-0007 (per-worktree state) drafted as Proposed.
 
 **Scope**:
-- `mindspec next` creates worktree via `bd worktree create` after claiming bead
+- `mindspec next` creates worktree via `bd worktree create` + discovers ready work via `bd mol ready`
 - New `mindspec complete` command: close bead + `bd worktree remove` + advance state
-- Delegate all worktree CRUD to Beads (`bd worktree create/list/remove/info`)
-- Update `implement.md` template to use `mindspec complete` as single close-out step
-- Deprecate `mindspec bead worktree`
-
-### 008a: Molecule-Based Plan Decomposition
-**Why P1**: `bead plan` reimplements Beads molecule DAG creation. Beads formulas and `bd mol pour` handle this natively.
-
-**Scope**:
-- Replace `internal/bead/plan.go` (`CreatePlanBeads()`) with Beads molecule creation
-- Convert plan `work_chunks` YAML to a Beads formula (or call `bd mol pour` with equivalent structure)
-- Leverage `bd mol show --parallel` for DAG visualization
-- `bd mol ready` replaces custom ready-work filtering for plan beads
+- Replace `CreatePlanBeads()` with Beads molecule creation (`bd mol pour` or equivalent)
+- Delegate all worktree and molecule CRUD to Beads
+- Deprecate `mindspec bead worktree` and `mindspec bead plan`
 
 ### 008b: Human Gates for Approval Workflow
 **Why P1**: Spec-approve and plan-approve are human gates tracked only in markdown frontmatter. Beads has first-class `human` gate support.
@@ -174,8 +165,7 @@ P0: 000 ✓ → 001 ✓ (Go skeleton + doctor)
     → 002 ✓ (glossary) → 003 ✓ (context packs)
 
 P1: 004 ✓ (instruct) → 005 ✓ (next) → 006 ✓ (validate) → 007 ✓ (Beads tooling)
-    → 008 (worktree lifecycle + mindspec complete)  ← NEXT
-    → 008a (molecule-based plan decomposition)
+    → 008 (worktree lifecycle + molecules + mindspec complete)  ← NEXT
     → 008b (human gates for approval)
     → 008c (compose bd prime into instruct)
     → 009 (domains) → 010 (ADRs) → 011 (proofs)
@@ -185,6 +175,6 @@ P2: 012 (memory) → 013 (init)
 
 **Rationale**:
 - 001–007 are done. 008 is the next priority.
-- 008a/b/c deepen Beads integration before adding new MindSpec features. Molecules replace custom DAG code, gates formalize approval tracking, prime composition unifies agent context.
-- 008a/b/c can be done in any order after 008 lands (they're independent of each other).
+- 008b/c deepen Beads integration further. Gates formalize approval tracking, prime composition unifies agent context.
+- 008b and 008c can be done in any order after 008 lands (they're independent of each other).
 - 009+ resume after Beads integration is solid.
