@@ -246,3 +246,113 @@ status: Draft
 		t.Error("bead B: expected depends-on to be present")
 	}
 }
+
+// --- ADR citation validation tests ---
+
+func makePlanWithCitations(t *testing.T, root string, citations string, hasADRFitness bool) {
+	t.Helper()
+	specDir := filepath.Join(root, "docs", "specs", "999-test")
+	os.MkdirAll(specDir, 0o755)
+
+	fitnessSection := ""
+	if hasADRFitness {
+		fitnessSection = "\n## ADR Fitness\n\nAll cited ADRs remain appropriate.\n"
+	}
+
+	plan := "---\nstatus: Draft\nspec_id: \"999-test\"\nversion: \"1.0\"\nadr_citations:\n" + citations + "---\n\n# Plan\n" + fitnessSection + "\n## Bead 999-A: Test\n\n**Steps**:\n1. Step one\n2. Step two\n3. Step three\n\n**Verification**:\n- [ ] Check it\n\n**Depends on**: nothing\n"
+	os.WriteFile(filepath.Join(specDir, "plan.md"), []byte(plan), 0o644)
+}
+
+func writeTestADR(t *testing.T, root, id, status string) {
+	t.Helper()
+	adrDir := filepath.Join(root, "docs", "adr")
+	os.MkdirAll(adrDir, 0o755)
+
+	content := "# " + id + ": Test\n\n- **Status**: " + status + "\n- **Domain(s)**: core\n- **Supersedes**: n/a\n- **Superseded-by**: n/a\n\n## Decision\nSome decision.\n"
+	os.WriteFile(filepath.Join(adrDir, id+".md"), []byte(content), 0o644)
+}
+
+func TestValidatePlan_ADRCiteMissing(t *testing.T) {
+	tmp := t.TempDir()
+	makePlanWithCitations(t, tmp, "  - id: ADR-9999\n    sections: [\"CLI\"]\n", true)
+
+	r := ValidatePlan(tmp, "999-test")
+
+	found := false
+	for _, issue := range r.Issues {
+		if issue.Name == "adr-cite-missing" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected adr-cite-missing error for nonexistent ADR")
+	}
+}
+
+func TestValidatePlan_ADRCiteSuperseded(t *testing.T) {
+	tmp := t.TempDir()
+	writeTestADR(t, tmp, "ADR-0001", "Superseded")
+	makePlanWithCitations(t, tmp, "  - id: ADR-0001\n    sections: [\"CLI\"]\n", true)
+
+	r := ValidatePlan(tmp, "999-test")
+
+	found := false
+	for _, issue := range r.Issues {
+		if issue.Name == "adr-cite-superseded" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected adr-cite-superseded warning for Superseded ADR")
+	}
+}
+
+func TestValidatePlan_ADRCiteProposed(t *testing.T) {
+	tmp := t.TempDir()
+	writeTestADR(t, tmp, "ADR-0001", "Proposed")
+	makePlanWithCitations(t, tmp, "  - id: ADR-0001\n    sections: [\"CLI\"]\n", true)
+
+	r := ValidatePlan(tmp, "999-test")
+
+	found := false
+	for _, issue := range r.Issues {
+		if issue.Name == "adr-cite-proposed" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected adr-cite-proposed warning for Proposed ADR")
+	}
+}
+
+func TestValidatePlan_ADRFitnessMissing(t *testing.T) {
+	tmp := t.TempDir()
+	writeTestADR(t, tmp, "ADR-0001", "Accepted")
+	makePlanWithCitations(t, tmp, "  - id: ADR-0001\n    sections: [\"CLI\"]\n", false)
+
+	r := ValidatePlan(tmp, "999-test")
+
+	found := false
+	for _, issue := range r.Issues {
+		if issue.Name == "adr-fitness-missing" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected adr-fitness-missing warning when ## ADR Fitness section is absent")
+	}
+}
+
+func TestValidatePlan_ADRFitnessPresent(t *testing.T) {
+	tmp := t.TempDir()
+	writeTestADR(t, tmp, "ADR-0001", "Accepted")
+	makePlanWithCitations(t, tmp, "  - id: ADR-0001\n    sections: [\"CLI\"]\n", true)
+
+	r := ValidatePlan(tmp, "999-test")
+
+	for _, issue := range r.Issues {
+		if issue.Name == "adr-fitness-missing" {
+			t.Error("unexpected adr-fitness-missing warning when ## ADR Fitness section is present")
+		}
+	}
+}

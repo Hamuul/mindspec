@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mindspec/mindspec/internal/adr"
 	"gopkg.in/yaml.v3"
 )
 
@@ -53,7 +54,12 @@ func ValidatePlan(root, specID string) *Result {
 	// Check ADR citations
 	if len(fm.ADRCitations) == 0 {
 		r.AddWarning("adr-citations", "no ADR citations in frontmatter")
+	} else {
+		checkADRCitations(r, root, fm.ADRCitations)
 	}
+
+	// Check ADR Fitness section
+	checkADRFitnessSection(r, content)
 
 	// Check bead IDs exist in Beads
 	checkBeadIDs(r, fm.BeadIDs)
@@ -209,6 +215,45 @@ func parseBeadSections(content string) []beadSection {
 	}
 
 	return sections
+}
+
+// checkADRCitations validates that each cited ADR exists and has appropriate status.
+func checkADRCitations(r *Result, root string, citations []ADRCitation) {
+	for _, cite := range citations {
+		path := filepath.Join(root, "docs", "adr", cite.ID+".md")
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			r.AddError("adr-cite-missing", fmt.Sprintf("cited ADR %s does not exist", cite.ID))
+			continue
+		}
+
+		a, err := adr.ParseADR(path)
+		if err != nil {
+			r.AddWarning("adr-cite-parse", fmt.Sprintf("cannot parse cited ADR %s: %v", cite.ID, err))
+			continue
+		}
+
+		if strings.EqualFold(a.Status, "Superseded") {
+			msg := fmt.Sprintf("cited ADR %s is Superseded", cite.ID)
+			if a.SupersededBy != "" {
+				msg += fmt.Sprintf(" (see %s)", a.SupersededBy)
+			}
+			r.AddWarning("adr-cite-superseded", msg)
+		}
+		if strings.EqualFold(a.Status, "Proposed") {
+			r.AddWarning("adr-cite-proposed", fmt.Sprintf("cited ADR %s has status Proposed — consider accepting it first", cite.ID))
+		}
+	}
+}
+
+// checkADRFitnessSection checks that the plan includes an ## ADR Fitness section.
+func checkADRFitnessSection(r *Result, content string) {
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "## ADR Fitness" {
+			return
+		}
+	}
+	r.AddWarning("adr-fitness-missing", "plan should include an ## ADR Fitness section documenting evaluation of relevant ADRs")
 }
 
 // checkBeadSection validates a single bead section.

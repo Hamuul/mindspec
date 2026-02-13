@@ -11,6 +11,7 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
+	rootCmd.AddCommand(adrCmd)
 	rootCmd.AddCommand(approveCmd)
 	rootCmd.AddCommand(beadCmd)
 	rootCmd.AddCommand(completeCmd)

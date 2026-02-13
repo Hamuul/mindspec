@@ -1,6 +1,6 @@
 {
-  "mode": "idle",
-  "activeSpec": "",
+  "mode": "review",
+  "activeSpec": "012-adr-lifecycle",
   "activeBead": "",
-  "lastUpdated": "2026-02-13T16:40:56Z"
+  "lastUpdated": "2026-02-13T17:00:57Z"
 }
