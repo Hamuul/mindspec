@@ -47,10 +47,9 @@ var beadSpecCmd = &cobra.Command{
 }
 
 var beadPlanCmd = &cobra.Command{
-	Use:        "plan [spec-id]",
-	Short:      "Create implementation beads from an approved plan",
-	Long:       `Reads an approved plan with work_chunks, creates one bead per chunk, wires dependencies, and writes bead IDs into plan frontmatter.`,
-	Deprecated: "use /plan-approve workflow instead, which calls this automatically",
+	Use:   "plan [spec-id]",
+	Short: "Create implementation beads from an approved plan",
+	Long:  `Reads an approved plan with work_chunks, creates one bead per chunk, wires dependencies, and writes bead IDs into plan frontmatter. Also called automatically by 'mindspec approve plan'.`,
 	Args:       cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		specID := args[0]

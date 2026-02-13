@@ -206,6 +206,8 @@ Mode transitions are marked with explicit commits:
 
 Normal commits during a mode are expected and encouraged (especially in Implementation Mode — tests first, refactor, docs, etc.). The milestone commit marks the boundary cleanly.
 
+> **Note**: Milestone commits are an **agent convention** enforced by training and instruct templates, not by CLI tooling. The `mindspec approve` and `mindspec complete` commands do not create git commits — the agent is responsible for making the milestone commit after running these commands.
+
 ### Commit Message Conventions
 
 Use conventional-commit style scoped to the bead ID:

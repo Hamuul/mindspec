@@ -22,7 +22,7 @@ type PlanResult struct {
 }
 
 // ApprovePlan validates and approves a plan, resolving its gate and setting state.
-func ApprovePlan(root, specID string) (*PlanResult, error) {
+func ApprovePlan(root, specID, approvedBy string) (*PlanResult, error) {
 	result := &PlanResult{SpecID: specID}
 
 	// Step 1: Validate
@@ -33,11 +33,22 @@ func ApprovePlan(root, specID string) (*PlanResult, error) {
 
 	// Step 2: Update plan frontmatter
 	planPath := filepath.Join(root, "docs", "specs", specID, "plan.md")
-	if err := updatePlanApproval(planPath); err != nil {
+	if err := updatePlanApproval(planPath, approvedBy); err != nil {
 		return nil, fmt.Errorf("updating plan approval: %w", err)
 	}
 
-	// Step 3: Resolve plan gate (best-effort)
+	// Step 3: Create plan beads (best-effort, idempotent)
+	beadResult, err := bead.CreatePlanBeads(root, specID)
+	if err != nil {
+		result.Warnings = append(result.Warnings, fmt.Sprintf("could not create plan beads: %v", err))
+	} else {
+		// Write bead IDs back to plan frontmatter
+		if err := bead.WriteGeneratedBeadIDs(planPath, beadResult); err != nil {
+			result.Warnings = append(result.Warnings, fmt.Sprintf("could not write bead IDs to plan: %v", err))
+		}
+	}
+
+	// Step 4: Resolve plan gate (best-effort)
 	gateTitle := bead.PlanGateTitle(specID)
 	gate, _ := bead.FindGateAnyStatus(gateTitle)
 	if gate != nil {
@@ -55,7 +66,7 @@ func ApprovePlan(root, specID string) (*PlanResult, error) {
 		result.Warnings = append(result.Warnings, "no plan gate found (legacy beads — proceeding without gate)")
 	}
 
-	// Step 4: Set state to plan mode (approved)
+	// Step 5: Set state to plan mode (approved)
 	// Note: implement mode requires a bead ID. The user runs `mindspec next`
 	// to claim work and transition to implement mode.
 	if err := state.SetMode(root, state.ModePlan, specID, ""); err != nil {
@@ -66,7 +77,7 @@ func ApprovePlan(root, specID string) (*PlanResult, error) {
 }
 
 // updatePlanApproval reads a plan file and updates YAML frontmatter with approval fields.
-func updatePlanApproval(planPath string) error {
+func updatePlanApproval(planPath, approvedBy string) error {
 	data, err := os.ReadFile(planPath)
 	if err != nil {
 		return fmt.Errorf("reading plan: %w", err)
@@ -114,7 +125,7 @@ func updatePlanApproval(planPath string) error {
 	now := time.Now().UTC()
 	fmMap["status"] = "Approved"
 	fmMap["approved_at"] = now.Format(time.RFC3339)
-	fmMap["approved_by"] = "user"
+	fmMap["approved_by"] = approvedBy
 
 	// Re-marshal
 	newFm, err := yaml.Marshal(fmMap)

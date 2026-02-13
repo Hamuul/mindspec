@@ -146,7 +146,7 @@ func checkCleanWorktree(path string) error {
 		return fmt.Errorf("checking worktree status: %w", err)
 	}
 	if strings.TrimSpace(string(out)) != "" {
-		return fmt.Errorf("worktree has uncommitted changes — commit or stash before completing:\n%s", strings.TrimSpace(string(out)))
+		return fmt.Errorf("worktree has uncommitted changes — commit before completing:\n%s", strings.TrimSpace(string(out)))
 	}
 	return nil
 }

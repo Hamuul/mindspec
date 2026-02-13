@@ -7,12 +7,13 @@ import (
 	"github.com/mindspec/mindspec/internal/bead"
 )
 
-// worktreeInfoFn is a package-level variable for testability.
-var worktreeInfoFn = bead.WorktreeInfo
+// worktreeListFn is a package-level variable for testability.
+var worktreeListFn = bead.WorktreeList
 
 // CheckWorktree verifies that the current working directory is the expected
-// worktree for the active bead. Returns a warning message if mismatched,
-// or empty string if OK or check is not applicable.
+// worktree for the active bead. Returns an informational message if the
+// worktree exists but CWD doesn't match, a warning if the worktree doesn't
+// exist, or empty string if OK or check is not applicable.
 func CheckWorktree(activeBead string) string {
 	if activeBead == "" {
 		return ""
@@ -25,15 +26,23 @@ func CheckWorktree(activeBead string) string {
 		return fmt.Sprintf("Could not determine working directory: %v", err)
 	}
 
-	info, err := worktreeInfoFn()
+	entries, err := worktreeListFn()
 	if err != nil {
-		// bd worktree info not available — fall back to name check
-		return fmt.Sprintf("Worktree mismatch: you are in %s but bead %s expects a worktree named %s (not found). Create it with: mindspec next", cwd, activeBead, expectedName)
-	}
-
-	if info.IsWorktree && info.Name == expectedName {
+		// bd worktree list not available — can't check
 		return ""
 	}
 
-	return fmt.Sprintf("Worktree mismatch: you are in %s but bead %s expects a worktree named %s (not found). Create it with: mindspec next", cwd, activeBead, expectedName)
+	for _, e := range entries {
+		if e.Name == expectedName {
+			// Worktree exists — check if we're in it
+			if e.Path == cwd {
+				return ""
+			}
+			// Exists but CWD differs — informational, not a warning
+			return fmt.Sprintf("Switch to worktree to begin work: cd %s", e.Path)
+		}
+	}
+
+	// Worktree doesn't exist
+	return fmt.Sprintf("No worktree found for bead %s. Create it with: mindspec next", activeBead)
 }

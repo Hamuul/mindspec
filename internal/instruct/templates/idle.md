@@ -17,3 +17,10 @@ You are not currently working on any spec or bead.
 {{- else}}
 No specs found in `docs/specs/`.
 {{- end}}
+
+## Next Action
+
+Greet the user and ask what they'd like to work on. Suggest:
+- `/spec-init` to draft a new specification
+- Resuming an existing spec (if any are listed above)
+- `mindspec doctor` to check project health

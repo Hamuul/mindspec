@@ -243,8 +243,16 @@ func TestParseSpecID(t *testing.T) {
 		title    string
 		expected string
 	}{
+		// Bracket-prefix convention
+		{"[IMPL 009-feature.1] Chunk title", "009-feature"},
+		{"[IMPL 009-workflow-gaps.2] Approval enhancements", "009-workflow-gaps"},
+		{"[SPEC 008b-gates] Human Gates Feature", "008b-gates"},
+		{"[PLAN 009-feature] Plan decomposition", "009-feature"},
+		{"[IMPL 001.3] Simple numeric", "001"},
+		// Legacy colon convention (fallback)
 		{"005-next: Implement work selection", "005-next"},
 		{"003-context: Fix rendering bug", "003-context"},
+		// Edge cases
 		{"No colon here", ""},
 		{"simple:", "simple"},
 		{": leading colon", ""},

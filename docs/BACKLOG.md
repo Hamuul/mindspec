@@ -53,37 +53,24 @@
 ### 006: `mindspec validate` — Workflow Checks ✓
 ### 007: Beads Integration Conventions + Tooling ✓
 
-### 008: Workflow Lifecycle — Worktrees + Molecules ← **NEXT**
-**Why P1**: Implementation Mode requires worktree isolation. Plan decomposition reimplements Beads molecules. Both modify `mindspec next`, so they're merged.
+### 008: Workflow Lifecycle — Worktrees + Molecules ✓
+### 008b: Human Gates for Approval Workflow ✓
+### 008c: Compose `bd prime` into `mindspec instruct` ✓
 
-**Status**: Spec DRAFT (pending approval). ADR-0006 (branch protection) and ADR-0007 (per-worktree state) drafted as Proposed.
-
-**Scope**:
-- `mindspec next` creates worktree via `bd worktree create` + discovers ready work via `bd mol ready`
-- New `mindspec complete` command: close bead + `bd worktree remove` + advance state
-- Replace `CreatePlanBeads()` with Beads molecule creation (`bd mol pour` or equivalent)
-- Delegate all worktree and molecule CRUD to Beads
-- Deprecate `mindspec bead worktree` and `mindspec bead plan`
-
-### 008b: Human Gates for Approval Workflow
-**Why P1**: Spec-approve and plan-approve are human gates tracked only in markdown frontmatter. Beads has first-class `human` gate support.
+### 009: Workflow Happy-Path Gap Fixes ← **NEXT**
+**Why P1**: A dogfooding review ([docs/happy-path.md](happy-path.md)) found 8 gaps between what the workflow promises and what actually works. The most critical: bead creation is never automated — approve commands assume beads exist but nothing creates them.
 
 **Scope**:
-- Model spec approval as a Beads human gate on the spec bead
-- Model plan approval as a Beads human gate on the plan molecule
-- `bd gate resolve <id>` becomes the execution signal (complements frontmatter as document record)
-- `bd ready` naturally shows work unblocked by resolved gates
-- Update `/spec-approve` and `/plan-approve` skills to resolve Beads gates alongside frontmatter update
+- Automate bead creation in `approve spec` and `approve plan` commands
+- Fix spec ID parsing in `ResolveMode` for bracket-prefix bead titles
+- Suppress false worktree mismatch warning after `mindspec next`
+- Generate context pack on spec approval
+- Add `--approved-by` flag to approval commands
+- Fix "stash" error message in `complete` to match conventions
+- Add `## Next Action` directive to idle instruct template
+- Document milestone commits as agent-convention-only
 
-### 008c: Compose `bd prime` into `mindspec instruct`
-**Why P1**: `bd prime` provides Beads workflow context (~1-2k tokens), `mindspec instruct` provides spec-driven process guidance. Composing them gives agents a complete picture.
-
-**Scope**:
-- `mindspec instruct` embeds or appends `bd prime` output
-- Avoids agents needing two separate context sources
-- Respect token budgets — `bd prime` is already compact
-
-### 009: Domain Scaffold + Context Map
+### 010: Domain Scaffold + Context Map (was 009)
 **Why P1**: DDD primitives need tooling support.
 
 **Scope**:
@@ -93,7 +80,7 @@
 
 **Partial**: Initial domain structure and `docs/context-map.md` created manually.
 
-### 010: ADR Lifecycle Tooling
+### 011: ADR Lifecycle Tooling (was 010)
 **Why P1**: ADR governance needs tooling support.
 
 **Scope**:
@@ -102,7 +89,7 @@
 - Superseding workflow: create new ADR linking to superseded one
 - Validate ADR citations in plans
 
-### 011: Proof Runner (MVP)
+### 012: Proof Runner (MVP) (was 011)
 **Why P1**: Foundation for "proof-of-done" invariant.
 
 **Scope**:
@@ -115,7 +102,7 @@
 
 ## P2: Project Health + Memory
 
-### 012: Memory Service (Basic)
+### 013: Memory Service (Basic) (was 012)
 **Why P2**: Persist decisions, gotchas, debugging outcomes across sessions.
 
 **Scope**:
@@ -124,7 +111,7 @@
 - Tag by spec-id, domain, keywords
 - Memory entries reference canonical beads or specs (per ADR-0002)
 
-### 013: `mindspec init` — Project Bootstrap
+### 014: `mindspec init` — Project Bootstrap (was 013)
 **Why P2**: Scaffolds a new MindSpec project from scratch.
 
 **Scope**:
@@ -138,20 +125,20 @@
 
 ## P3: Advanced Features
 
-### 014: Architecture Divergence Detection
+### 015: Architecture Divergence Detection (was 014)
 - Compare implementation against documented architecture
 - Auto-trigger ADR divergence protocol when violations detected
 
-### 015: Parallel Task Dispatch
+### 016: Parallel Task Dispatch (was 015)
 - Identify ready beads (no unresolved dependencies)
 - Generate per-bead context packets for parallel agent execution
 
-### 016: Observability / Telemetry
+### 017: Observability / Telemetry (was 016)
 - Glossary hit/miss rates
 - Token budgets and cache rates
 - OTel-friendly event shaping for future Agent Mind Visualization
 
-### 017: Cross-Platform Release Automation
+### 018: Cross-Platform Release Automation (was 017)
 - CI/CD pipeline for Go binary builds
 - Multi-arch binaries (darwin/linux, amd64/arm64)
 - GitHub Releases or homebrew tap
@@ -165,16 +152,13 @@ P0: 000 ✓ → 001 ✓ (Go skeleton + doctor)
     → 002 ✓ (glossary) → 003 ✓ (context packs)
 
 P1: 004 ✓ (instruct) → 005 ✓ (next) → 006 ✓ (validate) → 007 ✓ (Beads tooling)
-    → 008 (worktree lifecycle + molecules + mindspec complete)  ← NEXT
-    → 008b (human gates for approval)
-    → 008c (compose bd prime into instruct)
-    → 009 (domains) → 010 (ADRs) → 011 (proofs)
+    → 008 ✓ (worktree lifecycle) → 008b ✓ (human gates) → 008c ✓ (prime compose)
+    → 009 (workflow gap fixes)  ← NEXT
+    → 010 (domains) → 011 (ADRs) → 012 (proofs)
 
-P2: 012 (memory) → 013 (init)
+P2: 013 (memory) → 014 (init)
 ```
 
 **Rationale**:
-- 001–007 are done. 008 is the next priority.
-- 008b/c deepen Beads integration further. Gates formalize approval tracking, prime composition unifies agent context.
-- 008b and 008c can be done in any order after 008 lands (they're independent of each other).
-- 009+ resume after Beads integration is solid.
+- 001–008c are done. 009 (workflow gap fixes) is next — closes all happy-path dogfooding gaps.
+- 010+ resume after workflow gaps are addressed.

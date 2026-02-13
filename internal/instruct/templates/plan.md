@@ -46,3 +46,7 @@ Implementation beads, each with:
 ## Next Action
 
 Complete the plan at `docs/specs/{{.ActiveSpec}}/plan.md`, then run `/plan-approve`.
+
+## Session Close
+
+Before ending a session: commit all changes, run quality gates if code changed, update bead status, and push to remote (if configured). Work is not complete until changes are committed and pushed.

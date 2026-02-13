@@ -28,7 +28,7 @@ Details here.
 	planPath := filepath.Join(tmp, "plan.md")
 	os.WriteFile(planPath, []byte(planContent), 0644)
 
-	err := updatePlanApproval(planPath)
+	err := updatePlanApproval(planPath, "user")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestUpdatePlanApproval_NoFrontmatter(t *testing.T) {
 	planPath := filepath.Join(tmp, "plan.md")
 	os.WriteFile(planPath, []byte("# No frontmatter\n"), 0644)
 
-	err := updatePlanApproval(planPath)
+	err := updatePlanApproval(planPath, "user")
 	if err == nil {
 		t.Fatal("expected error for missing frontmatter")
 	}
@@ -99,7 +99,7 @@ work_chunks:
 	planPath := filepath.Join(tmp, "plan.md")
 	os.WriteFile(planPath, []byte(planContent), 0644)
 
-	err := updatePlanApproval(planPath)
+	err := updatePlanApproval(planPath, "user")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

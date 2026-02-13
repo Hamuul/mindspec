@@ -54,3 +54,7 @@ When the bead is done:
 ## Next Action
 
 Implement the bead's scope, then follow the completion checklist above.
+
+## Session Close
+
+Before ending a session: commit all changes, run quality gates (tests, build), update bead status, and push to remote (if configured). Work is not complete until changes are committed and pushed.

@@ -39,3 +39,7 @@ A spec containing:
 ## Next Action
 
 Complete the spec at `docs/specs/{{.ActiveSpec}}/spec.md`, then run `/spec-approve`.
+
+## Session Close
+
+Before ending a session: commit all changes, run quality gates if code changed, update bead status, and push to remote (if configured). Work is not complete until changes are committed and pushed.

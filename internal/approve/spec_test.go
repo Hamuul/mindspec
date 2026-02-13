@@ -54,7 +54,7 @@ None
 	specPath := filepath.Join(tmp, "spec.md")
 	os.WriteFile(specPath, []byte(specContent), 0644)
 
-	err := updateSpecApproval(specPath)
+	err := updateSpecApproval(specPath, "user")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestUpdateSpecApproval_NoApprovalSection(t *testing.T) {
 	specPath := filepath.Join(tmp, "spec.md")
 	os.WriteFile(specPath, []byte(specContent), 0644)
 
-	err := updateSpecApproval(specPath)
+	err := updateSpecApproval(specPath, "user")
 	if err == nil {
 		t.Fatal("expected error for missing Approval section")
 	}
@@ -114,7 +114,7 @@ Extra stuff here.
 	specPath := filepath.Join(tmp, "spec.md")
 	os.WriteFile(specPath, []byte(specContent), 0644)
 
-	err := updateSpecApproval(specPath)
+	err := updateSpecApproval(specPath, "user")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

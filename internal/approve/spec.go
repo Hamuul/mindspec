@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/mindspec/mindspec/internal/bead"
+	"github.com/mindspec/mindspec/internal/contextpack"
 	"github.com/mindspec/mindspec/internal/state"
 	"github.com/mindspec/mindspec/internal/validate"
 )
@@ -20,7 +21,7 @@ type SpecResult struct {
 }
 
 // ApproveSpec validates and approves a spec, resolving its gate and setting state.
-func ApproveSpec(root, specID string) (*SpecResult, error) {
+func ApproveSpec(root, specID, approvedBy string) (*SpecResult, error) {
 	result := &SpecResult{SpecID: specID}
 
 	// Step 1: Validate
@@ -31,11 +32,19 @@ func ApproveSpec(root, specID string) (*SpecResult, error) {
 
 	// Step 2: Update spec frontmatter (Approval section)
 	specPath := filepath.Join(root, "docs", "specs", specID, "spec.md")
-	if err := updateSpecApproval(specPath); err != nil {
+	if err := updateSpecApproval(specPath, approvedBy); err != nil {
 		return nil, fmt.Errorf("updating spec approval: %w", err)
 	}
 
-	// Step 3: Resolve spec gate (best-effort)
+	// Step 3: Create spec bead + gate (best-effort, idempotent)
+	beadResult, err := bead.CreateSpecBead(root, specID)
+	if err != nil {
+		result.Warnings = append(result.Warnings, fmt.Sprintf("could not create spec bead: %v", err))
+	} else if beadResult.GateID != "" {
+		// Gate was created or already exists
+	}
+
+	// Step 4: Resolve spec gate (best-effort)
 	gateTitle := bead.SpecGateTitle(specID)
 	gate, _ := bead.FindGateAnyStatus(gateTitle)
 	if gate != nil {
@@ -53,7 +62,17 @@ func ApproveSpec(root, specID string) (*SpecResult, error) {
 		result.Warnings = append(result.Warnings, "no spec gate found (legacy beads — proceeding without gate)")
 	}
 
-	// Step 4: Set state to plan mode
+	// Step 5: Generate context pack (best-effort)
+	pack, err := contextpack.Build(root, specID, contextpack.ModePlan)
+	if err != nil {
+		result.Warnings = append(result.Warnings, fmt.Sprintf("could not generate context pack: %v", err))
+	} else {
+		if err := pack.WriteToFile(root, specID); err != nil {
+			result.Warnings = append(result.Warnings, fmt.Sprintf("could not write context pack: %v", err))
+		}
+	}
+
+	// Step 6: Set state to plan mode
 	if err := state.SetMode(root, state.ModePlan, specID, ""); err != nil {
 		return nil, fmt.Errorf("setting state: %w", err)
 	}
@@ -62,7 +81,7 @@ func ApproveSpec(root, specID string) (*SpecResult, error) {
 }
 
 // updateSpecApproval reads a spec file and updates the ## Approval section.
-func updateSpecApproval(specPath string) error {
+func updateSpecApproval(specPath, approvedBy string) error {
 	data, err := os.ReadFile(specPath)
 	if err != nil {
 		return fmt.Errorf("reading spec: %w", err)
@@ -95,7 +114,7 @@ func updateSpecApproval(specPath string) error {
 		"## Approval",
 		"",
 		"- **Status**: APPROVED",
-		"- **Approved By**: user",
+		fmt.Sprintf("- **Approved By**: %s", approvedBy),
 		fmt.Sprintf("- **Approval Date**: %s", today),
 		"- **Notes**: Approved via mindspec approve spec",
 	}

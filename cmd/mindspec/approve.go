@@ -19,11 +19,13 @@ var approveSpecCmd = &cobra.Command{
 	Use:   "spec [spec-id]",
 	Short: "Approve a spec and transition to Plan Mode",
 	Long: `Validates the spec, updates the Approval section to APPROVED,
-resolves the spec gate in Beads, sets state to plan mode,
-and emits plan mode guidance.`,
+creates the spec bead and gate (if not already present),
+resolves the spec gate in Beads, generates the context pack,
+sets state to plan mode, and emits plan mode guidance.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		specID := args[0]
+		approvedBy, _ := cmd.Flags().GetString("approved-by")
 
 		root, err := findRoot()
 		if err != nil {
@@ -32,10 +34,10 @@ and emits plan mode guidance.`,
 
 		// Preflight Beads (best-effort — gate resolution needs it)
 		if err := bead.Preflight(root); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: Beads preflight failed: %v (gate resolution may fail)\n", err)
+			fmt.Fprintf(os.Stderr, "warning: Beads preflight failed: %v (bead creation and gate resolution may fail)\n", err)
 		}
 
-		result, err := approve.ApproveSpec(root, specID)
+		result, err := approve.ApproveSpec(root, specID, approvedBy)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
@@ -64,11 +66,13 @@ var approvePlanCmd = &cobra.Command{
 	Use:   "plan [spec-id]",
 	Short: "Approve a plan and transition toward Implementation Mode",
 	Long: `Validates the plan, updates YAML frontmatter to Approved,
+creates implementation beads (if not already present),
 resolves the plan gate in Beads, and emits guidance.
 Run 'mindspec next' after this to claim work and enter Implementation Mode.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		specID := args[0]
+		approvedBy, _ := cmd.Flags().GetString("approved-by")
 
 		root, err := findRoot()
 		if err != nil {
@@ -77,10 +81,10 @@ Run 'mindspec next' after this to claim work and enter Implementation Mode.`,
 
 		// Preflight Beads (best-effort)
 		if err := bead.Preflight(root); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: Beads preflight failed: %v (gate resolution may fail)\n", err)
+			fmt.Fprintf(os.Stderr, "warning: Beads preflight failed: %v (bead creation and gate resolution may fail)\n", err)
 		}
 
-		result, err := approve.ApprovePlan(root, specID)
+		result, err := approve.ApprovePlan(root, specID, approvedBy)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
@@ -108,6 +112,8 @@ Run 'mindspec next' after this to claim work and enter Implementation Mode.`,
 }
 
 func init() {
+	approveSpecCmd.Flags().String("approved-by", "user", "Identity of the approver")
+	approvePlanCmd.Flags().String("approved-by", "user", "Identity of the approver")
 	approveCmd.AddCommand(approveSpecCmd)
 	approveCmd.AddCommand(approvePlanCmd)
 }
