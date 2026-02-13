@@ -1,9 +1,13 @@
 package next
 
 import (
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/mindspec/mindspec/internal/bead"
 )
 
 // --- ParseBeadsJSON tests ---
@@ -250,6 +254,290 @@ func TestParseSpecID(t *testing.T) {
 		if result != tt.expected {
 			t.Errorf("parseSpecID(%q) = %q, want %q", tt.title, result, tt.expected)
 		}
+	}
+}
+
+// --- QueryReady molecule-aware tests ---
+
+func TestQueryReady_PrefersMolChildren(t *testing.T) {
+	origSearch := searchBeads
+	origMolReady := molReady
+	origExec := execCommand
+	defer func() {
+		searchBeads = origSearch
+		molReady = origMolReady
+		execCommand = origExec
+	}()
+
+	searchBeads = func(query string) ([]bead.BeadInfo, error) {
+		// Return a molecule parent
+		return []bead.BeadInfo{
+			{ID: "mol-parent-1", Title: "[PLAN test] Plan", IssueType: "epic"},
+		}, nil
+	}
+
+	molReady = func(parentID string) ([]bead.BeadInfo, error) {
+		// Return ready children
+		return []bead.BeadInfo{
+			{ID: "child-1", Title: "[IMPL test.1] First chunk", IssueType: "task", Priority: 2},
+			{ID: "child-2", Title: "[IMPL test.2] Second chunk", IssueType: "task", Priority: 2},
+		}, nil
+	}
+
+	// execCommand should NOT be called (mol ready should be preferred)
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		t.Error("bd ready should not be called when mol children exist")
+		return exec.Command("echo", "[]")
+	}
+
+	items, err := QueryReady()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(items))
+	}
+	if items[0].ID != "child-1" {
+		t.Errorf("items[0].ID: got %q, want %q", items[0].ID, "child-1")
+	}
+}
+
+func TestQueryReady_FallsBackToBdReady(t *testing.T) {
+	origSearch := searchBeads
+	origMolReady := molReady
+	origExec := execCommand
+	defer func() {
+		searchBeads = origSearch
+		molReady = origMolReady
+		execCommand = origExec
+	}()
+
+	// No molecule parents
+	searchBeads = func(query string) ([]bead.BeadInfo, error) {
+		return nil, nil
+	}
+
+	molReady = func(parentID string) ([]bead.BeadInfo, error) {
+		t.Error("MolReady should not be called when no parents found")
+		return nil, nil
+	}
+
+	// bd ready fallback
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		return exec.Command("echo", `[{"id":"standalone-1","title":"Standalone work","status":"open","priority":2,"issue_type":"task","owner":"","created_at":"","updated_at":""}]`)
+	}
+
+	items, err := QueryReady()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(items))
+	}
+	if items[0].ID != "standalone-1" {
+		t.Errorf("items[0].ID: got %q, want %q", items[0].ID, "standalone-1")
+	}
+}
+
+func TestQueryReady_FallsBackWhenMolEmpty(t *testing.T) {
+	origSearch := searchBeads
+	origMolReady := molReady
+	origExec := execCommand
+	defer func() {
+		searchBeads = origSearch
+		molReady = origMolReady
+		execCommand = origExec
+	}()
+
+	// Molecule parent exists but no ready children
+	searchBeads = func(query string) ([]bead.BeadInfo, error) {
+		return []bead.BeadInfo{
+			{ID: "mol-parent-1", Title: "[PLAN test] Plan", IssueType: "epic"},
+		}, nil
+	}
+
+	molReady = func(parentID string) ([]bead.BeadInfo, error) {
+		return nil, nil // empty
+	}
+
+	// Should fall back to bd ready
+	bdReadyCalled := false
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		bdReadyCalled = true
+		return exec.Command("echo", `[{"id":"fallback-1","title":"Fallback work","status":"open","priority":2,"issue_type":"task","owner":"","created_at":"","updated_at":""}]`)
+	}
+
+	items, err := QueryReady()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !bdReadyCalled {
+		t.Error("expected bd ready fallback to be called")
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(items))
+	}
+	if items[0].ID != "fallback-1" {
+		t.Errorf("items[0].ID: got %q, want %q", items[0].ID, "fallback-1")
+	}
+}
+
+// --- ClaimBead tests ---
+
+func TestClaimBead_DelegatesToBeadUpdate(t *testing.T) {
+	origUpdate := updateBead
+	defer func() { updateBead = origUpdate }()
+
+	var capturedID, capturedStatus string
+	updateBead = func(id, status string) error {
+		capturedID = id
+		capturedStatus = status
+		return nil
+	}
+
+	err := ClaimBead("bead-abc")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedID != "bead-abc" {
+		t.Errorf("ID: got %q, want %q", capturedID, "bead-abc")
+	}
+	if capturedStatus != "in_progress" {
+		t.Errorf("status: got %q, want %q", capturedStatus, "in_progress")
+	}
+}
+
+func TestClaimBead_PropagatesError(t *testing.T) {
+	origUpdate := updateBead
+	defer func() { updateBead = origUpdate }()
+
+	updateBead = func(id, status string) error {
+		return fmt.Errorf("bd update failed")
+	}
+
+	err := ClaimBead("bead-abc")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// --- EnsureWorktree tests ---
+
+func TestEnsureWorktree_CreatesNew(t *testing.T) {
+	origList := worktreeList
+	origCreate := worktreeCreate
+	defer func() {
+		worktreeList = origList
+		worktreeCreate = origCreate
+	}()
+
+	listCallCount := 0
+	worktreeList = func() ([]bead.WorktreeListEntry, error) {
+		listCallCount++
+		if listCallCount == 1 {
+			// First call: no matching worktree
+			return []bead.WorktreeListEntry{
+				{Name: "mindspec", Path: "/home/user/mindspec", Branch: "main", IsMain: true},
+			}, nil
+		}
+		// Second call: worktree was created
+		return []bead.WorktreeListEntry{
+			{Name: "mindspec", Path: "/home/user/mindspec", Branch: "main", IsMain: true},
+			{Name: "worktree-bead-abc", Path: "/home/user/worktree-bead-abc", Branch: "bead/bead-abc", IsMain: false},
+		}, nil
+	}
+
+	var createdName, createdBranch string
+	worktreeCreate = func(name, branch string) error {
+		createdName = name
+		createdBranch = branch
+		return nil
+	}
+
+	path, err := EnsureWorktree("bead-abc")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if path != "/home/user/worktree-bead-abc" {
+		t.Errorf("path: got %q, want %q", path, "/home/user/worktree-bead-abc")
+	}
+	if createdName != "worktree-bead-abc" {
+		t.Errorf("created name: got %q, want %q", createdName, "worktree-bead-abc")
+	}
+	if createdBranch != "bead/bead-abc" {
+		t.Errorf("created branch: got %q, want %q", createdBranch, "bead/bead-abc")
+	}
+}
+
+func TestEnsureWorktree_ReusesExisting(t *testing.T) {
+	origList := worktreeList
+	origCreate := worktreeCreate
+	defer func() {
+		worktreeList = origList
+		worktreeCreate = origCreate
+	}()
+
+	worktreeList = func() ([]bead.WorktreeListEntry, error) {
+		return []bead.WorktreeListEntry{
+			{Name: "mindspec", Path: "/home/user/mindspec", Branch: "main", IsMain: true},
+			{Name: "worktree-bead-abc", Path: "/home/user/worktree-bead-abc", Branch: "bead/bead-abc", IsMain: false},
+		}, nil
+	}
+
+	worktreeCreate = func(name, branch string) error {
+		t.Error("worktreeCreate should not be called when worktree exists")
+		return nil
+	}
+
+	path, err := EnsureWorktree("bead-abc")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if path != "/home/user/worktree-bead-abc" {
+		t.Errorf("path: got %q, want %q", path, "/home/user/worktree-bead-abc")
+	}
+}
+
+func TestEnsureWorktree_MatchesByBranch(t *testing.T) {
+	origList := worktreeList
+	origCreate := worktreeCreate
+	defer func() {
+		worktreeList = origList
+		worktreeCreate = origCreate
+	}()
+
+	worktreeList = func() ([]bead.WorktreeListEntry, error) {
+		return []bead.WorktreeListEntry{
+			{Name: "custom-name", Path: "/home/user/custom-name", Branch: "bead/bead-xyz", IsMain: false},
+		}, nil
+	}
+
+	worktreeCreate = func(name, branch string) error {
+		t.Error("should not create — matched by branch")
+		return nil
+	}
+
+	path, err := EnsureWorktree("bead-xyz")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if path != "/home/user/custom-name" {
+		t.Errorf("path: got %q, want %q", path, "/home/user/custom-name")
+	}
+}
+
+// --- convertBeadInfos tests ---
+
+func TestConvertBeadInfos(t *testing.T) {
+	src := []bead.BeadInfo{
+		{ID: "a", Title: "First", Status: "open", Priority: 1, IssueType: "task", Owner: "user", CreatedAt: "t1", UpdatedAt: "t2"},
+	}
+	result := convertBeadInfos(src)
+	if len(result) != 1 {
+		t.Fatalf("expected 1, got %d", len(result))
+	}
+	if result[0].ID != "a" || result[0].Title != "First" || result[0].Priority != 1 {
+		t.Errorf("conversion mismatch: %+v", result[0])
 	}
 }
 

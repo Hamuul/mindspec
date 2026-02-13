@@ -78,6 +78,15 @@ to "here's your bead, here's the mode, here are your rules" in one step.`,
 			return fmt.Errorf("claiming bead: %w", err)
 		}
 
+		// Step 5.5: Create or reuse worktree
+		wtPath, wtErr := next.EnsureWorktree(selected.ID)
+		if wtErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: worktree setup failed: %v\n", wtErr)
+		} else if wtPath != "" {
+			fmt.Printf("Worktree: %s\n", wtPath)
+			fmt.Printf("  cd %s\n", wtPath)
+		}
+
 		// Step 6: Resolve mode and spec ID
 		resolved := next.ResolveMode(root, selected)
 
