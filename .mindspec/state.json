@@ -1,6 +1,6 @@
 {
-  "mode": "review",
-  "activeSpec": "012-adr-lifecycle",
+  "mode": "plan",
+  "activeSpec": "011-domain-scaffold",
   "activeBead": "",
-  "lastUpdated": "2026-02-13T17:00:57Z"
+  "lastUpdated": "2026-02-13T17:15:41Z"
 }
