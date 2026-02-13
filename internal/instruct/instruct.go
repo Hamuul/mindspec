@@ -152,6 +152,10 @@ func gatesForMode(mode string) []string {
 			"ADR divergence (stop immediately if implementation deviates from cited ADR)",
 			"Scope expansion (discovered work becomes new beads)",
 		}
+	case state.ModeReview:
+		return []string{
+			"Implementation approval (use /impl-approve)",
+		}
 	default:
 		return []string{}
 	}

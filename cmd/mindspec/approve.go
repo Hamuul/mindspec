@@ -111,9 +111,46 @@ Run 'mindspec next' after this to claim work and enter Implementation Mode.`,
 	},
 }
 
+var approveImplCmd = &cobra.Command{
+	Use:   "impl [spec-id]",
+	Short: "Approve implementation and transition to idle",
+	Long: `Verifies review mode is active for the given spec,
+transitions state to idle, and emits idle mode guidance.
+This is the final human gate in the spec lifecycle.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		specID := args[0]
+
+		root, err := findRoot()
+		if err != nil {
+			return err
+		}
+
+		result, err := approve.ApproveImpl(root, specID)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("Implementation for %s approved. Mode: idle.\n", result.SpecID)
+		for _, w := range result.Warnings {
+			fmt.Fprintf(os.Stderr, "warning: %s\n", w)
+		}
+		fmt.Println()
+
+		// Instruct-tail: emit idle guidance
+		if err := emitInstruct(root); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not emit guidance: %v\n", err)
+		}
+
+		return nil
+	},
+}
+
 func init() {
 	approveSpecCmd.Flags().String("approved-by", "user", "Identity of the approver")
 	approvePlanCmd.Flags().String("approved-by", "user", "Identity of the approver")
 	approveCmd.AddCommand(approveSpecCmd)
 	approveCmd.AddCommand(approvePlanCmd)
+	approveCmd.AddCommand(approveImplCmd)
 }

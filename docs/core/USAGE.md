@@ -4,10 +4,10 @@ This guide walks through the complete lifecycle of developing a feature with Min
 
 ## Overview
 
-MindSpec enforces a three-phase gated lifecycle: **Spec → Plan → Implement**. Every phase transition requires explicit human approval. The agent cannot skip ahead.
+MindSpec enforces a three-phase gated lifecycle: **Spec → Plan → Implement → Review**. Every phase transition requires explicit human approval. The agent cannot skip ahead.
 
 ```
-Idle ──→ Spec Mode ──human gate──→ Plan Mode ──human gate──→ Implementation Mode ──→ Idle
+Idle ──→ Spec Mode ──human gate──→ Plan Mode ──human gate──→ Implementation Mode ──→ Review Mode ──human gate──→ Idle
 ```
 
 All agent operating guidance is emitted dynamically by `mindspec instruct` (run automatically on session start). Static files like CLAUDE.md and AGENTS.md are minimal bootstraps — the CLI is the source of truth for what the agent should do in each mode.
@@ -51,12 +51,11 @@ Agent and human fill in the spec — Goal, Requirements, Acceptance Criteria, Im
 
 ## Phase 2: Spec Approval (Human Gate)
 
-### Human says
-"Looks good, approve it" or invokes `/spec-approve`
+### Human invokes
+`/spec-approve` (typing the command is the approval — no second confirmation)
 
 ### Agent does
-1. Summarizes the spec and asks: "Do you approve this spec for planning?"
-2. On **yes** — runs `mindspec approve spec <id>`
+Runs `mindspec approve spec <id>`
 
 ### What the CLI does (single command)
 1. **Validates** — `validate.ValidateSpec()` checks required sections, acceptance criteria quality
@@ -129,12 +128,11 @@ work_chunks:
 
 ## Phase 4: Plan Approval (Human Gate)
 
-### Human says
-"Plan looks good" or invokes `/plan-approve`
+### Human invokes
+`/plan-approve` (typing the command is the approval — no second confirmation)
 
 ### Agent does
-1. Summarizes the plan (beads, scope, deps) and asks: "Do you approve this plan for implementation?"
-2. On **yes** — runs `mindspec approve plan <id>`
+Runs `mindspec approve plan <id>`
 
 ### What the CLI does (single command)
 1. **Validates** — `validate.ValidatePlan()` checks frontmatter, bead sections, verification steps
@@ -199,16 +197,43 @@ The instruct-tail checks if a worktree exists for the active bead and tells the 
 6. **Advance state**:
    - If more ready beads → stays `implement`, sets next bead
    - If beads exist but blocked → transitions to `plan`
-   - If all beads done → transitions to `idle`
+   - If all beads done → transitions to `review`
 7. **Instruct-tail** — emits guidance for the new state
 
 ---
 
-## Phase 8: Loop or Finish
+## Phase 8: Loop or Review
 
 If `mindspec complete` found another ready bead → run `mindspec next` again, repeat Phases 5–7.
 
-If all beads are done → state goes to `idle`, the feature is complete.
+If all beads are done → state transitions to `review` mode (see Phase 9).
+
+---
+
+## Phase 9: Implementation Review (Human Gate)
+
+**State**: `mode: review, activeSpec: "<id>"`
+
+When all implementation beads are complete, the agent enters review mode. The agent verifies the work against the spec's acceptance criteria and presents a summary.
+
+### Agent does
+1. Reads the spec's acceptance criteria from `docs/specs/<id>/spec.md`
+2. Runs `make test` and `make build` to confirm quality gates pass
+3. Verifies doc-sync is complete
+4. Presents a summary: what was built and how each acceptance criterion is satisfied
+
+### Human invokes
+`/impl-approve` (typing the command is the approval)
+
+### Agent does
+Runs `mindspec approve impl <id>`
+
+### What the CLI does
+1. **Verifies** review mode is active for the given spec
+2. **Sets state** → `idle`
+3. **Instruct-tail** — emits idle mode guidance
+
+The feature is now complete.
 
 ---
 
@@ -232,14 +257,15 @@ Work is not complete until changes are committed.
 |------|-------|-------|-------------|
 | Start feature | "Build X" | Creates spec, sets state | `mindspec state set --mode=spec` |
 | Write spec | Reviews, guides | Writes markdown | — |
-| Approve spec | "Yes, approved" | Runs approval | `mindspec approve spec <id>` |
+| Approve spec | `/spec-approve` | Runs approval | `mindspec approve spec <id>` |
 | Write plan | Reviews plan | Decomposes into beads | — |
-| Approve plan | "Yes, approved" | Runs approval | `mindspec approve plan <id>` |
+| Approve plan | `/plan-approve` | Runs approval | `mindspec approve plan <id>` |
 | Claim work | — | Claims bead | `mindspec next` |
 | Implement | Reviews code | Codes + tests + doc-sync | `impl(bead): ...` commits |
 | Complete bead | — | Closes bead | `mindspec complete` |
 | Next bead | — | Claims next | `mindspec next` (loop) |
-| All done | — | State → idle | (automatic) |
+| Review | — | Verifies acceptance criteria | — |
+| Approve impl | `/impl-approve` | Transitions to idle | `mindspec approve impl <id>` |
 
 ---
 
@@ -253,7 +279,8 @@ Work is not complete until changes are committed.
 | `mindspec validate plan <id>` | Pre-check plan quality before approval |
 | `mindspec doctor` | Project health check |
 | `/spec-init` | Start a new specification |
-| `/spec-approve` | Request spec → plan transition |
-| `/plan-approve` | Request plan → implement transition |
+| `/spec-approve` | Approve spec → plan transition |
+| `/plan-approve` | Approve plan → implement transition |
+| `/impl-approve` | Approve implementation → idle |
 | `mindspec next` | Claim the next ready bead |
 | `mindspec complete` | Close current bead and advance |

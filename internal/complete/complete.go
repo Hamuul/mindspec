@@ -107,6 +107,10 @@ func Run(root, beadID string) (*Result, error) {
 		if err := setModeFn(root, state.ModePlan, specID, ""); err != nil {
 			return result, fmt.Errorf("advancing state to plan: %w", err)
 		}
+	case state.ModeReview:
+		if err := setModeFn(root, state.ModeReview, specID, ""); err != nil {
+			return result, fmt.Errorf("advancing state to review: %w", err)
+		}
 	default:
 		// idle
 		result.NextSpec = ""
@@ -132,6 +136,9 @@ func FormatResult(r *Result) string {
 		sb.WriteString("Run `mindspec next` to claim and start.\n")
 	case state.ModePlan:
 		fmt.Fprintf(&sb, "Remaining beads are blocked. Mode: plan (spec: %s)\n", r.NextSpec)
+	case state.ModeReview:
+		fmt.Fprintf(&sb, "All beads complete. Mode: review (spec: %s)\n", r.NextSpec)
+		sb.WriteString("Review implementation against acceptance criteria, then use `/impl-approve` to accept.\n")
 	default:
 		sb.WriteString("All beads complete. Mode: idle\n")
 	}
@@ -176,7 +183,8 @@ func advanceState(root, specID string) (mode, nextBead string) {
 		return state.ModePlan, ""
 	}
 
-	return state.ModeIdle, ""
+	// All beads done → review gate (human must approve before idle)
+	return state.ModeReview, ""
 }
 
 // getMolParentID reads the molecule parent ID from the plan's generated block.

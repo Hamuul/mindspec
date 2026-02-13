@@ -323,8 +323,8 @@ func TestAdvanceState_AllDone(t *testing.T) {
 	}
 
 	mode, nextBead := advanceState(root, "test-spec")
-	if mode != state.ModeIdle {
-		t.Errorf("mode: got %q, want %q", mode, state.ModeIdle)
+	if mode != state.ModeReview {
+		t.Errorf("mode: got %q, want %q", mode, state.ModeReview)
 	}
 	if nextBead != "" {
 		t.Errorf("nextBead should be empty, got %q", nextBead)
@@ -391,14 +391,18 @@ func TestFormatResult_Implement(t *testing.T) {
 	}
 }
 
-func TestFormatResult_Idle(t *testing.T) {
+func TestFormatResult_Review(t *testing.T) {
 	r := &Result{
 		BeadID:     "bead-last",
 		BeadClosed: true,
-		NextMode:   state.ModeIdle,
+		NextMode:   state.ModeReview,
+		NextSpec:   "test-spec",
 	}
 	out := FormatResult(r)
-	if !strings.Contains(out, "idle") {
-		t.Errorf("should mention idle: %s", out)
+	if !strings.Contains(out, "review") {
+		t.Errorf("should mention review: %s", out)
+	}
+	if !strings.Contains(out, "/impl-approve") {
+		t.Errorf("should mention /impl-approve: %s", out)
 	}
 }

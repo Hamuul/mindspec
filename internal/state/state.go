@@ -17,10 +17,11 @@ const (
 	ModeSpec      = "spec"
 	ModePlan      = "plan"
 	ModeImplement = "implement"
+	ModeReview    = "review"
 )
 
 // ValidModes lists all valid mode values.
-var ValidModes = []string{ModeIdle, ModeSpec, ModePlan, ModeImplement}
+var ValidModes = []string{ModeIdle, ModeSpec, ModePlan, ModeImplement, ModeReview}
 
 // State represents the MindSpec workflow state persisted at .mindspec/state.json.
 type State struct {
@@ -80,7 +81,7 @@ func SetMode(root, mode, spec, bead string) error {
 		return fmt.Errorf("invalid mode %q: must be one of %v", mode, ValidModes)
 	}
 
-	if mode == ModeSpec || mode == ModePlan || mode == ModeImplement {
+	if mode == ModeSpec || mode == ModePlan || mode == ModeImplement || mode == ModeReview {
 		if spec == "" {
 			return fmt.Errorf("mode %q requires --spec", mode)
 		}

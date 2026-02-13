@@ -26,6 +26,8 @@ func CrossValidate(root string, s *State) []Warning {
 		warnings = append(warnings, validatePlanMode(root, s)...)
 	case ModeImplement:
 		warnings = append(warnings, validateImplementMode(root, s)...)
+	case ModeReview:
+		warnings = append(warnings, validateReviewMode(root, s)...)
 	}
 
 	return warnings
@@ -124,6 +126,19 @@ func validateImplementMode(root string, s *State) []Warning {
 		warnings = append(warnings, Warning{
 			Field:   "activeBead",
 			Message: beadWarning,
+		})
+	}
+
+	return warnings
+}
+
+func validateReviewMode(root string, s *State) []Warning {
+	var warnings []Warning
+
+	if s.ActiveSpec == "" {
+		warnings = append(warnings, Warning{
+			Field:   "activeSpec",
+			Message: "State is in review mode but no activeSpec is set",
 		})
 	}
 

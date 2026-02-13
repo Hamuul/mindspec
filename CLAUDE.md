@@ -1,6 +1,6 @@
 # CLAUDE.md — MindSpec
 
-MindSpec is a spec-driven development framework (Claude Code-first). See [mindspec.md](mindspec.md) for the full product specification.
+MindSpec is a spec-driven development framework (Claude Code-first). See [mindspec.md](mindspec.md) for the full product specification, or [USAGE.md](docs/core/USAGE.md) for the development workflow.
 
 ## Guidance
 
@@ -18,6 +18,7 @@ make test     # Run all tests
 | Command | Purpose |
 |:--------|:--------|
 | `/spec-init` | Initialize a new specification (enters Spec Mode) |
-| `/spec-approve` | Request Spec → Plan transition |
-| `/plan-approve` | Request Plan → Implementation transition |
+| `/spec-approve` | Approve spec → Plan Mode |
+| `/plan-approve` | Approve plan → Implementation Mode |
+| `/impl-approve` | Approve implementation → Idle |
 | `/spec-status` | Check current mode and active spec/bead state |
