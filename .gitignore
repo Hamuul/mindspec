@@ -26,6 +26,9 @@ ENV/
 *.swp
 *.swo
 
+# Worktrees
+worktree-*/
+
 # Go
 bin/
 *.exe
@@ -33,5 +36,3 @@ bin/
 # OS
 .DS_Store
 Thumbs.db
-worktree-mindspec-ov9/
-worktree-mindspec-ov9.2/
