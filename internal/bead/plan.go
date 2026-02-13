@@ -76,9 +76,18 @@ func ParsePlanMeta(planPath string) (*PlanMeta, error) {
 	return &meta, nil
 }
 
-// CreatePlanBeads creates implementation beads from an approved plan.
-// Returns a mapping of chunk ID to bead ID. Idempotent.
-func CreatePlanBeads(root, specID string) (map[int]string, error) {
+// PlanBeadResult holds the results of molecule-based plan decomposition.
+type PlanBeadResult struct {
+	MolParentID string         // molecule parent (epic) bead ID
+	ChunkBeads  map[int]string // chunk ID -> child bead ID
+}
+
+// CreatePlanBeads creates a molecule from an approved plan's work_chunks.
+// The molecule parent is an epic with the spec bead as its parent.
+// Work chunks become task children under the molecule parent.
+// Dependencies are wired between children via DepAdd.
+// Idempotent: searches for existing beads before creating.
+func CreatePlanBeads(root, specID string) (*PlanBeadResult, error) {
 	planPath := fmt.Sprintf("%s/docs/specs/%s/plan.md", root, specID)
 	meta, err := ParsePlanMeta(planPath)
 	if err != nil {
@@ -95,15 +104,31 @@ func CreatePlanBeads(root, specID string) (map[int]string, error) {
 		return nil, fmt.Errorf("plan has no work_chunks defined")
 	}
 
-	// Find spec bead as parent
+	// Find spec bead as grandparent
 	specPrefix := fmt.Sprintf("[SPEC %s]", specID)
-	var parentID string
+	var specBeadID string
 	specBeads, err := Search(specPrefix)
 	if err == nil && len(specBeads) > 0 {
-		parentID = specBeads[0].ID
+		specBeadID = specBeads[0].ID
 	}
 
-	// Create beads per chunk (idempotent)
+	// Find or create molecule parent (epic)
+	molPrefix := fmt.Sprintf("[PLAN %s]", specID)
+	var molParentID string
+	existing, err := Search(molPrefix)
+	if err == nil && len(existing) > 0 {
+		molParentID = existing[0].ID
+	} else {
+		molTitle := fmt.Sprintf("%s Plan decomposition", molPrefix)
+		molDesc := fmt.Sprintf("Molecule parent for spec %s\nPlan: docs/specs/%s/plan.md", specID, specID)
+		molBead, err := Create(molTitle, molDesc, "epic", 2, specBeadID)
+		if err != nil {
+			return nil, fmt.Errorf("creating molecule parent: %w", err)
+		}
+		molParentID = molBead.ID
+	}
+
+	// Create beads per chunk as molecule children (idempotent)
 	mapping := make(map[int]string)
 	for _, chunk := range meta.WorkChunks {
 		implPrefix := fmt.Sprintf("[IMPL %s.%d]", specID, chunk.ID)
@@ -119,14 +144,14 @@ func CreatePlanBeads(root, specID string) (map[int]string, error) {
 		desc := buildImplDescription(chunk, specID)
 
 		title := fmt.Sprintf("%s %s", implPrefix, chunk.Title)
-		bead, err := Create(title, desc, "task", 2, parentID)
+		bead, err := Create(title, desc, "task", 2, molParentID)
 		if err != nil {
 			return nil, fmt.Errorf("creating bead for chunk %d: %w", chunk.ID, err)
 		}
 		mapping[chunk.ID] = bead.ID
 	}
 
-	// Wire dependencies
+	// Wire dependencies between children
 	for _, chunk := range meta.WorkChunks {
 		for _, depID := range chunk.DependsOn {
 			blockedBead, ok := mapping[chunk.ID]
@@ -143,7 +168,10 @@ func CreatePlanBeads(root, specID string) (map[int]string, error) {
 		}
 	}
 
-	return mapping, nil
+	return &PlanBeadResult{
+		MolParentID: molParentID,
+		ChunkBeads:  mapping,
+	}, nil
 }
 
 // buildImplDescription creates a structured description for an impl bead.
@@ -165,9 +193,10 @@ func buildImplDescription(chunk WorkChunk, specID string) string {
 	return desc
 }
 
-// WriteGeneratedBeadIDs writes bead IDs into the plan frontmatter under generated.bead_ids.
+// WriteGeneratedBeadIDs writes bead IDs into the plan frontmatter under generated.
+// Includes mol_parent_id and per-chunk bead_ids.
 // Preserves existing frontmatter fields via map[string]interface{} round-trip.
-func WriteGeneratedBeadIDs(planPath string, mapping map[int]string) error {
+func WriteGeneratedBeadIDs(planPath string, result *PlanBeadResult) error {
 	data, err := os.ReadFile(planPath)
 	if err != nil {
 		return fmt.Errorf("cannot read plan: %v", err)
@@ -214,14 +243,17 @@ func WriteGeneratedBeadIDs(planPath string, mapping map[int]string) error {
 
 	// Build bead_ids as map with string keys for YAML
 	beadIDs := make(map[string]string)
-	for chunkID, beadID := range mapping {
+	for chunkID, beadID := range result.ChunkBeads {
 		beadIDs[fmt.Sprintf("%d", chunkID)] = beadID
 	}
 
-	// Set generated.bead_ids
+	// Set generated block: mol_parent_id + bead_ids
 	gen, ok := fmMap["generated"].(map[string]interface{})
 	if !ok {
 		gen = make(map[string]interface{})
+	}
+	if result.MolParentID != "" {
+		gen["mol_parent_id"] = result.MolParentID
 	}
 	gen["bead_ids"] = beadIDs
 	fmMap["generated"] = gen
@@ -234,9 +266,9 @@ func WriteGeneratedBeadIDs(planPath string, mapping map[int]string) error {
 
 	// Splice back: new frontmatter + body after closing ---
 	body := strings.Join(lines[fmEndIdx+1:], "\n")
-	result := "---\n" + string(newFm) + "---\n" + body
+	output := "---\n" + string(newFm) + "---\n" + body
 
-	if err := os.WriteFile(planPath, []byte(result), 0644); err != nil {
+	if err := os.WriteFile(planPath, []byte(output), 0644); err != nil {
 		return fmt.Errorf("writing plan: %w", err)
 	}
 

@@ -146,7 +146,7 @@ spec_id: test
 	}
 }
 
-func TestCreatePlanBeads_CreatesAndWiresDeps(t *testing.T) {
+func TestCreatePlanBeads_CreatesMoleculeParent(t *testing.T) {
 	tmp := t.TempDir()
 	specDir := filepath.Join(tmp, "docs", "specs", "test")
 	os.MkdirAll(specDir, 0755)
@@ -175,8 +175,8 @@ work_chunks:
 	origExec := execCommand
 	defer func() { execCommand = origExec }()
 
+	var createCalls [][]string
 	var depAddCalls [][]string
-	createCount := 0
 
 	execCommand = func(name string, args ...string) *exec.Cmd {
 		if name == "bd" && len(args) > 0 {
@@ -184,9 +184,16 @@ work_chunks:
 			case "search":
 				return exec.Command("echo", `[]`) // no existing beads
 			case "create":
-				createCount++
-				id := "bead-" + strings.Replace(args[1], " ", "", -1)[:10]
-				return exec.Command("echo", `{"id":"`+id+`","title":"","description":"","status":"open","priority":2,"issue_type":"task","owner":"","created_at":"","updated_at":""}`)
+				createCalls = append(createCalls, args)
+				// Return different IDs based on title prefix
+				title := args[1]
+				var id string
+				if strings.HasPrefix(title, "[PLAN") {
+					id = "mol-parent-001"
+				} else {
+					id = "bead-" + strings.Replace(title, " ", "", -1)[:10]
+				}
+				return exec.Command("echo", `{"id":"`+id+`","title":"","description":"","status":"open","priority":2,"issue_type":"epic","owner":"","created_at":"","updated_at":""}`)
 			case "dep":
 				if len(args) >= 4 {
 					depAddCalls = append(depAddCalls, args[1:])
@@ -197,18 +204,126 @@ work_chunks:
 		return exec.Command("echo", "")
 	}
 
-	mapping, err := CreatePlanBeads(tmp, "test")
+	result, err := CreatePlanBeads(tmp, "test")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(mapping) != 2 {
-		t.Errorf("expected 2 mappings, got %d", len(mapping))
+	// Should have molecule parent ID
+	if result.MolParentID != "mol-parent-001" {
+		t.Errorf("MolParentID: got %q, want %q", result.MolParentID, "mol-parent-001")
+	}
+
+	// Should have 2 chunk beads
+	if len(result.ChunkBeads) != 2 {
+		t.Errorf("expected 2 chunk beads, got %d", len(result.ChunkBeads))
+	}
+
+	// First create call should be the molecule parent (epic)
+	// Searches: [SPEC test], [PLAN test], [IMPL test.1], [IMPL test.2] = 4 searches
+	// Creates: [PLAN test] (epic), [IMPL test.1], [IMPL test.2] = 3 creates
+	if len(createCalls) != 3 {
+		t.Fatalf("expected 3 create calls (1 epic + 2 tasks), got %d", len(createCalls))
+	}
+
+	// First create should be the molecule parent with type=epic
+	molCreateArgs := createCalls[0]
+	if !strings.HasPrefix(molCreateArgs[1], "[PLAN test]") {
+		t.Errorf("first create should be [PLAN test], got title %q", molCreateArgs[1])
+	}
+	hasEpicType := false
+	for _, arg := range molCreateArgs {
+		if arg == "--type=epic" {
+			hasEpicType = true
+		}
+	}
+	if !hasEpicType {
+		t.Error("molecule parent should be type=epic")
+	}
+
+	// Child creates should have parent=mol-parent-001
+	for i := 1; i < len(createCalls); i++ {
+		hasParent := false
+		for _, arg := range createCalls[i] {
+			if arg == "--parent=mol-parent-001" {
+				hasParent = true
+			}
+		}
+		if !hasParent {
+			t.Errorf("child create[%d] should have --parent=mol-parent-001", i)
+		}
 	}
 
 	// At least one dep add call for chunk 2 -> chunk 1
 	if len(depAddCalls) == 0 {
 		t.Error("expected at least one dep add call")
+	}
+}
+
+func TestCreatePlanBeads_IdempotentMolParent(t *testing.T) {
+	tmp := t.TempDir()
+	specDir := filepath.Join(tmp, "docs", "specs", "test")
+	os.MkdirAll(specDir, 0755)
+	planContent := `---
+status: Approved
+spec_id: test
+work_chunks:
+  - id: 1
+    title: "chunk one"
+    scope: "one.go"
+    verify: []
+    depends_on: []
+---
+
+# Plan
+`
+	os.WriteFile(filepath.Join(specDir, "plan.md"), []byte(planContent), 0644)
+
+	origExec := execCommand
+	defer func() { execCommand = origExec }()
+
+	createCount := 0
+
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		if name == "bd" && len(args) > 0 {
+			switch args[0] {
+			case "search":
+				query := args[1]
+				// [PLAN test] already exists
+				if strings.HasPrefix(query, "[PLAN") {
+					return exec.Command("echo", `[{"id":"existing-mol","title":"[PLAN test]","description":"","status":"open","priority":2,"issue_type":"epic","owner":"","created_at":"","updated_at":""}]`)
+				}
+				// [IMPL test.1] already exists
+				if strings.HasPrefix(query, "[IMPL") {
+					return exec.Command("echo", `[{"id":"existing-child","title":"[IMPL test.1]","description":"","status":"open","priority":2,"issue_type":"task","owner":"","created_at":"","updated_at":""}]`)
+				}
+				return exec.Command("echo", `[]`)
+			case "create":
+				createCount++
+				return exec.Command("echo", `{"id":"new-bead","title":"","description":"","status":"open","priority":2,"issue_type":"task","owner":"","created_at":"","updated_at":""}`)
+			}
+		}
+		return exec.Command("echo", "")
+	}
+
+	result, err := CreatePlanBeads(tmp, "test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should reuse existing molecule parent
+	if result.MolParentID != "existing-mol" {
+		t.Errorf("MolParentID: got %q, want %q", result.MolParentID, "existing-mol")
+	}
+
+	// Should reuse existing child
+	if result.ChunkBeads[1] != "existing-child" {
+		t.Errorf("ChunkBeads[1]: got %q, want %q", result.ChunkBeads[1], "existing-child")
+	}
+
+	// No new beads should have been created
+	if createCount != 0 {
+		t.Errorf("expected 0 create calls (all existing), got %d", createCount)
 	}
 }
 
@@ -274,11 +389,14 @@ This should be preserved.
 	planPath := filepath.Join(tmp, "plan.md")
 	os.WriteFile(planPath, []byte(planContent), 0644)
 
-	mapping := map[int]string{
-		1: "bead-abc",
+	result := &PlanBeadResult{
+		MolParentID: "mol-parent-xyz",
+		ChunkBeads: map[int]string{
+			1: "bead-abc",
+		},
 	}
 
-	err := WriteGeneratedBeadIDs(planPath, mapping)
+	err := WriteGeneratedBeadIDs(planPath, result)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -310,6 +428,14 @@ This should be preserved.
 	if !contains(content, "bead-abc") {
 		t.Error("bead ID value not found")
 	}
+
+	// Should have generated.mol_parent_id
+	if !contains(content, "mol_parent_id") {
+		t.Error("generated mol_parent_id not found")
+	}
+	if !contains(content, "mol-parent-xyz") {
+		t.Error("mol parent ID value not found")
+	}
 }
 
 func TestWriteGeneratedBeadIDs_NoFrontmatter(t *testing.T) {
@@ -317,7 +443,11 @@ func TestWriteGeneratedBeadIDs_NoFrontmatter(t *testing.T) {
 	planPath := filepath.Join(tmp, "plan.md")
 	os.WriteFile(planPath, []byte("# No frontmatter\n"), 0644)
 
-	err := WriteGeneratedBeadIDs(planPath, map[int]string{1: "bead-x"})
+	result := &PlanBeadResult{
+		MolParentID: "mol-x",
+		ChunkBeads:  map[int]string{1: "bead-x"},
+	}
+	err := WriteGeneratedBeadIDs(planPath, result)
 	if err == nil {
 		t.Fatal("expected error for missing frontmatter")
 	}

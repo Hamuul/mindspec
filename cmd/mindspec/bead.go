@@ -61,7 +61,7 @@ var beadPlanCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		mapping, err := bead.CreatePlanBeads(root, specID)
+		result, err := bead.CreatePlanBeads(root, specID)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
@@ -69,12 +69,13 @@ var beadPlanCmd = &cobra.Command{
 
 		// Write bead IDs back to plan frontmatter
 		planPath := fmt.Sprintf("%s/docs/specs/%s/plan.md", root, specID)
-		if err := bead.WriteGeneratedBeadIDs(planPath, mapping); err != nil {
+		if err := bead.WriteGeneratedBeadIDs(planPath, result); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: could not write bead IDs to plan: %v\n", err)
 		}
 
+		fmt.Printf("Molecule parent: %s\n", result.MolParentID)
 		fmt.Println("Implementation beads created:")
-		for chunkID, beadID := range mapping {
+		for chunkID, beadID := range result.ChunkBeads {
 			fmt.Printf("  chunk %d → %s\n", chunkID, beadID)
 		}
 		return nil
