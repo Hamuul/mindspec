@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	beadpkg "github.com/mindspec/mindspec/internal/bead"
 	"github.com/mindspec/mindspec/internal/state"
 	"github.com/mindspec/mindspec/internal/workspace"
 	"github.com/spf13/cobra"
@@ -41,6 +42,11 @@ var stateSetCmd = &cobra.Command{
 
 		if err := state.SetMode(root, mode, spec, bead); err != nil {
 			return err
+		}
+
+		// Propagate bead status when entering implement mode
+		if mode == state.ModeImplement && spec != "" {
+			beadpkg.PropagateStart(spec)
 		}
 
 		fmt.Printf("State updated: mode=%s", mode)
