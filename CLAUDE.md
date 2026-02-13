@@ -47,6 +47,7 @@ internal/contextpack/  Context pack generation
 internal/state/        Workflow state management (.mindspec/state.json)
 internal/instruct/     Mode-aware guidance emission (embedded templates)
 internal/bead/         Beads integration (spec/plan bead creation, worktree, hygiene)
+internal/complete/     Bead close-out orchestration (close, worktree removal, state advance)
 internal/next/         Work selection, claiming, mode resolution
 docs/core/             Permanent architectural context
 docs/domains/          Domain-scoped documentation (DDD)
@@ -63,6 +64,7 @@ make build                   # Build binary to ./bin/mindspec
 ./bin/mindspec --help        # CLI usage
 ./bin/mindspec doctor        # Project health check
 ./bin/mindspec next          # Claim next ready bead and get guidance
+./bin/mindspec complete      # Close bead, remove worktree, advance state
 ./bin/mindspec state show    # Check current mode/spec/bead
 ./bin/mindspec instruct      # Emit mode-aware guidance
 ./bin/mindspec bead spec <id>        # Create spec bead from approved spec

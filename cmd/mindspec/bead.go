@@ -44,10 +44,11 @@ var beadSpecCmd = &cobra.Command{
 }
 
 var beadPlanCmd = &cobra.Command{
-	Use:   "plan [spec-id]",
-	Short: "Create implementation beads from an approved plan",
-	Long:  `Reads an approved plan with work_chunks, creates one bead per chunk, wires dependencies, and writes bead IDs into plan frontmatter.`,
-	Args:  cobra.ExactArgs(1),
+	Use:        "plan [spec-id]",
+	Short:      "Create implementation beads from an approved plan",
+	Long:       `Reads an approved plan with work_chunks, creates one bead per chunk, wires dependencies, and writes bead IDs into plan frontmatter.`,
+	Deprecated: "use /plan-approve workflow instead, which calls this automatically",
+	Args:       cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		specID := args[0]
 
@@ -83,10 +84,11 @@ var beadPlanCmd = &cobra.Command{
 }
 
 var beadWorktreeCmd = &cobra.Command{
-	Use:   "worktree [bead-id]",
-	Short: "Show or create a worktree for a bead",
-	Long:  `Without --create, shows the worktree path for a bead. With --create, creates a git worktree at ../worktree-<bead-id>.`,
-	Args:  cobra.ExactArgs(1),
+	Use:        "worktree [bead-id]",
+	Short:      "Show or create a worktree for a bead",
+	Long:       `Without --create, shows the worktree path for a bead. With --create, creates a git worktree at ../worktree-<bead-id>.`,
+	Deprecated: "use 'mindspec next' which creates worktrees automatically, or 'bd worktree' for direct access",
+	Args:       cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		beadID := args[0]
 		create, _ := cmd.Flags().GetBool("create")
@@ -102,22 +104,31 @@ var beadWorktreeCmd = &cobra.Command{
 		}
 
 		if create {
-			path, err := bead.CreateWorktree(root, beadID)
-			if err != nil {
+			wtName := "worktree-" + beadID
+			branchName := "bead/" + beadID
+			if err := bead.WorktreeCreate(wtName, branchName); err != nil {
 				fmt.Fprintf(os.Stderr, "error: %v\n", err)
 				os.Exit(1)
 			}
-			fmt.Printf("Worktree created: %s\n", path)
+			fmt.Printf("Worktree created: %s\n", wtName)
 		} else {
-			path, err := bead.FindWorktree(beadID)
+			entries, err := bead.WorktreeList()
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "error: %v\n", err)
 				os.Exit(2)
 			}
-			if path == "" {
+			expectedName := "worktree-" + beadID
+			expectedBranch := "bead/" + beadID
+			found := false
+			for _, e := range entries {
+				if e.Name == expectedName || e.Branch == expectedBranch {
+					fmt.Println(e.Path)
+					found = true
+					break
+				}
+			}
+			if !found {
 				fmt.Println("No worktree found for bead", beadID)
-			} else {
-				fmt.Println(path)
 			}
 		}
 		return nil

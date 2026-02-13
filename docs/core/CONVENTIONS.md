@@ -138,16 +138,40 @@ work_chunks:
 
 Each chunk has a stable `id` (integer), `title`, `scope`, `verify` (list), and `depends_on` (list of chunk IDs).
 
-### `generated.bead_ids` Convention
+### Molecule-Based Plan Decomposition
 
-When `mindspec bead plan` creates implementation beads, it writes bead IDs into the plan frontmatter under `generated.bead_ids`. This machine-written metadata does not invalidate plan approval:
+Plans are decomposed into **Beads molecules**. `mindspec bead plan` creates:
+
+1. A **molecule parent** (epic type) with title `[PLAN <spec-id>] Plan decomposition`
+2. **Task children** per work chunk with title `[IMPL <spec-id>.<chunk-id>] <title>`
+3. **Dependencies** wired between children based on `depends_on`
+
+The molecule parent ID and per-chunk bead IDs are written back to the plan frontmatter under `generated`:
 
 ```yaml
 generated:
+  mol_parent_id: beads-xxx
   bead_ids:
     "1": beads-abc
     "2": beads-def
 ```
+
+`mindspec next` queries ready children within the molecule via `bd ready --parent <mol-parent-id>`. `mindspec complete` uses the molecule parent to determine state advancement (next ready child, blocked children, or all done).
+
+### Worktree Lifecycle
+
+Worktrees are managed entirely by Beads (`bd worktree`) — MindSpec orchestrates but does not implement git worktree operations directly.
+
+**Creation**: `mindspec next` creates a worktree automatically when claiming a bead, via `bd worktree create`.
+
+**Removal**: `mindspec complete` removes the worktree after closing the bead, via `bd worktree remove`.
+
+**Naming**: Worktrees are named `worktree-<bead-id>` with branch `bead/<bead-id>`.
+
+**State advancement** after `mindspec complete`:
+- If ready children remain in the molecule → mode stays `implement`, next bead is set
+- If children exist but are blocked → mode transitions to `plan`
+- If all children are complete → mode transitions to `idle`
 
 ## Git Workflow Conventions
 
@@ -249,3 +273,4 @@ The primary interface is the Go CLI binary. Key commands:
 - `mindspec bead spec|plan|worktree|hygiene`: Beads lifecycle tooling (Spec 007)
 - `mindspec validate spec|plan|docs`: Check artifact quality (Spec 006)
 - `mindspec next`: Select and claim next ready work (Spec 005)
+- `mindspec complete`: Close bead, remove worktree, advance state (Spec 008)
