@@ -96,6 +96,24 @@ func Search(query string) ([]BeadInfo, error) {
 	return items, nil
 }
 
+// SearchAny searches for beads matching query, returning beads of any status.
+func SearchAny(query string) ([]BeadInfo, error) {
+	cmd := execCommand("bd", "search", query, "--json")
+	out, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return nil, fmt.Errorf("bd search failed: %s", string(exitErr.Stderr))
+		}
+		return nil, fmt.Errorf("bd search failed: %w", err)
+	}
+
+	var items []BeadInfo
+	if err := json.Unmarshal(out, &items); err != nil {
+		return nil, fmt.Errorf("parsing bd search output: %w", err)
+	}
+	return items, nil
+}
+
 // Show returns details for a single bead by ID.
 func Show(id string) (*BeadInfo, error) {
 	cmd := execCommand("bd", "show", id, "--json")

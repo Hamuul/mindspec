@@ -18,6 +18,7 @@ func saveAndRestore(t *testing.T) {
 	origReadState := readStateFn
 	origSetMode := setModeFn
 	origClose := closeBeadFn
+	origPropagate := propagateCloseFn
 	origWtList := worktreeListFn
 	origWtRemove := worktreeRemoveFn
 	origMolReady := molReadyFn
@@ -29,6 +30,7 @@ func saveAndRestore(t *testing.T) {
 		readStateFn = origReadState
 		setModeFn = origSetMode
 		closeBeadFn = origClose
+		propagateCloseFn = origPropagate
 		worktreeListFn = origWtList
 		worktreeRemoveFn = origWtRemove
 		molReadyFn = origMolReady
@@ -36,6 +38,9 @@ func saveAndRestore(t *testing.T) {
 		parsePlanMetaFn = origParsePlan
 		execCommandFn = origExec
 	})
+
+	// Default propagateCloseFn to no-op so tests don't call real bd commands
+	propagateCloseFn = func(specID string) {}
 }
 
 // setupTempRoot creates a temp dir with a plan.md containing a mol_parent_id.

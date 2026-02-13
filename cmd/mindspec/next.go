@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/mindspec/mindspec/internal/bead"
 	"github.com/mindspec/mindspec/internal/next"
 	"github.com/mindspec/mindspec/internal/state"
 	"github.com/mindspec/mindspec/internal/workspace"
@@ -88,6 +89,11 @@ to "here's your bead, here's the mode, here are your rules" in one step.`,
 
 		// Step 6: Resolve mode and spec ID
 		resolved := next.ResolveMode(root, selected)
+
+		// Step 6.5: Propagate in_progress to parent beads
+		if resolved.SpecID != "" {
+			bead.PropagateStart(resolved.SpecID)
+		}
 
 		// Step 7: Update state
 		if err := state.SetMode(root, resolved.Mode, resolved.SpecID, selected.ID); err != nil {

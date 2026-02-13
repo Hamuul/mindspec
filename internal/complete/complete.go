@@ -14,8 +14,9 @@ import (
 var (
 	readStateFn      = state.Read
 	setModeFn        = state.SetMode
-	closeBeadFn      = bead.Close
-	worktreeListFn   = bead.WorktreeList
+	closeBeadFn        = bead.Close
+	propagateCloseFn   = bead.PropagateClose
+	worktreeListFn     = bead.WorktreeList
 	worktreeRemoveFn = bead.WorktreeRemove
 	molReadyFn       = bead.MolReady
 	searchBeadsFn    = bead.Search
@@ -75,6 +76,11 @@ func Run(root, beadID string) (*Result, error) {
 	// 4. Close bead
 	if err := closeBeadFn(beadID); err != nil {
 		return nil, fmt.Errorf("closing bead: %w", err)
+	}
+
+	// 4.5. Propagate close to parent beads if all impl beads are done
+	if specID != "" {
+		propagateCloseFn(specID)
 	}
 
 	result := &Result{
