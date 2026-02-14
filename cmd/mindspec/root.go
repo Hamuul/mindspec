@@ -56,6 +56,7 @@ func init() {
 	rootCmd.AddCommand(domainCmd)
 	rootCmd.AddCommand(doctorCmd)
 	rootCmd.AddCommand(glossaryCmd)
+	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(instructCmd)
 	rootCmd.AddCommand(nextCmd)
 	rootCmd.AddCommand(specInitCmd)
