@@ -231,7 +231,7 @@ run_session() {
     wait_for_port "${port}" 5
 
     # Build claude command
-    local claude_args=(-p "${PROMPT}" --dangerously-skip-permissions)
+    local claude_args=(-p "${PROMPT}" --dangerously-skip-permissions --no-session-persistence)
     if [[ -n "${MAX_TURNS}" ]]; then
         claude_args+=(--max-turns "${MAX_TURNS}")
     fi
@@ -254,7 +254,7 @@ run_session() {
             export MINDSPEC_TRACE="${trace_path}"
         fi
         run_with_timeout "${SESSION_TIMEOUT}" claude "${claude_args[@]}" \
-            2>&1 | tee "${WORK_DIR}/output-${label}.txt"
+            > >(tee "${WORK_DIR}/output-${label}.txt") 2>&1
     ) || claude_exit=$?
 
     if [[ ${claude_exit} -eq 124 ]]; then
