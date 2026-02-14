@@ -120,7 +120,7 @@ The MVP prioritizes correctness and readability over visual polish. It must work
 
 ## Approval
 
-- **Status**: DRAFT
-- **Approved By**: —
-- **Approval Date**: —
-- **Notes**: —
+- **Status**: APPROVED
+- **Approved By**: user
+- **Approval Date**: 2026-02-14
+- **Notes**: Approved via mindspec approve spec
