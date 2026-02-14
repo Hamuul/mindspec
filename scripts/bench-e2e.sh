@@ -695,10 +695,10 @@ main() {
     neutralize_baseline "${WORK_DIR}/wt-b"
     neutralize_nodocs "${WORK_DIR}/wt-c"
 
-    # Run sessions sequentially
-    run_session "a" "${WORK_DIR}/wt-a" "${PORT_A}" "${WORK_DIR}/session-a.jsonl" "${WORK_DIR}/trace-a.jsonl"
+    # Run sessions sequentially (baselines first so MindSpec gets no cache warmup advantage)
     run_session "b" "${WORK_DIR}/wt-b" "${PORT_B}" "${WORK_DIR}/session-b.jsonl" ""
     run_session "c" "${WORK_DIR}/wt-c" "${PORT_C}" "${WORK_DIR}/session-c.jsonl" ""
+    run_session "a" "${WORK_DIR}/wt-a" "${PORT_A}" "${WORK_DIR}/session-a.jsonl" "${WORK_DIR}/trace-a.jsonl"
 
     # Generate quantitative reports
     echo ""
