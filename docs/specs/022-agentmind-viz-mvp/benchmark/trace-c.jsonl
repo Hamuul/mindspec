@@ -1,0 +1,2 @@
+{"ts":"2026-02-14T15:45:21.893755Z","event":"command.start","run_id":"1b66573379ce416f","data":{"args":["022"],"command":"spec-init"}}
+{"ts":"2026-02-14T15:45:22.010795Z","event":"command.end","run_id":"1b66573379ce416f","dur_ms":117.341458,"data":{"command":"spec-init"}}

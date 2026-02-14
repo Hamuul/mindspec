@@ -1,0 +1,16 @@
+The plan is ready for your review. Here's a summary of what I'm proposing:
+
+**Architecture**: A standalone Node.js/TypeScript app in `viz/` with three layers:
+1. **OTLP Receiver** — HTTP endpoints parsing Claude Code's OTLP/HTTP JSON telemetry
+2. **Normalizer + Graph State** — Maps events to 5 node types (agent, tool, mcp_server, llm, file) and 5 edge types (tool_call, mcp_call, model_call, read, write) with decay/caps
+3. **Browser UI** — `3d-force-graph` with UnrealBloomPass bloom, starfield background, HUD overlay
+
+**Key choices**:
+- Vanilla JS frontend (no React/bundler) for simplicity
+- `3d-force-graph` wraps Three.js + d3-force-3d in one package
+- Neon palette: cyan agents, lime tools, magenta MCP, gold LLM, teal files
+- Edge decay (fade after 5min, remove after 15min) + hard caps (200 nodes, 1000 edges)
+- Both live and replay modes supported
+- Prompts never displayed by default
+
+**10 implementation steps** across ~13 files, with vitest unit tests for the normalizer and graph state.

@@ -1,0 +1,16 @@
+The spec for **022: AgentMind Viz MVP** is drafted at `docs/specs/022/spec.md`. Here's a summary of what it covers:
+
+**Ingestion**: Two modes — `mindspec viz live` (OTLP receiver for live Claude Code sessions) and `mindspec viz replay` (replays recorded NDJSON captures). A normalization layer maps raw telemetry into node upserts and edge events with dedup, retention/decay, and hard caps (500 nodes / 2000 edges).
+
+**Node types**: agent, tool, mcp_server, data_source, llm_endpoint
+**Edge types**: tool_call, mcp_call, retrieval, write, model_call
+
+**Web UI**: Single-page app embedded in the Go binary via `embed.FS` — no npm build step. Three.js force-directed 3D graph with starfield background, glowing nodes, animated edges.
+
+**Interaction**: Hover detail cards, click-to-pin, search/filter by name/type, pause/resume stream, legend/HUD (throughput, errors, latency, cap indicator).
+
+**Safety**: No raw prompts by default, sampling at >100 events/sec, backpressure with drop counters.
+
+**Architecture**: Follows ADR-0003 (CLI-first) and ADR-0004 (Go), reuses OTLP parsing from `internal/bench/collector.go`.
+
+Ready for your review — use `/spec-approve` when it looks good, or let me know what to adjust.

@@ -1,0 +1,9 @@
+The plan covers 11 files across 3 packages:
+
+- **`internal/viz/`** (7 new files): OTLP types, normalizer with node/edge mapping, WebSocket hub, HTTP server with embedded UI, and NDJSON replay
+- **`internal/viz/static/index.html`**: Single-file 3D galaxy UI using `3d-force-graph` (CDN-loaded Three.js), with starfield background, glowing neon nodes by type, animated edges, auto-orbit camera, HUD, search/filter, and detail cards
+- **`cmd/mindspec/viz.go`**: `viz serve` (live OTLP) and `viz replay` (file playback) commands
+- **One-line change** to `root.go` to register the new command
+- **One new dependency**: `nhooyr.io/websocket`
+
+Key design choices: duplicates OTLP parsing types rather than refactoring `bench`; uses emissive materials instead of bloom pass for performance at 200+ nodes; auto-reconnecting WebSocket with snapshot-on-connect; 200-node/500-edge caps with pruning.
