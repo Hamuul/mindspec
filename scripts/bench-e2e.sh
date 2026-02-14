@@ -231,6 +231,7 @@ run_session() {
         export OTEL_LOGS_EXPORTER=otlp
         export OTEL_EXPORTER_OTLP_PROTOCOL=http/json
         export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:${port}"
+        export OTEL_LOG_TOOL_DETAILS=1
         if [[ -n "${trace_path}" ]]; then
             export MINDSPEC_TRACE="${trace_path}"
         fi

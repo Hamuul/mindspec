@@ -54,6 +54,7 @@ export OTEL_METRICS_EXPORTER=otlp
 export OTEL_LOGS_EXPORTER=otlp
 export OTEL_EXPORTER_OTLP_PROTOCOL=http/json
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+export OTEL_LOG_TOOL_DETAILS=1
 export MINDSPEC_TRACE=/tmp/mindspec-bench-a-trace.jsonl
 ```
 
@@ -86,7 +87,7 @@ You're now back at the exact same starting point, on a detached HEAD.
 
 ## Step 5: Neutralize MindSpec for Session B
 
-The repo contains `CLAUDE.md`, `.mindspec/`, and `.claude/` — these would cause Claude Code to follow MindSpec workflows automatically. Strip them out:
+The repo contains `CLAUDE.md`, `.mindspec/`, and `.claude/` — these would cause Claude Code to follow MindSpec workflows automatically. Strip the MindSpec-specific pieces:
 
 ```bash
 # Remove MindSpec project instructions (Claude Code reads this automatically)
@@ -95,11 +96,26 @@ rm -f CLAUDE.md
 # Remove MindSpec state (prevents hooks from emitting guidance)
 rm -rf .mindspec/
 
-# Remove project-level Claude Code hooks and rules
-rm -rf .claude/
+# Remove MindSpec-specific commands (keep .claude/ directory itself)
+rm -f .claude/commands/spec-init.md
+rm -f .claude/commands/spec-approve.md
+rm -f .claude/commands/plan-approve.md
+rm -f .claude/commands/impl-approve.md
+rm -f .claude/commands/spec-status.md
+
+# Strip MindSpec hooks from settings.json (keep other settings)
+python3 -c "
+import json, sys
+with open(sys.argv[1]) as f:
+    data = json.load(f)
+data.pop('hooks', None)
+with open(sys.argv[1], 'w') as f:
+    json.dump(data, f, indent=2)
+    f.write('\n')
+" .claude/settings.json
 ```
 
-These deletions are uncommitted and will be discarded when you return to a branch. Without these files, Claude Code operates as a vanilla agent with no MindSpec awareness.
+These deletions are uncommitted and will be discarded when you return to a branch. Without CLAUDE.md, hooks, and MindSpec commands, Claude Code operates as a vanilla agent with no MindSpec awareness — but retains any non-MindSpec `.claude/` settings.
 
 ## Step 6: Run Session B (Baseline)
 
@@ -119,6 +135,7 @@ export OTEL_METRICS_EXPORTER=otlp
 export OTEL_LOGS_EXPORTER=otlp
 export OTEL_EXPORTER_OTLP_PROTOCOL=http/json
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+export OTEL_LOG_TOOL_DETAILS=1
 ```
 
 (No `MINDSPEC_TRACE` — there's no MindSpec to trace.)
