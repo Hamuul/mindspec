@@ -254,7 +254,7 @@ run_session() {
             export MINDSPEC_TRACE="${trace_path}"
         fi
         run_with_timeout "${SESSION_TIMEOUT}" claude "${claude_args[@]}" \
-            > "${WORK_DIR}/output-${label}.txt" 2>&1
+            2>&1 | tee "${WORK_DIR}/output-${label}.txt"
     ) || claude_exit=$?
 
     if [[ ${claude_exit} -eq 124 ]]; then
