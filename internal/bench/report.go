@@ -362,3 +362,185 @@ func fmtDeltaDuration(ms float64) string {
 	}
 	return sign + fmtDuration(ms)
 }
+
+// MultiReport holds an N-way comparison of sessions (no deltas).
+type MultiReport struct {
+	Sessions []*Session
+}
+
+// CompareN creates an N-way comparison from 2 or more sessions.
+func CompareN(sessions []*Session) *MultiReport {
+	return &MultiReport{Sessions: sessions}
+}
+
+// FormatTableN produces a human-readable N-way side-by-side table (no delta column).
+func FormatTableN(r *MultiReport) string {
+	n := len(r.Sessions)
+	if n == 0 {
+		return ""
+	}
+
+	// Determine column width based on longest label
+	colW := 15
+	for _, s := range r.Sessions {
+		l := s.Label
+		if l == "" {
+			l = "Session"
+		}
+		if len(l)+2 > colW {
+			colW = len(l) + 2
+		}
+	}
+
+	labels := make([]string, n)
+	for i, s := range r.Sessions {
+		labels[i] = s.Label
+		if labels[i] == "" {
+			labels[i] = fmt.Sprintf("Session %d", i+1)
+		}
+	}
+
+	// Header
+	out := fmt.Sprintf("%-22s", "Metric")
+	for _, l := range labels {
+		out += fmt.Sprintf(" %*s", colW, l)
+	}
+	out += "\n"
+
+	// Separator
+	sepLen := 22 + n*(colW+1)
+	for i := 0; i < sepLen; i++ {
+		out += "─"
+	}
+	out += "\n"
+
+	// API Calls
+	out += fmtRowN("API Calls", colW, mapInt(r.Sessions, func(s *Session) int64 { return int64(s.APICallCount) }))
+	out += fmtRowN("Input Tokens", colW, mapInt(r.Sessions, func(s *Session) int64 { return s.InputTokens }))
+	out += fmtRowN("Output Tokens", colW, mapInt(r.Sessions, func(s *Session) int64 { return s.OutputTokens }))
+	out += fmtRowN("Cache Read Tokens", colW, mapInt(r.Sessions, func(s *Session) int64 { return s.CacheRead }))
+	out += fmtRowN("Cache Create Tokens", colW, mapInt(r.Sessions, func(s *Session) int64 { return s.CacheCreate }))
+	out += fmtRowN("Total Tokens", colW, mapInt(r.Sessions, func(s *Session) int64 { return s.TotalTokens() }))
+
+	// Cost
+	out += fmt.Sprintf("%-22s", "Cost (USD)")
+	for _, s := range r.Sessions {
+		out += fmt.Sprintf(" %*s", colW, fmt.Sprintf("$%.4f", s.CostUSD))
+	}
+	out += "\n"
+
+	// Duration
+	out += fmt.Sprintf("%-22s", "Duration")
+	for _, s := range r.Sessions {
+		out += fmt.Sprintf(" %*s", colW, fmtDuration(s.DurationMs))
+	}
+	out += "\n"
+
+	// Cache Hit Rate
+	out += fmt.Sprintf("%-22s", "Cache Hit Rate")
+	for _, s := range r.Sessions {
+		out += fmt.Sprintf(" %*.1f%%", colW-1, s.CacheHitRate()*100)
+	}
+	out += "\n"
+
+	// Output/Input Ratio
+	out += fmt.Sprintf("%-22s", "Output/Input Ratio")
+	for _, s := range r.Sessions {
+		eff := float64(0)
+		if s.InputTokens > 0 {
+			eff = float64(s.OutputTokens) / float64(s.InputTokens)
+		}
+		out += fmt.Sprintf(" %*.2fx", colW-1, eff)
+	}
+	out += "\n"
+
+	// Per-model breakdown
+	models := mergedModelNamesN(r.Sessions)
+	if len(models) > 0 {
+		out += "\n"
+		out += fmt.Sprintf("%-22s", "Per-Model Breakdown")
+		for _, l := range labels {
+			out += fmt.Sprintf(" %*s", colW, l)
+		}
+		out += "\n"
+		for i := 0; i < sepLen; i++ {
+			out += "─"
+		}
+		out += "\n"
+
+		for _, model := range models {
+			out += fmt.Sprintf("  %s\n", model)
+
+			// Tokens In
+			out += fmt.Sprintf("%-22s", "    Tokens In")
+			for _, s := range r.Sessions {
+				ms := s.ModelBreakdown[model]
+				if ms == nil {
+					out += fmt.Sprintf(" %*d", colW, 0)
+				} else {
+					out += fmt.Sprintf(" %*d", colW, ms.InputTokens)
+				}
+			}
+			out += "\n"
+
+			// Tokens Out
+			out += fmt.Sprintf("%-22s", "    Tokens Out")
+			for _, s := range r.Sessions {
+				ms := s.ModelBreakdown[model]
+				if ms == nil {
+					out += fmt.Sprintf(" %*d", colW, 0)
+				} else {
+					out += fmt.Sprintf(" %*d", colW, ms.OutputTokens)
+				}
+			}
+			out += "\n"
+
+			// Cost
+			out += fmt.Sprintf("%-22s", "    Cost")
+			for _, s := range r.Sessions {
+				ms := s.ModelBreakdown[model]
+				if ms == nil {
+					out += fmt.Sprintf(" %*s", colW, "$0.0000")
+				} else {
+					out += fmt.Sprintf(" %*s", colW, fmt.Sprintf("$%.4f", ms.CostUSD))
+				}
+			}
+			out += "\n"
+		}
+	}
+
+	return out
+}
+
+// mergedModelNamesN returns the sorted union of model names from all sessions.
+func mergedModelNamesN(sessions []*Session) []string {
+	seen := make(map[string]struct{})
+	for _, s := range sessions {
+		for m := range s.ModelBreakdown {
+			seen[m] = struct{}{}
+		}
+	}
+	names := make([]string, 0, len(seen))
+	for m := range seen {
+		names = append(names, m)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func mapInt(sessions []*Session, fn func(*Session) int64) []int64 {
+	vals := make([]int64, len(sessions))
+	for i, s := range sessions {
+		vals[i] = fn(s)
+	}
+	return vals
+}
+
+func fmtRowN(label string, colW int, vals []int64) string {
+	out := fmt.Sprintf("%-22s", label)
+	for _, v := range vals {
+		out += fmt.Sprintf(" %*d", colW, v)
+	}
+	out += "\n"
+	return out
+}

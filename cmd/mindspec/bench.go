@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/mindspec/mindspec/internal/bench"
 	"github.com/spf13/cobra"
@@ -79,48 +80,109 @@ var benchCollectCmd = &cobra.Command{
 }
 
 var benchReportCmd = &cobra.Command{
-	Use:   "report <session-a.jsonl> <session-b.jsonl>",
-	Short: "Compare two collected benchmark sessions",
-	Args:  cobra.ExactArgs(2),
+	Use:   "report <session.jsonl> [session.jsonl...]",
+	Short: "Compare two or more collected benchmark sessions",
+	Args:  cobra.MinimumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		labels, _ := cmd.Flags().GetString("labels")
 		format, _ := cmd.Flags().GetString("format")
 
-		labelA, labelB := "Session A", "Session B"
-		if labels != "" {
-			parts := splitLabels(labels)
-			if len(parts) >= 2 {
-				labelA, labelB = parts[0], parts[1]
+		labelParts := splitLabels(labels)
+
+		// Parse all sessions
+		var sessions []*bench.Session
+		for i, path := range args {
+			label := fmt.Sprintf("Session %d", i+1)
+			if i < len(labelParts) {
+				label = labelParts[i]
 			}
-		}
-
-		a, err := bench.ParseSession(args[0], labelA)
-		if err != nil {
-			return err
-		}
-
-		b, err := bench.ParseSession(args[1], labelB)
-		if err != nil {
-			return err
-		}
-
-		report := bench.Compare(a, b)
-
-		if format == "json" {
-			out, err := bench.FormatJSON(report)
+			s, err := bench.ParseSession(path, label)
 			if err != nil {
 				return err
 			}
-			fmt.Println(out)
+			sessions = append(sessions, s)
+		}
+
+		// 2 sessions: pairwise with delta (backward compat)
+		if len(sessions) == 2 {
+			report := bench.Compare(sessions[0], sessions[1])
+			if format == "json" {
+				out, err := bench.FormatJSON(report)
+				if err != nil {
+					return err
+				}
+				fmt.Println(out)
+				return nil
+			}
+			fmt.Print(bench.FormatTable(report))
 			return nil
 		}
 
-		fmt.Print(bench.FormatTable(report))
+		// 3+ sessions: N-way side-by-side (no deltas)
+		report := bench.CompareN(sessions)
+		fmt.Print(bench.FormatTableN(report))
 		return nil
 	},
 }
 
+var benchRunCmd = &cobra.Command{
+	Use:   "run",
+	Short: "Run a full 3-session A/B/C benchmark",
+	Long: `Run 3 Claude Code sessions under different conditions and produce a
+comparative benchmark report.
+
+  Session A (no-docs):   No CLAUDE.md/.mindspec; hooks stripped; no docs/
+  Session B (baseline):  No CLAUDE.md/.mindspec; hooks stripped; docs/ present
+  Session C (mindspec):  Full MindSpec tooling`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		specID, _ := cmd.Flags().GetString("spec-id")
+		prompt, _ := cmd.Flags().GetString("prompt")
+		promptFile, _ := cmd.Flags().GetString("prompt-file")
+		timeoutSec, _ := cmd.Flags().GetInt("timeout")
+		maxTurns, _ := cmd.Flags().GetInt("max-turns")
+		model, _ := cmd.Flags().GetString("model")
+		workDir, _ := cmd.Flags().GetString("work-dir")
+		skipCleanup, _ := cmd.Flags().GetBool("skip-cleanup")
+		skipQual, _ := cmd.Flags().GetBool("skip-qualitative")
+		skipCommit, _ := cmd.Flags().GetBool("skip-commit")
+
+		if specID == "" {
+			return fmt.Errorf("--spec-id is required")
+		}
+
+		// Read prompt from file if specified
+		if promptFile != "" {
+			data, err := os.ReadFile(promptFile)
+			if err != nil {
+				return fmt.Errorf("reading prompt file: %w", err)
+			}
+			prompt = string(data)
+		}
+		if prompt == "" {
+			return fmt.Errorf("--prompt or --prompt-file is required")
+		}
+
+		cfg := &bench.RunConfig{
+			SpecID:          specID,
+			Prompt:          prompt,
+			Timeout:         time.Duration(timeoutSec) * time.Second,
+			MaxTurns:        maxTurns,
+			Model:           model,
+			WorkDir:         workDir,
+			SkipCleanup:     skipCleanup,
+			SkipQualitative: skipQual,
+			SkipCommit:      skipCommit,
+			Stdout:          os.Stdout,
+		}
+
+		return bench.Run(cfg)
+	},
+}
+
 func splitLabels(s string) []string {
+	if s == "" {
+		return nil
+	}
 	var parts []string
 	current := ""
 	for _, c := range s {
@@ -141,10 +203,22 @@ func init() {
 	benchCollectCmd.Flags().Int("port", 4318, "Port to listen on")
 	benchCollectCmd.Flags().String("output", "", "Output NDJSON file path")
 
-	benchReportCmd.Flags().String("labels", "", "Comma-separated labels for sessions (e.g., mindspec,baseline)")
+	benchReportCmd.Flags().String("labels", "", "Comma-separated labels for sessions (e.g., no-docs,baseline,mindspec)")
 	benchReportCmd.Flags().String("format", "table", "Output format: table or json")
+
+	benchRunCmd.Flags().String("spec-id", "", "Spec folder ID (e.g., 015-project-bootstrap)")
+	benchRunCmd.Flags().String("prompt", "", "Feature prompt for all 3 sessions")
+	benchRunCmd.Flags().String("prompt-file", "", "Read prompt from file")
+	benchRunCmd.Flags().Int("timeout", 1800, "Per-session timeout in seconds")
+	benchRunCmd.Flags().Int("max-turns", 0, "Max agentic turns per session (0 = unlimited)")
+	benchRunCmd.Flags().String("model", "", "Claude model for all sessions")
+	benchRunCmd.Flags().String("work-dir", "", "Base dir for worktrees (default: /tmp/mindspec-bench-<spec-id>)")
+	benchRunCmd.Flags().Bool("skip-cleanup", false, "Preserve worktrees after completion")
+	benchRunCmd.Flags().Bool("skip-qualitative", false, "Skip qualitative analysis (quantitative only)")
+	benchRunCmd.Flags().Bool("skip-commit", false, "Don't commit results to docs/specs/")
 
 	benchCmd.AddCommand(benchSetupCmd)
 	benchCmd.AddCommand(benchCollectCmd)
 	benchCmd.AddCommand(benchReportCmd)
+	benchCmd.AddCommand(benchRunCmd)
 }

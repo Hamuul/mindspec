@@ -252,7 +252,7 @@ rm -f /tmp/bench-session-a.jsonl /tmp/bench-session-b.jsonl /tmp/mindspec-bench-
 
 ## Automated E2E Benchmarking
 
-For repeatable benchmarks, use `scripts/bench-e2e.sh`. It automates the full workflow — worktree creation, session execution, telemetry collection, quantitative reports, qualitative analysis, and result persistence — for 3 sessions:
+For repeatable benchmarks, use `mindspec bench run`. It automates the full workflow — worktree creation, session execution, in-process telemetry collection, N-way quantitative reports, qualitative analysis, and result persistence — for 3 sessions:
 
 | Session | Description |
 |:--------|:------------|
@@ -263,7 +263,7 @@ For repeatable benchmarks, use `scripts/bench-e2e.sh`. It automates the full wor
 ### Example
 
 ```bash
-scripts/bench-e2e.sh \
+mindspec bench run \
   --spec-id 015-project-bootstrap \
   --prompt "Plan and implement: mindspec init — a bootstrap command that scaffolds a new project" \
   --max-turns 30 \
@@ -273,7 +273,7 @@ scripts/bench-e2e.sh \
 Or read the prompt from a file:
 
 ```bash
-scripts/bench-e2e.sh \
+mindspec bench run \
   --spec-id 015-project-bootstrap \
   --prompt-file prompts/015.txt
 ```
@@ -286,7 +286,7 @@ scripts/bench-e2e.sh \
 | `--prompt <string>` | Feature prompt for all 3 sessions (required unless `--prompt-file`) | — |
 | `--prompt-file <path>` | Read prompt from file | — |
 | `--timeout <seconds>` | Per-session timeout | 1800 (30 min) |
-| `--max-turns <int>` | Max agentic turns per session | unlimited |
+| `--max-turns <int>` | Max agentic turns per session (0 = unlimited) | 0 |
 | `--model <model>` | Claude model for all sessions | system default |
 | `--work-dir <path>` | Base dir for worktrees | `/tmp/mindspec-bench-<spec-id>` |
 | `--skip-cleanup` | Preserve worktrees after completion | false |
@@ -295,23 +295,39 @@ scripts/bench-e2e.sh \
 
 ### Output
 
-Results are written to `docs/specs/<spec-id>/`:
+Results are written to `docs/specs/<spec-id>/benchmark/`:
 
-- **`benchmark.md`** — metadata, 3 pairwise quantitative reports, qualitative analysis with per-dimension 1-5 ratings
+- **`report.md`** — metadata, N-way side-by-side quantitative report, qualitative analysis with per-dimension 1-5 ratings
 - **`improvements.md`** — actionable findings: what the non-MindSpec sessions did better
+- **`session-{a,b,c}.jsonl`** — OTLP telemetry NDJSON
+- **`output-{a,b,c}.txt`** — Claude session output
+- **`trace-c.jsonl`** — MindSpec trace (session C only)
 
-The script auto-commits these to the current branch unless `--skip-commit` is passed.
+The command auto-commits these to the current branch unless `--skip-commit` is passed.
 
 ### How It Works
 
 1. Creates 3 git worktrees from the current HEAD
 2. Neutralizes A (removes CLAUDE.md, .mindspec/, MindSpec commands, hooks, and docs/) and B (same but keeps docs/)
-3. Runs `claude -p` sequentially (A → B → C; MindSpec last to avoid cache warmup advantage)
-4. Collects plans: Session C's `docs/specs/<ID>/plan.md`, Sessions A/B's `.claude/plans/*.md`
-5. Generates pairwise `mindspec bench report` comparisons (A-vs-B, A-vs-C, B-vs-C)
-6. Runs a qualitative analysis via `claude -p` comparing all 3 implementations and plans
-7. Runs an improvements analysis identifying what A/B did better
-8. Assembles results and cleans up worktrees
+3. Starts in-process OTLP collectors (one goroutine per session, no subprocesses)
+4. Runs `claude -p` sequentially (A → B → C; MindSpec last to avoid cache warmup advantage)
+5. Collects plans: Session C's `docs/specs/<ID>/plan.md`, Sessions A/B's `.claude/plans/*.md`
+6. Generates N-way side-by-side quantitative report (all sessions in columns)
+7. Runs a qualitative analysis via `claude -p` comparing all 3 implementations and plans
+8. Runs an improvements analysis identifying what A/B did better
+9. Writes all artifacts to `docs/specs/<spec-id>/benchmark/` and cleans up worktrees
+
+### N-way Reports
+
+`mindspec bench report` accepts 2 or more JSONL files:
+
+```bash
+# 2 files: pairwise comparison with delta column (backward compatible)
+mindspec bench report a.jsonl b.jsonl --labels "mindspec,baseline"
+
+# 3+ files: N-way side-by-side comparison (no delta column)
+mindspec bench report a.jsonl b.jsonl c.jsonl --labels "no-docs,baseline,mindspec"
+```
 
 The manual workflow above remains available for interactive sessions where you want more control.
 
