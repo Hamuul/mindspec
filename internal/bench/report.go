@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"sort"
 	"time"
 )
 
@@ -78,6 +79,7 @@ func ParseSession(path, label string) (*Session, error) {
 
 		switch e.Event {
 		case "claude_code.api_request", "claude.api_request":
+			// Legacy log-based events with flat fields
 			s.APICallCount++
 
 			inputTok := toInt64(e.Data["input_tokens"])
@@ -94,14 +96,43 @@ func ParseSession(path, label string) (*Session, error) {
 			s.CostUSD += cost
 
 			if model != "" {
-				ms, ok := s.ModelBreakdown[model]
-				if !ok {
-					ms = &ModelStats{}
-					s.ModelBreakdown[model] = ms
-				}
+				ms := getOrCreateModel(s, model)
 				ms.Calls++
 				ms.InputTokens += inputTok
 				ms.OutputTokens += outputTok
+				ms.CostUSD += cost
+			}
+
+		case "claude_code.token.usage":
+			// OTLP metric events: data.type = input|output|cacheRead|cacheCreation, data.value = delta
+			tokType, _ := e.Data["type"].(string)
+			val := toInt64(e.Data["value"])
+			switch tokType {
+			case "input":
+				s.InputTokens += val
+			case "output":
+				s.OutputTokens += val
+			case "cacheRead":
+				s.CacheRead += val
+			case "cacheCreation":
+				s.CacheCreate += val
+			}
+			if model, _ := e.Data["model"].(string); model != "" {
+				ms := getOrCreateModel(s, model)
+				switch tokType {
+				case "input":
+					ms.InputTokens += val
+				case "output":
+					ms.OutputTokens += val
+				}
+			}
+
+		case "claude_code.cost.usage":
+			// OTLP metric events: data.value = cost delta (USD)
+			cost := toFloat64(e.Data["value"])
+			s.CostUSD += cost
+			if model, _ := e.Data["model"].(string); model != "" {
+				ms := getOrCreateModel(s, model)
 				ms.CostUSD += cost
 			}
 		}
@@ -116,6 +147,32 @@ func ParseSession(path, label string) (*Session, error) {
 	}
 
 	return s, nil
+}
+
+// mergedModelNames returns the sorted union of model names from both sessions.
+func mergedModelNames(a, b *Session) []string {
+	seen := make(map[string]struct{})
+	for m := range a.ModelBreakdown {
+		seen[m] = struct{}{}
+	}
+	for m := range b.ModelBreakdown {
+		seen[m] = struct{}{}
+	}
+	names := make([]string, 0, len(seen))
+	for m := range seen {
+		names = append(names, m)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func getOrCreateModel(s *Session, model string) *ModelStats {
+	ms, ok := s.ModelBreakdown[model]
+	if !ok {
+		ms = &ModelStats{}
+		s.ModelBreakdown[model] = ms
+	}
+	return ms
 }
 
 func toInt64(v any) int64 {
@@ -230,6 +287,31 @@ func FormatTable(r *Report) string {
 		effB = float64(r.B.OutputTokens) / float64(r.B.InputTokens)
 	}
 	out += fmt.Sprintf("%-22s %14.2fx %14.2fx\n", "Output/Input Ratio", effA, effB)
+
+	// Per-model breakdown
+	models := mergedModelNames(r.A, r.B)
+	if len(models) > 0 {
+		out += fmt.Sprintf("\n%-22s %15s %15s %15s\n", "Per-Model Breakdown", labelA, labelB, "Delta")
+		out += fmt.Sprintf("%s\n", "────────────────────────────────────────────────────────────────────")
+		for _, model := range models {
+			msA := r.A.ModelBreakdown[model]
+			msB := r.B.ModelBreakdown[model]
+			if msA == nil {
+				msA = &ModelStats{}
+			}
+			if msB == nil {
+				msB = &ModelStats{}
+			}
+			out += fmt.Sprintf("  %s\n", model)
+			out += fmtRow64("    Tokens In", msA.InputTokens, msB.InputTokens, msA.InputTokens-msB.InputTokens)
+			out += fmtRow64("    Tokens Out", msA.OutputTokens, msB.OutputTokens, msA.OutputTokens-msB.OutputTokens)
+			out += fmt.Sprintf("%-22s %15s %15s %15s\n",
+				"    Cost",
+				fmt.Sprintf("$%.4f", msA.CostUSD),
+				fmt.Sprintf("$%.4f", msB.CostUSD),
+				fmtDeltaFloat(msA.CostUSD-msB.CostUSD, "$"))
+		}
+	}
 
 	return out
 }

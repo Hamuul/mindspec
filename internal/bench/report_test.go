@@ -78,6 +78,94 @@ func TestParseSession(t *testing.T) {
 	}
 }
 
+func TestParseSessionMetricEvents(t *testing.T) {
+	dir := t.TempDir()
+	events := []CollectedEvent{
+		{
+			TS:    "2026-02-13T10:00:00.000000000Z",
+			Event: "claude_code.token.usage",
+			Data:  map[string]any{"type": "input", "value": float64(5000), "model": "claude-opus-4-6"},
+		},
+		{
+			TS:    "2026-02-13T10:00:00.000000000Z",
+			Event: "claude_code.token.usage",
+			Data:  map[string]any{"type": "output", "value": float64(1000), "model": "claude-opus-4-6"},
+		},
+		{
+			TS:    "2026-02-13T10:00:00.000000000Z",
+			Event: "claude_code.token.usage",
+			Data:  map[string]any{"type": "cacheRead", "value": float64(2000), "model": "claude-opus-4-6"},
+		},
+		{
+			TS:    "2026-02-13T10:00:00.000000000Z",
+			Event: "claude_code.token.usage",
+			Data:  map[string]any{"type": "cacheCreation", "value": float64(500), "model": "claude-opus-4-6"},
+		},
+		{
+			TS:    "2026-02-13T10:00:00.000000000Z",
+			Event: "claude_code.cost.usage",
+			Data:  map[string]any{"value": float64(0.03), "model": "claude-opus-4-6"},
+		},
+		// Second batch (delta)
+		{
+			TS:    "2026-02-13T10:05:00.000000000Z",
+			Event: "claude_code.token.usage",
+			Data:  map[string]any{"type": "input", "value": float64(3000), "model": "claude-opus-4-6"},
+		},
+		{
+			TS:    "2026-02-13T10:05:00.000000000Z",
+			Event: "claude_code.token.usage",
+			Data:  map[string]any{"type": "output", "value": float64(800), "model": "claude-opus-4-6"},
+		},
+		{
+			TS:    "2026-02-13T10:05:00.000000000Z",
+			Event: "claude_code.cost.usage",
+			Data:  map[string]any{"value": float64(0.02), "model": "claude-opus-4-6"},
+		},
+	}
+
+	path := writeFixture(t, dir, "session-metrics.jsonl", events)
+	s, err := ParseSession(path, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if s.InputTokens != 8000 {
+		t.Errorf("InputTokens = %d, want 8000", s.InputTokens)
+	}
+	if s.OutputTokens != 1800 {
+		t.Errorf("OutputTokens = %d, want 1800", s.OutputTokens)
+	}
+	if s.CacheRead != 2000 {
+		t.Errorf("CacheRead = %d, want 2000", s.CacheRead)
+	}
+	if s.CacheCreate != 500 {
+		t.Errorf("CacheCreate = %d, want 500", s.CacheCreate)
+	}
+	if s.TotalTokens() != 9800 {
+		t.Errorf("TotalTokens = %d, want 9800", s.TotalTokens())
+	}
+	if s.DurationMs != 300000 {
+		t.Errorf("DurationMs = %f, want 300000", s.DurationMs)
+	}
+	// Cost
+	expectedCost := 0.05
+	if diff := s.CostUSD - expectedCost; diff > 0.0001 || diff < -0.0001 {
+		t.Errorf("CostUSD = %f, want %f", s.CostUSD, expectedCost)
+	}
+	// Model breakdown
+	ms, ok := s.ModelBreakdown["claude-opus-4-6"]
+	if !ok {
+		t.Fatal("missing model breakdown for claude-opus-4-6")
+	}
+	if ms.InputTokens != 8000 {
+		t.Errorf("model InputTokens = %d, want 8000", ms.InputTokens)
+	}
+	if ms.OutputTokens != 1800 {
+		t.Errorf("model OutputTokens = %d, want 1800", ms.OutputTokens)
+	}
+}
+
 func TestCompare(t *testing.T) {
 	a := &Session{
 		Label:        "mindspec",
