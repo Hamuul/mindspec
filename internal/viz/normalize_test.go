@@ -430,6 +430,101 @@ func TestNormalizeSubAgentSpawnEdge(t *testing.T) {
 	}
 }
 
+func TestNormalizeAgentIdentityFromSessionID(t *testing.T) {
+	e := bench.CollectedEvent{
+		TS:    "2026-02-14T12:00:00Z",
+		Event: "claude_code.api_request",
+		Data: map[string]any{
+			"model":      "claude-sonnet-4-5-20250929",
+			"session.id": "a595bc37-ba5a-4345-8fbe-bbdaab766b2d",
+		},
+	}
+
+	nodes, edges := NormalizeEvent(e)
+
+	var agentNode *NodeUpsert
+	for i := range nodes {
+		if nodes[i].Type == NodeAgent {
+			agentNode = &nodes[i]
+		}
+	}
+	if agentNode == nil {
+		t.Fatal("expected agent node")
+	}
+	// session.id "a595bc37..." → first 4 hex chars after stripping hyphens = "a595"
+	if agentNode.ID != "agent:session:a595" {
+		t.Errorf("agent ID = %q, want agent:session:a595", agentNode.ID)
+	}
+	if agentNode.Label != "Claude Code (a595)" {
+		t.Errorf("agent label = %q, want %q", agentNode.Label, "Claude Code (a595)")
+	}
+	if edges[0].Src != "agent:session:a595" {
+		t.Errorf("edge src = %q, want agent:session:a595", edges[0].Src)
+	}
+}
+
+func TestNormalizeAgentIdentityServiceNamePlusSessionID(t *testing.T) {
+	e := bench.CollectedEvent{
+		TS:    "2026-02-14T12:00:00Z",
+		Event: "claude_code.api_request",
+		Data: map[string]any{
+			"model":      "claude-sonnet-4-5-20250929",
+			"session.id": "7f3b1234-0000-0000-0000-000000000000",
+		},
+		Resource: map[string]any{
+			"service.name": "claude-code",
+		},
+	}
+
+	nodes, _ := NormalizeEvent(e)
+
+	var agentNode *NodeUpsert
+	for i := range nodes {
+		if nodes[i].Type == NodeAgent {
+			agentNode = &nodes[i]
+		}
+	}
+	if agentNode == nil {
+		t.Fatal("expected agent node")
+	}
+	if agentNode.ID != "agent:claude-code:7f3b" {
+		t.Errorf("agent ID = %q, want agent:claude-code:7f3b", agentNode.ID)
+	}
+	if agentNode.Label != "claude-code (7f3b)" {
+		t.Errorf("agent label = %q, want %q", agentNode.Label, "claude-code (7f3b)")
+	}
+}
+
+func TestNormalizeAgentNameTakesPrecedenceOverSessionID(t *testing.T) {
+	e := bench.CollectedEvent{
+		TS:    "2026-02-14T12:00:00Z",
+		Event: "claude_code.api_request",
+		Data: map[string]any{
+			"model":      "claude-sonnet-4-5-20250929",
+			"session.id": "a595bc37-ba5a-4345-8fbe-bbdaab766b2d",
+		},
+		Resource: map[string]any{
+			"agent.name": "research",
+		},
+	}
+
+	nodes, _ := NormalizeEvent(e)
+
+	var agentNode *NodeUpsert
+	for i := range nodes {
+		if nodes[i].Type == NodeAgent {
+			agentNode = &nodes[i]
+		}
+	}
+	if agentNode == nil {
+		t.Fatal("expected agent node")
+	}
+	// agent.name should win over session.id
+	if agentNode.ID != "agent:research" {
+		t.Errorf("agent ID = %q, want agent:research", agentNode.ID)
+	}
+}
+
 func TestNormalizeSubAgentSelfLoopSkipped(t *testing.T) {
 	e := bench.CollectedEvent{
 		TS:    "2026-02-14T12:00:00Z",

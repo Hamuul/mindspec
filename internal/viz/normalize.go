@@ -9,9 +9,13 @@ import (
 	"github.com/mindspec/mindspec/internal/bench"
 )
 
-// resolveAgentID derives an agent identity from OTLP resource attributes.
-// Precedence: agent.name > service.name+service.instance.id > service.name > "claude-code".
-func resolveAgentID(resource map[string]any) (id string, label string) {
+// resolveAgentID derives an agent identity from OTLP resource attributes and event data.
+// Precedence: agent.name > service.name+service.instance.id > service.name+session.id
+//
+//	> session.id (truncated) > "claude-code".
+//
+// session.id (a UUID in event data) auto-differentiates multiple Claude Code instances.
+func resolveAgentID(resource, data map[string]any) (id string, label string) {
 	if name, ok := resource["agent.name"].(string); ok && name != "" {
 		return "agent:" + name, name
 	}
@@ -20,10 +24,29 @@ func resolveAgentID(resource map[string]any) (id string, label string) {
 	if svcName != "" && svcInstance != "" {
 		return "agent:" + svcName + ":" + svcInstance, svcName
 	}
+	sessionID, _ := data["session.id"].(string)
+	if svcName != "" && sessionID != "" {
+		short := truncateSessionID(sessionID)
+		return "agent:" + svcName + ":" + short, svcName + " (" + short + ")"
+	}
 	if svcName != "" {
 		return "agent:" + svcName, svcName
 	}
+	if sessionID != "" {
+		short := truncateSessionID(sessionID)
+		return "agent:session:" + short, "Claude Code (" + short + ")"
+	}
 	return "agent:claude-code", "Claude Code"
+}
+
+// truncateSessionID returns the first 4 hex chars of a session UUID for display.
+func truncateSessionID(id string) string {
+	// Strip hyphens and take first 4 chars
+	clean := strings.ReplaceAll(id, "-", "")
+	if len(clean) > 4 {
+		return clean[:4]
+	}
+	return clean
 }
 
 // NormalizeEvent converts a CollectedEvent into graph operations (node upserts and edge events).
@@ -32,7 +55,7 @@ func NormalizeEvent(e bench.CollectedEvent) ([]NodeUpsert, []EdgeEvent) {
 	var edges []EdgeEvent
 
 	ts := parseTimestamp(e.TS)
-	agentID, agentLabel := resolveAgentID(e.Resource)
+	agentID, agentLabel := resolveAgentID(e.Resource, e.Data)
 
 	// Sub-agent hierarchy: if agent.parent is set, emit parent→child spawn edge
 	if parentName, ok := e.Resource["agent.parent"].(string); ok && parentName != "" {
