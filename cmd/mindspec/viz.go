@@ -10,20 +10,22 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var vizCmd = &cobra.Command{
-	Use:   "viz",
-	Short: "Real-time 3D visualization of agent activity",
+var agentmindCmd = &cobra.Command{
+	Use:     "agentmind",
+	Aliases: []string{"viz"},
+	Short:   "AgentMind — real-time 3D visualization of agent activity",
 	Long: `Launch a local web server that renders agent activity as an interactive
 3D force-directed graph with a starfield aesthetic.
 
 Subcommands:
-  live    Start OTLP receiver + web UI for real-time visualization
+  serve   Start OTLP receiver + web UI for real-time visualization
   replay  Replay a recorded NDJSON session file`,
 }
 
-var vizLiveCmd = &cobra.Command{
-	Use:   "live",
-	Short: "Start OTLP receiver + web UI for real-time visualization",
+var agentmindServeCmd = &cobra.Command{
+	Use:     "serve",
+	Aliases: []string{"live"},
+	Short:   "Start OTLP receiver + web UI for real-time visualization",
 	Long: `Start an OTLP/HTTP receiver and web UI server. Configure Claude Code with:
   export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:<otlp-port>`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -44,7 +46,7 @@ var vizLiveCmd = &cobra.Command{
 	},
 }
 
-var vizReplayCmd = &cobra.Command{
+var agentmindReplayCmd = &cobra.Command{
 	Use:   "replay <file.jsonl>",
 	Short: "Replay a recorded NDJSON session file",
 	Args:  cobra.ExactArgs(1),
@@ -72,12 +74,12 @@ var vizReplayCmd = &cobra.Command{
 }
 
 func init() {
-	vizLiveCmd.Flags().Int("otlp-port", 4318, "Port for OTLP/HTTP receiver")
-	vizLiveCmd.Flags().Int("ui-port", 8420, "Port for web UI")
+	agentmindServeCmd.Flags().Int("otlp-port", 4318, "Port for OTLP/HTTP receiver")
+	agentmindServeCmd.Flags().Int("ui-port", 8420, "Port for web UI")
 
-	vizReplayCmd.Flags().Float64("speed", 1, "Replay speed multiplier (1, 5, 10, or 0 for max)")
-	vizReplayCmd.Flags().Int("ui-port", 8420, "Port for web UI")
+	agentmindReplayCmd.Flags().Float64("speed", 1, "Replay speed multiplier (1, 5, 10, or 0 for max)")
+	agentmindReplayCmd.Flags().Int("ui-port", 8420, "Port for web UI")
 
-	vizCmd.AddCommand(vizLiveCmd)
-	vizCmd.AddCommand(vizReplayCmd)
+	agentmindCmd.AddCommand(agentmindServeCmd)
+	agentmindCmd.AddCommand(agentmindReplayCmd)
 }

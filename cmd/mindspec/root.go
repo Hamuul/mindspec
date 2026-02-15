@@ -63,5 +63,5 @@ func init() {
 	rootCmd.AddCommand(stateCmd)
 	rootCmd.AddCommand(traceCmd)
 	rootCmd.AddCommand(validateCmd)
-	rootCmd.AddCommand(vizCmd)
+	rootCmd.AddCommand(agentmindCmd)
 }
