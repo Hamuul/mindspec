@@ -50,8 +50,8 @@ const EDGE_GLOW = {
   FIRE_BOOST: 0.8,     // energy added per firing (cumulative, stacks high)
   DECAY_RATE: 0.985,   // per-tick multiplier (50ms ticks → half-life ~2.3s)
   DECAY_FLOOR: 0.005,
-  BASE_WIDTH: 0.15,    // Thin constellation-style base width
-  MAX_WIDTH: 0.6,      // Maximum width under energy
+  BASE_WIDTH: 0.4,     // Visible at rest
+  MAX_WIDTH: 2.0,      // Bright flash on activity
 };
 
 // Desaturate edge colors (~60% saturation) for subtle constellation lines
@@ -80,7 +80,7 @@ const _basisMat = new window.THREE.Matrix4();
 const container = document.getElementById('graph-container');
 
 const Graph = ForceGraph3D()(container)
-  .backgroundColor('#0a0a1a')
+  .backgroundColor('#0d0d0d')
   .nodeColor(node => NODE_COLORS[node.type] || '#cccccc')
   .nodeVal(node => Math.max(1, Math.log2((node.activityCount || 1) + 1) * 2))
   .nodeOpacity(node => {
@@ -102,9 +102,10 @@ const Graph = ForceGraph3D()(container)
       map: lineGlowTexture,
       vertexColors: true,
       transparent: true,
-      opacity: 0.08,
+      opacity: 0.35,
       blending: window.THREE.AdditiveBlending,
       depthWrite: false,
+      depthTest: false,
       side: window.THREE.DoubleSide,
     });
     return new window.THREE.Mesh(geo, mat);
@@ -131,10 +132,15 @@ const Graph = ForceGraph3D()(container)
     ).normalize();
 
     _billUp.crossVectors(_edgeDir, _toCamera);
-    if (_billUp.lengthSq() < 0.0001) {
-      // Edge points directly at camera — use fallback up
+    if (_billUp.lengthSq() < 0.01) {
+      // Edge nearly parallel to camera direction — pick a stable fallback
+      // Try world-up first; if that's also parallel, use world-right
       _billUp.set(0, 1, 0);
       _billUp.crossVectors(_edgeDir, _billUp);
+      if (_billUp.lengthSq() < 0.01) {
+        _billUp.set(1, 0, 0);
+        _billUp.crossVectors(_edgeDir, _billUp);
+      }
     }
     _billUp.normalize();
     _faceNormal.crossVectors(_edgeDir, _billUp).normalize();
@@ -163,11 +169,11 @@ const Graph = ForceGraph3D()(container)
     // Scale: thin constellation lines with energy-driven width
     const edgeData = state.edges.get(link.id);
     const energy = edgeData ? edgeData._energy : 0;
-    const glowWidth = Math.min(EDGE_GLOW.MAX_WIDTH, EDGE_GLOW.BASE_WIDTH + energy * 0.5);
+    const glowWidth = Math.min(EDGE_GLOW.MAX_WIDTH, EDGE_GLOW.BASE_WIDTH + energy * 2.0);
     mesh.scale.set(len, glowWidth, 1);
 
-    // Opacity: subtle baseline, flashes on activity
-    mesh.material.opacity = Math.min(1.0, 0.12 + energy * 0.9);
+    // Opacity: always visible, bright flash on activity
+    mesh.material.opacity = Math.min(1.0, 0.35 + energy * 0.65);
 
     return true;
   })
@@ -181,86 +187,67 @@ const Graph = ForceGraph3D()(container)
     hideDetail();
   });
 
-// ─── Multi-Layer Starfield ────────────────────────────────────
-function buildStarfieldLayer(count, spread, size, color) {
-  const geo = new window.THREE.BufferGeometry();
-  const positions = new Float32Array(count * 3);
-  for (let i = 0; i < count * 3; i++) {
-    positions[i] = (Math.random() - 0.5) * spread * 2;
-  }
-  geo.setAttribute('position', new window.THREE.BufferAttribute(positions, 3));
+// ─── Resize Handling ─────────────────────────────────────────
+window.addEventListener('resize', () => {
+  Graph.width(window.innerWidth).height(window.innerHeight);
+});
 
-  let sizes;
-  if (typeof size === 'object') {
-    // Random size range { min, max }
-    sizes = new Float32Array(count);
-    for (let i = 0; i < count; i++) {
-      sizes[i] = size.min + Math.random() * (size.max - size.min);
-    }
-    geo.setAttribute('size', new window.THREE.BufferAttribute(sizes, 1));
-  }
+// ─── Auto-Zoom ──────────────────────────────────────────────
+const autoZoom = {
+  on: true,
+  pendingTimer: null,
+  DEBOUNCE_MS: 600,     // wait for force layout to settle
+  TRANSITION_MS: 1000,  // smooth camera flight
+  FILL_PCT: 0.70,       // structure fills ~70% of viewport
+};
 
-  const mat = new window.THREE.PointsMaterial({
-    color: new window.THREE.Color(color),
-    size: typeof size === 'number' ? size : size.min,
-    sizeAttenuation: true,
-    transparent: true,
-    opacity: 0.9,
-    depthWrite: false,
-  });
-  const points = new window.THREE.Points(geo, mat);
-  points.layers.set(0); // Non-bloom layer
-  return points;
+function triggerAutoZoom() {
+  if (!autoZoom.on || state.paused) return;
+  // Debounce: multiple rapid node/edge additions → single smooth zoom
+  clearTimeout(autoZoom.pendingTimer);
+  autoZoom.pendingTimer = setTimeout(() => {
+    if (!autoZoom.on || state.nodes.size === 0) return;
+    const margin = (1 - autoZoom.FILL_PCT) / 2;
+    const pad = Math.min(window.innerWidth, window.innerHeight) * margin;
+    Graph.zoomToFit(autoZoom.TRANSITION_MS, pad);
+  }, autoZoom.DEBOUNCE_MS);
 }
 
-function buildBrightStars(count, spread) {
-  // Cross-shaped sprite texture for landmark stars
-  const canvas = document.createElement('canvas');
-  canvas.width = 64;
-  canvas.height = 64;
-  const ctx = canvas.getContext('2d');
-  const cx = 32, cy = 32;
+// ─── Starfield ───────────────────────────────────────────────
+// Stars are tiny sprites (same rendering path as nodes, so they're circular).
+const starSpriteTexture = (function() {
+  const c = document.createElement('canvas');
+  c.width = 32; c.height = 32;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+  g.addColorStop(0,   'rgba(255,255,255,1)');
+  g.addColorStop(0.15,'rgba(255,255,255,0.6)');
+  g.addColorStop(0.4, 'rgba(255,255,255,0.08)');
+  g.addColorStop(1,   'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 32, 32);
+  return new window.THREE.CanvasTexture(c);
+})();
 
-  // Core glow
-  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 28);
-  grad.addColorStop(0, 'rgba(255,255,255,1.0)');
-  grad.addColorStop(0.15, 'rgba(255,255,255,0.8)');
-  grad.addColorStop(0.4, 'rgba(255,255,255,0.15)');
-  grad.addColorStop(1.0, 'rgba(255,255,255,0.0)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 64, 64);
-
-  // Cross spikes (subtle)
-  ctx.globalAlpha = 0.5;
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(cx, 2); ctx.lineTo(cx, 62);
-  ctx.moveTo(2, cy); ctx.lineTo(62, cy);
-  ctx.stroke();
-  ctx.globalAlpha = 1.0;
-
-  const tex = new window.THREE.CanvasTexture(canvas);
+function buildStarSprites(count, spread, minScale, maxScale, color, opacity) {
+  const mat = new window.THREE.SpriteMaterial({
+    map: starSpriteTexture,
+    color: new window.THREE.Color(color),
+    transparent: true,
+    opacity: opacity,
+    depthWrite: false,
+    blending: window.THREE.AdditiveBlending,
+  });
   const group = new window.THREE.Group();
-  group.layers.set(0);
-
   for (let i = 0; i < count; i++) {
-    const mat = new window.THREE.SpriteMaterial({
-      map: tex,
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.7 + Math.random() * 0.3,
-      depthWrite: false,
-    });
     const sprite = new window.THREE.Sprite(mat);
     sprite.position.set(
       (Math.random() - 0.5) * spread * 2,
       (Math.random() - 0.5) * spread * 2,
       (Math.random() - 0.5) * spread * 2
     );
-    const s = 2.5 + Math.random() * 1.5;
+    const s = minScale + Math.pow(Math.random(), 2) * (maxScale - minScale);
     sprite.scale.set(s, s, 1);
-    sprite.layers.set(0);
     group.add(sprite);
   }
   return group;
@@ -268,11 +255,11 @@ function buildBrightStars(count, spread) {
 
 (function createStarfield() {
   const scene = Graph.scene();
-  scene.add(buildStarfieldLayer(8000, 3000, 0.3, '#333355'));   // Far
-  scene.add(buildStarfieldLayer(3000, 2000, 0.6, '#555577'));   // Mid
-  scene.add(buildStarfieldLayer(500, 1000, { min: 1.0, max: 2.0 }, '#8888aa')); // Near
-  scene.add(buildBrightStars(20, 1200));  // Bright landmarks
+  scene.add(buildStarSprites(500, 2000, 2, 5, '#ffffff', 1.0));
+  scene.add(buildStarSprites(300, 1500, 3, 8, '#aaccff', 1.0));
+  scene.add(buildStarSprites(100, 1000, 5, 10, '#ffccaa', 1.0));
 })();
+
 
 // ─── Star-Point Node Textures ────────────────────────────────
 function createCoreTexture(size) {
@@ -309,36 +296,8 @@ function createHaloTexture(size) {
   return new window.THREE.CanvasTexture(canvas);
 }
 
-function createDiffractionTexture(size) {
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  const c = size / 2;
-
-  // 4-point cross spikes
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 1.5;
-  ctx.globalAlpha = 0.6;
-  ctx.beginPath();
-  ctx.moveTo(c, 4); ctx.lineTo(c, size - 4);
-  ctx.moveTo(4, c); ctx.lineTo(size - 4, c);
-  ctx.stroke();
-
-  // Subtle center glow
-  ctx.globalAlpha = 0.3;
-  const grad = ctx.createRadialGradient(c, c, 0, c, c, c * 0.3);
-  grad.addColorStop(0, 'rgba(255,255,255,0.5)');
-  grad.addColorStop(1, 'rgba(255,255,255,0.0)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, size, size);
-
-  return new window.THREE.CanvasTexture(canvas);
-}
-
 const coreTexture = createCoreTexture(64);
 const haloTexture = createHaloTexture(128);
-const diffractionTexture = createDiffractionTexture(128);
 
 // Line glow: vertical gradient for edge ribbons
 function createLineGlowTexture(size) {
@@ -412,7 +371,7 @@ Graph.nodeThreeObject(node => {
   });
   const halo = new window.THREE.Sprite(haloMat);
   halo.scale.set(haloSize, haloSize, 1);
-  halo.layers.enable(1); // Bloom layer
+
   group.add(halo);
 
   // Core sprite (bright center)
@@ -426,40 +385,75 @@ Graph.nodeThreeObject(node => {
   });
   const core = new window.THREE.Sprite(coreMat);
   core.scale.set(coreSize, coreSize, 1);
-  core.layers.enable(1); // Bloom layer
+
   group.add(core);
 
-  // Diffraction spikes for high-activity nodes
-  if (activity > 10) {
-    const diffMat = new window.THREE.SpriteMaterial({
-      map: diffractionTexture,
-      color: new window.THREE.Color(color),
-      transparent: true,
-      opacity: Math.min(0.6, (activity - 10) / 40) * opacity,
-      depthWrite: false,
-      blending: window.THREE.AdditiveBlending,
-    });
-    const diff = new window.THREE.Sprite(diffMat);
-    const diffSize = coreSize * 2.5;
-    diff.scale.set(diffSize, diffSize, 1);
-    diff.layers.enable(1);
-    group.add(diff);
-  }
-
-  // Store reference for label system
-  group.userData = { nodeId: node.id, nodeType: node.type };
+  // Store references for dynamic updates
+  group.userData = { nodeId: node.id, nodeType: node.type, halo, core };
 
   return group;
 });
+
+// Dynamically update node glow size/opacity as activityCount changes
+function updateNodeGlows() {
+  const graphData = Graph.graphData();
+  if (!graphData || !graphData.nodes) return;
+
+  // Recalculate max activity
+  let newMax = 1;
+  for (const n of graphData.nodes) {
+    const a = (state.nodes.get(n.id) || {}).activityCount || n.activityCount || 1;
+    if (a > newMax) newMax = a;
+  }
+  maxActivityCount = newMax;
+
+  for (const n of graphData.nodes) {
+    if (!n.__threeObj || !n.__threeObj.userData) continue;
+    const ud = n.__threeObj.userData;
+    const data = state.nodes.get(ud.nodeId);
+    if (!data) continue;
+
+    const activity = data.activityCount || 1;
+    const color = NODE_COLORS[data.type] || '#cccccc';
+
+    const coreSize = Math.min(20, 4 + Math.log2(activity + 1) * 2);
+    const haloSize = coreSize * 3.5;
+
+    // Opacity for filter/stale
+    let opacity = 1.0;
+    if (state.filterText) {
+      const filter = state.filterText.toLowerCase();
+      const match = data.id.toLowerCase().includes(filter) ||
+                    (data.label || '').toLowerCase().includes(filter) ||
+                    data.type.toLowerCase().includes(filter);
+      opacity = match ? 1.0 : 0.08;
+    } else if (data.stale) {
+      opacity = 0.3;
+    }
+
+    // Update halo
+    if (ud.halo) {
+      ud.halo.scale.set(haloSize, haloSize, 1);
+      ud.halo.material.opacity = Math.min(0.8, Math.max(0.15, activity / maxActivityCount)) * opacity;
+    }
+
+    // Update core
+    if (ud.core) {
+      ud.core.scale.set(coreSize, coreSize, 1);
+      ud.core.material.opacity = opacity;
+    }
+
+  }
+}
 
 // ─── Token Animation System (DOM overlay) ───────────────────
 const TOKEN_ANIM = {
   DURATION: 3.0,
   BOUNCE_END: 0.2,
   FADE_START: 0.4,
-  DRIFT_PX: 120,
-  H_OFFSET_PX: 30,
-  STAGGER_PX: 28,
+  DRIFT_PX: 60,
+  H_OFFSET_PX: 12,
+  STAGGER_PX: 18,
   MAX_PER_NODE: 3,
   MAX_GLOBAL: 50,
   INPUT_COLOR: '#5eead4',
@@ -559,6 +553,7 @@ const LABEL_CONFIG = {
 const activeLabels = new Map(); // nodeId → { sprite, fadeStart }
 
 let lastDecayTime = performance.now();
+let lastGlowUpdate = 0;
 
 function animate() {
   requestAnimationFrame(animate);
@@ -640,6 +635,12 @@ function animate() {
     }
   }
 
+  // ── Update node glows based on current activity (throttled) ──
+  if (now - lastGlowUpdate > 500) {
+    updateNodeGlows();
+    lastGlowUpdate = now;
+  }
+
   // ── Always-on label fading ──
   tickLabels();
 
@@ -676,7 +677,7 @@ function animate() {
     }
 
     const x = screen.x + hOff;
-    const y = screen.y + driftY - staggerOff - 20;
+    const y = screen.y + driftY - staggerOff - 8;
 
     entry.el.style.opacity = opacity;
     entry.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%) scale(${scale})`;
@@ -704,6 +705,7 @@ setInterval(syncGraphData, 200);
 
 // ─── Node/Edge Management ───────────────────────────────────
 function addOrUpdateNode(data) {
+  const isNew = !state.nodes.has(data.id);
   const existing = state.nodes.get(data.id);
   if (existing) {
     Object.assign(existing, data);
@@ -711,10 +713,12 @@ function addOrUpdateNode(data) {
     state.nodes.set(data.id, { ...data });
   }
   state.graphDirty = true;
+  if (isNew) triggerAutoZoom();
 }
 
 function addOrUpdateEdge(data) {
   const key = data.src + '|' + data.dst + '|' + data.type;
+  const isNew = !state.edges.has(key);
   const existing = state.edges.get(key);
   if (existing) {
     Object.assign(existing, data);
@@ -724,6 +728,7 @@ function addOrUpdateEdge(data) {
   }
   pendingParticles.push(key);
   state.graphDirty = true;
+  if (isNew) triggerAutoZoom();
 }
 
 // ─── Detail Card ────────────────────────────────────────────
@@ -822,6 +827,10 @@ function connectWS() {
 
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
+    // Capture raw messages for replay
+    if (recording.active) {
+      recording.messages.push({ t: Date.now() - recording.startTime, msg });
+    }
     if (state.paused) {
       state.eventBuffer.push(msg);
       return;
@@ -848,6 +857,13 @@ function handleMessage(msg) {
       break;
     case 'stats':
       state.stats = msg.data;
+      // Backend file replay finished — show summary dashboard
+      if (msg.data.mode === 'replay-done' && fileReplayActive) {
+        fileReplayActive = false;
+        replay.active = false;
+        document.getElementById('hud-status').textContent = 'replay done';
+        showReplaySummary();
+      }
       break;
   }
 }
@@ -876,6 +892,9 @@ function handleUpdate(data) {
       addOrUpdateNode(n);
       if (recording.active) {
         recording.nodesCreated.add(n.id);
+      }
+      if (replay.active) {
+        replay.nodesCreated.add(n.id);
       }
     }
   }
@@ -909,6 +928,27 @@ function handleUpdate(data) {
           recording.mcpCalls[server] = (recording.mcpCalls[server] || 0) + 1;
         }
       }
+      // Track during replay
+      if (replay.active) {
+        replay.totalEvents++;
+        replay.edgesSeen.add(e.src + '|' + e.dst + '|' + e.type);
+        if (e.type === 'model_call') {
+          replay.apiRequests++;
+          if (e.attributes) {
+            replay.inputTokens += Number(e.attributes.input_tokens) || 0;
+            replay.outputTokens += Number(e.attributes.output_tokens) || 0;
+            replay.cost += Number(e.attributes.cost_usd) || 0;
+            const model = e.attributes.model || 'unknown';
+            replay.models[model] = (replay.models[model] || 0) + 1;
+          }
+        } else if (e.type === 'tool_call') {
+          const tool = (e.attributes && e.attributes.tool_name) || e.dst || 'unknown';
+          replay.toolCalls[tool] = (replay.toolCalls[tool] || 0) + 1;
+        } else if (e.type === 'mcp_call') {
+          const server = (e.attributes && e.attributes.server_name) || e.dst || 'unknown';
+          replay.mcpCalls[server] = (replay.mcpCalls[server] || 0) + 1;
+        }
+      }
     }
   }
 }
@@ -937,11 +977,17 @@ document.getElementById('btn-clear').addEventListener('click', () => {
   document.getElementById('detail-card').style.display = 'none';
   state.graphDirty = true;
   syncGraphData();
+  // Reset server-side graph so data doesn't return on reconnect
+  fetch('/api/reset', { method: 'POST' }).catch(() => {});
 });
 
 document.getElementById('search').addEventListener('input', (e) => {
   state.filterText = e.target.value;
   Graph.nodeColor(Graph.nodeColor());
+});
+
+document.getElementById('chk-autozoom').addEventListener('change', (e) => {
+  autoZoom.on = e.target.checked;
 });
 
 document.getElementById('chk-raw').addEventListener('change', (e) => {
@@ -976,6 +1022,7 @@ const recording = {
   models: {},       // model name → count
   nodesCreated: new Set(),
   edgesSeen: new Set(),
+  messages: [],     // { t: ms-since-start, msg: parsed-json }
 };
 
 function resetRecording() {
@@ -989,6 +1036,7 @@ function resetRecording() {
   recording.models = {};
   recording.nodesCreated = new Set();
   recording.edgesSeen = new Set();
+  recording.messages = [];
 }
 
 function formatNum(n) {
@@ -1033,11 +1081,11 @@ function showRecordDashboard() {
   // API Requests
   html += '<div class="dash-section">';
   html += '<div class="dash-section-title">LLM Calls</div>';
-  html += `<div class="dash-row"><span class="dash-key">Requests</span><span class="dash-val">${formatNum(recording.apiRequests)}</span></div>`;
   const modelEntries = Object.entries(recording.models).sort((a, b) => b[1] - a[1]);
   for (const [model, count] of modelEntries) {
     html += `<div class="dash-row"><span class="dash-key">${escapeHtml(model)}</span><span class="dash-val">${formatNum(count)}</span></div>`;
   }
+  html += `<div class="dash-row"><span class="dash-key">Total</span><span class="dash-val highlight">${formatNum(recording.apiRequests)}</span></div>`;
   html += '</div>';
 
   // Tool Calls
@@ -1081,14 +1129,18 @@ function showRecordDashboard() {
 }
 
 const btnRecord = document.getElementById('btn-record');
+const btnReplay = document.getElementById('btn-replay');
+
 btnRecord.addEventListener('click', () => {
   if (!recording.active) {
     // Start recording
+    stopReplay(); // stop any active replay
     resetRecording();
     recording.active = true;
     recording.startTime = Date.now();
     btnRecord.textContent = 'Stop';
     btnRecord.classList.add('recording');
+    btnReplay.style.display = 'none';
     document.getElementById('record-dashboard').style.display = 'none';
   } else {
     // Stop recording
@@ -1096,12 +1148,231 @@ btnRecord.addEventListener('click', () => {
     btnRecord.textContent = 'Record';
     btnRecord.classList.remove('recording');
     showRecordDashboard();
+    // Show replay button if we captured messages
+    if (recording.messages.length > 0) {
+      btnReplay.style.display = '';
+    }
   }
+});
+
+btnReplay.addEventListener('click', () => {
+  if (replay.active) {
+    stopReplay();
+    return;
+  }
+  if (recording.messages.length === 0) return;
+
+  // Show speed picker for replay
+  document.getElementById('speed-filename').textContent =
+    `Recorded session (${recording.messages.length} messages, ${formatDuration(Date.now() - recording.startTime)})`;
+  document.getElementById('record-dashboard').style.display = 'none';
+
+  // Reset speed selection to 1x
+  document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+  const btn1x = document.querySelector('.speed-btn[data-speed="1"]');
+  if (btn1x) btn1x.classList.add('active');
+  selectedSpeed = 1;
+
+  speedPicker.style.display = 'block';
+  pendingFile = null; // ensure file replay doesn't conflict
+  pendingReplaySource = 'recording';
 });
 
 document.getElementById('record-dash-close').addEventListener('click', () => {
   document.getElementById('record-dashboard').style.display = 'none';
 });
+
+// ─── Client-Side Replay ─────────────────────────────────────
+const replay = {
+  active: false,
+  messages: [],    // the recorded message buffer
+  speed: 1,
+  index: 0,
+  timerId: null,
+  // Stats accumulated during replay
+  startTime: 0,
+  totalEvents: 0,
+  apiRequests: 0,
+  inputTokens: 0,
+  outputTokens: 0,
+  cost: 0,
+  toolCalls: {},
+  mcpCalls: {},
+  models: {},
+  nodesCreated: new Set(),
+  edgesSeen: new Set(),
+};
+
+const REPLAY_SPEEDS = [0.5, 1, 1.5, 2, 5, 10, 50];
+
+function resetReplayStats() {
+  replay.startTime = Date.now();
+  replay.totalEvents = 0;
+  replay.apiRequests = 0;
+  replay.inputTokens = 0;
+  replay.outputTokens = 0;
+  replay.cost = 0;
+  replay.toolCalls = {};
+  replay.mcpCalls = {};
+  replay.models = {};
+  replay.nodesCreated = new Set();
+  replay.edgesSeen = new Set();
+}
+
+function startReplay(messages, speed) {
+  stopReplay();
+
+  // Clear graph
+  state.nodes.clear();
+  state.edges.clear();
+  state.graphDirty = true;
+  syncGraphData();
+
+  replay.messages = messages;
+  replay.speed = speed || 1;
+  replay.index = 0;
+  replay.active = true;
+  resetReplayStats();
+
+  // Update HUD
+  const statusEl = document.getElementById('hud-status');
+  statusEl.textContent = `replay ${replay.speed}x`;
+  statusEl.style.color = '#fde68a';
+
+  // Update button state
+  btnReplay.textContent = 'Stop';
+  btnReplay.classList.add('replaying');
+
+  scheduleNextReplayMsg();
+}
+
+function scheduleNextReplayMsg() {
+  if (!replay.active || replay.index >= replay.messages.length) {
+    finishReplay();
+    return;
+  }
+
+  const entry = replay.messages[replay.index];
+  const prevTime = replay.index > 0 ? replay.messages[replay.index - 1].t : 0;
+  let delay = (entry.t - prevTime) / replay.speed;
+
+  // Clamp delay: at max speed (0) or very fast speeds, batch quickly
+  if (replay.speed === 0) delay = 0;
+  delay = Math.max(0, Math.min(delay, 2000)); // cap at 2s real-time per gap
+
+  replay.timerId = setTimeout(() => {
+    if (!replay.active) return;
+    handleMessage(entry.msg);
+
+    // Update progress in HUD
+    const pct = ((replay.index + 1) / replay.messages.length * 100).toFixed(0);
+    document.getElementById('hud-status').textContent = `replay ${replay.speed}x (${pct}%)`;
+
+    replay.index++;
+    scheduleNextReplayMsg();
+  }, delay);
+}
+
+function finishReplay() {
+  replay.active = false;
+  replay.timerId = null;
+  btnReplay.textContent = 'Replay';
+  btnReplay.classList.remove('replaying');
+  document.getElementById('hud-status').textContent = 'replay done';
+  showReplaySummary();
+}
+
+function showReplaySummary() {
+  const dur = Date.now() - replay.startTime;
+  const totalToolCalls = Object.values(replay.toolCalls).reduce((a, b) => a + b, 0);
+  const totalMcpCalls = Object.values(replay.mcpCalls).reduce((a, b) => a + b, 0);
+  const totalTokens = replay.inputTokens + replay.outputTokens;
+
+  let html = '<div class="dash-title">Session Summary</div>';
+
+  // Overview
+  html += '<div class="dash-section">';
+  html += '<div class="dash-section-title">Overview</div>';
+  html += `<div class="dash-row"><span class="dash-key">Replay Duration</span><span class="dash-val highlight">${formatDuration(dur)}</span></div>`;
+  html += `<div class="dash-row"><span class="dash-key">Total Events</span><span class="dash-val">${formatNum(replay.totalEvents)}</span></div>`;
+  html += `<div class="dash-row"><span class="dash-key">Nodes</span><span class="dash-val">${formatNum(replay.nodesCreated.size)}</span></div>`;
+  html += `<div class="dash-row"><span class="dash-key">Edges</span><span class="dash-val">${formatNum(replay.edgesSeen.size)}</span></div>`;
+  html += '</div>';
+
+  // Tokens
+  if (totalTokens > 0) {
+    html += '<div class="dash-section">';
+    html += '<div class="dash-section-title">Tokens</div>';
+    html += `<div class="dash-row"><span class="dash-key">Input</span><span class="dash-val">${formatNum(replay.inputTokens)}</span></div>`;
+    html += `<div class="dash-row"><span class="dash-key">Output</span><span class="dash-val">${formatNum(replay.outputTokens)}</span></div>`;
+    html += `<div class="dash-row"><span class="dash-key">Total</span><span class="dash-val highlight">${formatNum(totalTokens)}</span></div>`;
+    if (replay.cost > 0) {
+      html += `<div class="dash-row"><span class="dash-key">Est. Cost</span><span class="dash-val cost">$${replay.cost.toFixed(4)}</span></div>`;
+    }
+    html += '</div>';
+  }
+
+  // API Requests
+  if (replay.apiRequests > 0) {
+    html += '<div class="dash-section">';
+    html += '<div class="dash-section-title">LLM Calls</div>';
+    const modelEntries = Object.entries(replay.models).sort((a, b) => b[1] - a[1]);
+    for (const [model, count] of modelEntries) {
+      html += `<div class="dash-row"><span class="dash-key">${escapeHtml(model)}</span><span class="dash-val">${formatNum(count)}</span></div>`;
+    }
+    html += `<div class="dash-row"><span class="dash-key">Total</span><span class="dash-val highlight">${formatNum(replay.apiRequests)}</span></div>`;
+    html += '</div>';
+  }
+
+  // Tool Calls
+  if (totalToolCalls > 0) {
+    html += '<div class="dash-section">';
+    html += '<div class="dash-section-title">Tool Calls</div>';
+    const toolEntries = Object.entries(replay.toolCalls).sort((a, b) => b[1] - a[1]);
+    const maxToolCount = toolEntries[0] ? toolEntries[0][1] : 1;
+    for (const [tool, count] of toolEntries) {
+      const pct = (count / maxToolCount * 100).toFixed(0);
+      const color = NODE_COLORS.tool;
+      html += `<div class="dash-bar-row">`;
+      html += `<span class="dash-bar-label">${escapeHtml(tool)}</span>`;
+      html += `<div class="dash-bar"><div class="dash-bar-fill" style="width:${pct}%;background:${color}"></div></div>`;
+      html += `<span class="dash-bar-count">${formatNum(count)}</span>`;
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  // MCP Calls
+  if (totalMcpCalls > 0) {
+    html += '<div class="dash-section">';
+    html += '<div class="dash-section-title">MCP Calls</div>';
+    const mcpEntries = Object.entries(replay.mcpCalls).sort((a, b) => b[1] - a[1]);
+    const maxMcpCount = mcpEntries[0] ? mcpEntries[0][1] : 1;
+    for (const [server, count] of mcpEntries) {
+      const pct = (count / maxMcpCount * 100).toFixed(0);
+      const color = NODE_COLORS.mcp_server;
+      html += `<div class="dash-bar-row">`;
+      html += `<span class="dash-bar-label">${escapeHtml(server)}</span>`;
+      html += `<div class="dash-bar"><div class="dash-bar-fill" style="width:${pct}%;background:${color}"></div></div>`;
+      html += `<span class="dash-bar-count">${formatNum(count)}</span>`;
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  document.getElementById('record-dash-content').innerHTML = html;
+  document.getElementById('record-dashboard').style.display = 'block';
+}
+
+function stopReplay() {
+  if (replay.timerId) {
+    clearTimeout(replay.timerId);
+    replay.timerId = null;
+  }
+  replay.active = false;
+  btnReplay.textContent = 'Replay';
+  btnReplay.classList.remove('replaying');
+}
 
 // ─── Load Session (replay from UI) ─────────────────────────
 const fileInput = document.getElementById('file-input');
@@ -1109,6 +1380,8 @@ const btnLoad = document.getElementById('btn-load');
 const speedPicker = document.getElementById('speed-picker');
 let pendingFile = null;
 let selectedSpeed = 1;
+let pendingReplaySource = null; // 'file' or 'recording'
+let fileReplayActive = false;   // true while backend streams a file replay
 
 btnLoad.addEventListener('click', () => {
   fileInput.click();
@@ -1117,6 +1390,7 @@ btnLoad.addEventListener('click', () => {
 fileInput.addEventListener('change', () => {
   if (!fileInput.files || fileInput.files.length === 0) return;
   pendingFile = fileInput.files[0];
+  pendingReplaySource = 'file';
   document.getElementById('speed-filename').textContent = pendingFile.name;
   speedPicker.style.display = 'block';
   fileInput.value = ''; // reset so same file can be re-selected
@@ -1132,14 +1406,27 @@ document.getElementById('speed-options').addEventListener('click', (e) => {
 });
 
 document.getElementById('speed-go').addEventListener('click', async () => {
-  if (!pendingFile) return;
   speedPicker.style.display = 'none';
 
-  // Clear frontend graph state
+  if (pendingReplaySource === 'recording') {
+    // Client-side replay of recorded messages
+    startReplay(recording.messages, selectedSpeed);
+    pendingReplaySource = null;
+    return;
+  }
+
+  if (!pendingFile) return;
+
+  // File-based replay via backend
   state.nodes.clear();
   state.edges.clear();
   state.graphDirty = true;
   syncGraphData();
+
+  // Track stats for file-based replay
+  fileReplayActive = true;
+  replay.active = true;
+  resetReplayStats();
 
   btnLoad.textContent = 'Loading...';
   btnLoad.classList.add('loading');
@@ -1166,6 +1453,7 @@ document.getElementById('speed-go').addEventListener('click', async () => {
   }
 
   pendingFile = null;
+  pendingReplaySource = null;
 });
 
 // Close speed picker on Escape
@@ -1173,130 +1461,15 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && speedPicker.style.display !== 'none') {
     speedPicker.style.display = 'none';
     pendingFile = null;
+    pendingReplaySource = null;
   }
 });
 
-// ─── Bloom Post-Processing ───────────────────────────────────
-(async function initBloom() {
-  try {
-    const { EffectComposer } = await import('three/addons/postprocessing/EffectComposer.js');
-    const { RenderPass } = await import('three/addons/postprocessing/RenderPass.js');
-    const { UnrealBloomPass } = await import('three/addons/postprocessing/UnrealBloomPass.js');
-    const { ShaderPass } = await import('three/addons/postprocessing/ShaderPass.js');
-
-    const renderer = Graph.renderer();
-    const scene = Graph.scene();
-    const camera = Graph.camera();
-
-    // Half-resolution bloom for performance
-    const bloomWidth = Math.floor(renderer.domElement.width / 2);
-    const bloomHeight = Math.floor(renderer.domElement.height / 2);
-
-    const bloomComposer = new EffectComposer(renderer);
-    bloomComposer.renderToScreen = false;
-    bloomComposer.addPass(new RenderPass(scene, camera));
-
-    const bloomPass = new UnrealBloomPass(
-      new window.THREE.Vector2(bloomWidth, bloomHeight),
-      1.2,  // strength
-      0.8,  // radius
-      0.6   // threshold
-    );
-    bloomComposer.addPass(bloomPass);
-
-    // Final composite shader: blend bloom on top of regular render
-    const compositeShader = {
-      uniforms: {
-        baseTexture: { value: null },
-        bloomTexture: { value: bloomComposer.renderTarget2.texture },
-      },
-      vertexShader: `
-        varying vec2 vUv;
-        void main() {
-          vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        uniform sampler2D baseTexture;
-        uniform sampler2D bloomTexture;
-        varying vec2 vUv;
-        void main() {
-          vec4 base = texture2D(baseTexture, vUv);
-          vec4 bloom = texture2D(bloomTexture, vUv);
-          gl_FragColor = base + bloom;
-        }
-      `,
-    };
-
-    const finalComposer = new EffectComposer(renderer);
-    const renderPass = new RenderPass(scene, camera);
-    finalComposer.addPass(renderPass);
-
-    const compositePass = new ShaderPass(new window.THREE.ShaderMaterial(compositeShader), 'baseTexture');
-    compositePass.needsSwap = true;
-    finalComposer.addPass(compositePass);
-
-    // Override the default render loop
-    const origTick = Graph._animationCycle || null;
-    Graph.postProcessingComposer = () => finalComposer;
-
-    // Custom render with selective bloom via layers
-    const darkMaterial = new window.THREE.MeshBasicMaterial({ color: 0x000000 });
-    const materials = {};
-
-    function darkenNonBloom(obj) {
-      if (obj.isMesh || obj.isSprite) {
-        if (!obj.layers.test(new window.THREE.Layers().set(1))) {
-          // Not on bloom layer — temporarily darken
-          materials[obj.uuid] = obj.material;
-          obj.material = darkMaterial;
-        }
-      }
-    }
-
-    function restoreMaterials(obj) {
-      if (materials[obj.uuid]) {
-        obj.material = materials[obj.uuid];
-        delete materials[obj.uuid];
-      }
-    }
-
-    // Hook into the animation frame
-    const onBeforeRender = () => {
-      // Bloom pass: darken non-bloom objects
-      scene.traverse(darkenNonBloom);
-      bloomComposer.render();
-      scene.traverse(restoreMaterials);
-
-      // Final composite
-      finalComposer.render();
-    };
-
-    // Replace renderer's render function
-    const origRender = renderer.render.bind(renderer);
-    let bloomEnabled = true;
-    renderer.render = function(s, c) {
-      if (bloomEnabled && s === scene) {
-        onBeforeRender();
-        return;
-      }
-      origRender(s, c);
-    };
-
-    // Handle resize
-    window.addEventListener('resize', () => {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      bloomComposer.setSize(Math.floor(w / 2), Math.floor(h / 2));
-      finalComposer.setSize(w, h);
-    });
-
-    console.log('[AgentMind] Bloom post-processing initialized');
-  } catch (err) {
-    console.warn('[AgentMind] Bloom unavailable (import map or CDN issue):', err.message);
-  }
-})();
+// ─── Bloom Note ──────────────────────────────────────────────
+// Bloom post-processing was removed — the additive-blend glow halos on
+// star-point nodes already create a soft glow effect without needing a
+// separate render pass. This avoids Three.js version/CDN compatibility
+// issues and keeps the render pipeline simple.
 
 // ─── Always-On Node Labels ──────────────────────────────────
 
@@ -1334,7 +1507,6 @@ function updateActiveLabels() {
     sprite.material.transparent = true;
     sprite.material.depthWrite = false;
     sprite.position.set(0, 8, 0); // Above node
-    sprite.layers.set(0); // Don't bloom labels
 
     // Find the node's THREE.Group and attach the label
     const graphData = Graph.graphData();

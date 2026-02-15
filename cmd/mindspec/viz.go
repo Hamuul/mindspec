@@ -31,7 +31,6 @@ var agentmindServeCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		otlpPort, _ := cmd.Flags().GetInt("otlp-port")
 		uiPort, _ := cmd.Flags().GetInt("ui-port")
-
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 

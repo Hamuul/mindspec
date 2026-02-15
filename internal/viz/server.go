@@ -51,6 +51,7 @@ func (s *Server) Run(ctx context.Context) error {
 	mux.Handle("/", http.FileServer(http.FS(webContent)))
 	mux.HandleFunc("/ws", s.handleWebSocket)
 	mux.HandleFunc("/api/replay", s.handleReplayUpload)
+	mux.HandleFunc("/api/reset", s.handleReset)
 
 	s.server = &http.Server{
 		Addr:    fmt.Sprintf(":%d", s.port),
@@ -105,6 +106,19 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	go client.WritePump(ctx)
 	client.ReadPump(ctx)
+}
+
+func (s *Server) handleReset(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	s.graph.Reset()
+	s.hub.Broadcast(WSMessage{Type: MsgSnapshot, Data: s.graph.Snapshot()})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"}) //nolint:errcheck
 }
 
 func (s *Server) handleReplayUpload(w http.ResponseWriter, r *http.Request) {

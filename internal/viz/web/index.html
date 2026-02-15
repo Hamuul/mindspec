@@ -3,15 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AgentMind Viz</title>
-<link rel="stylesheet" href="style.css">
+<title>MindSpec AgentMind</title>
+<link rel="stylesheet" href="style.css?v=026t">
 </head>
 <body>
 <div id="graph-container"></div>
 
 <!-- HUD -->
 <div id="hud">
-  <div class="hud-title">AgentMind Viz</div>
+  <div class="hud-title">MindSpec AgentMind</div>
   <div class="hud-row"><span class="hud-label">Status</span> <span id="hud-status">connecting...</span></div>
   <div class="hud-row"><span class="hud-label">Events/s</span> <span id="hud-eps">0</span></div>
   <div class="hud-row"><span class="hud-label">Errors</span> <span id="hud-errors">0</span></div>
@@ -48,9 +48,11 @@
   <button id="btn-reset">Reset Camera</button>
   <button id="btn-clear">Clear All</button>
   <button id="btn-record">Record</button>
+  <button id="btn-replay" style="display:none">Replay</button>
   <button id="btn-load">Load Session</button>
   <input type="file" id="file-input" accept=".jsonl,.ndjson,.json" style="display:none" />
-  <label id="raw-toggle"><input type="checkbox" id="chk-raw"> Show Raw</label>
+  <label class="chk-toggle"><input type="checkbox" id="chk-autozoom" checked> Auto Zoom</label>
+  <label class="chk-toggle"><input type="checkbox" id="chk-raw"> Show Raw</label>
 </div>
 
 <!-- Detail Card -->
@@ -66,12 +68,13 @@
   <div style="margin-bottom:12px">
     <label style="color:#888;display:block;margin-bottom:6px">Playback Speed</label>
     <div id="speed-options" style="display:flex;gap:6px;flex-wrap:wrap">
-      <button class="speed-btn" data-speed="0.25">0.25x</button>
       <button class="speed-btn" data-speed="0.5">0.5x</button>
       <button class="speed-btn active" data-speed="1">1x</button>
+      <button class="speed-btn" data-speed="1.5">1.5x</button>
       <button class="speed-btn" data-speed="2">2x</button>
       <button class="speed-btn" data-speed="5">5x</button>
-      <button class="speed-btn" data-speed="0">Max</button>
+      <button class="speed-btn" data-speed="10">10x</button>
+      <button class="speed-btn" data-speed="50">50x</button>
     </div>
   </div>
   <button id="speed-go" style="width:100%;padding:8px;margin-top:4px">Start Replay</button>
@@ -86,14 +89,6 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.73.3/dist/3d-force-graph.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three-spritetext@1.9.0/dist/three-spritetext.min.js"></script>
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-  }
-}
-</script>
-<script src="app.js"></script>
+<script src="app.js?v=026t"></script>
 </body>
 </html>
