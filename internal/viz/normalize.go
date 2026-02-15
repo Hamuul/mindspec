@@ -138,27 +138,29 @@ func NormalizeEvent(e bench.CollectedEvent) ([]NodeUpsert, []EdgeEvent) {
 			Label: agentLabel,
 		})
 
-		edgeType := classifyToolEdge(toolName)
+		toolCategory := classifyToolCategory(toolName)
 		dur := parseDuration(e.Data)
 		status := "ok"
 		if errStr, ok := e.Data["error"].(string); ok && errStr != "" {
 			status = "error"
 		}
 
+		attrs := safeMeta(e.Data, "tool_name", "name", "duration_ms")
+		attrs["tool_category"] = string(toolCategory)
+
 		edges = append(edges, EdgeEvent{
 			ID:        fmt.Sprintf("edge:%s->%s:%d", agentID, toolID, ts.UnixNano()),
 			Src:       agentID,
 			Dst:       toolID,
-			Type:      edgeType,
+			Type:      EdgeToolCall,
 			Status:    status,
 			StartTime: ts,
 			Duration:  dur,
-			Attributes: safeMeta(e.Data,
-				"tool_name", "name", "duration_ms"),
+			Attributes: attrs,
 		})
 
 		// File/data_source node classification
-		if edgeType == EdgeRetrieval || edgeType == EdgeWrite {
+		if toolCategory == EdgeRetrieval || toolCategory == EdgeWrite {
 			filePath := extractFilePath(e.Data)
 			if filePath != "" {
 				fileID := "file:" + filePath
@@ -174,7 +176,7 @@ func NormalizeEvent(e bench.CollectedEvent) ([]NodeUpsert, []EdgeEvent) {
 					ID:        fmt.Sprintf("edge:%s->%s:%d", toolID, fileID, ts.UnixNano()),
 					Src:       toolID,
 					Dst:       fileID,
-					Type:      edgeType,
+					Type:      toolCategory,
 					Status:    status,
 					StartTime: ts,
 				})
@@ -287,7 +289,7 @@ func parseDuration(data map[string]any) time.Duration {
 	return 0
 }
 
-func classifyToolEdge(toolName string) EdgeType {
+func classifyToolCategory(toolName string) EdgeType {
 	switch toolName {
 	case "Read", "Glob", "Grep", "WebFetch", "WebSearch":
 		return EdgeRetrieval

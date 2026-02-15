@@ -74,8 +74,11 @@ func TestNormalizeToolUse(t *testing.T) {
 		t.Fatalf("expected 1 edge, got %d", len(edges))
 	}
 
-	if edges[0].Type != EdgeRetrieval {
-		t.Errorf("Read tool should be classified as retrieval, got %s", edges[0].Type)
+	if edges[0].Type != EdgeToolCall {
+		t.Errorf("all tool edges should be tool_call, got %s", edges[0].Type)
+	}
+	if cat, ok := edges[0].Attributes["tool_category"].(string); !ok || cat != "retrieval" {
+		t.Errorf("Read tool should have tool_category=retrieval, got %v", edges[0].Attributes["tool_category"])
 	}
 }
 
@@ -92,8 +95,11 @@ func TestNormalizeToolUseWrite(t *testing.T) {
 	if len(edges) != 1 {
 		t.Fatalf("expected 1 edge, got %d", len(edges))
 	}
-	if edges[0].Type != EdgeWrite {
-		t.Errorf("Write tool should be classified as write, got %s", edges[0].Type)
+	if edges[0].Type != EdgeToolCall {
+		t.Errorf("all tool edges should be tool_call, got %s", edges[0].Type)
+	}
+	if cat, ok := edges[0].Attributes["tool_category"].(string); !ok || cat != "write" {
+		t.Errorf("Write tool should have tool_category=write, got %v", edges[0].Attributes["tool_category"])
 	}
 }
 
