@@ -162,6 +162,9 @@ comparative benchmark report.
 			return fmt.Errorf("--prompt or --prompt-file is required")
 		}
 
+		parallel, _ := cmd.Flags().GetBool("parallel")
+		otlpEndpoint, _ := cmd.Flags().GetString("otlp-endpoint")
+
 		cfg := &bench.RunConfig{
 			SpecID:          specID,
 			Prompt:          prompt,
@@ -172,6 +175,8 @@ comparative benchmark report.
 			SkipCleanup:     skipCleanup,
 			SkipQualitative: skipQual,
 			SkipCommit:      skipCommit,
+			Parallel:        parallel,
+			OTLPEndpoint:    otlpEndpoint,
 			Stdout:          os.Stdout,
 		}
 
@@ -257,6 +262,8 @@ func init() {
 	benchRunCmd.Flags().Bool("skip-cleanup", false, "Preserve worktrees after completion")
 	benchRunCmd.Flags().Bool("skip-qualitative", false, "Skip qualitative analysis (quantitative only)")
 	benchRunCmd.Flags().Bool("skip-commit", false, "Don't commit results to docs/specs/")
+	benchRunCmd.Flags().Bool("parallel", false, "Run all sessions concurrently")
+	benchRunCmd.Flags().String("otlp-endpoint", "", "Send all sessions to an external OTLP endpoint (skip per-session collectors)")
 
 	benchResumeCmd.Flags().String("spec-id", "", "Spec folder ID (e.g., 022-agentmind-viz-mvp)")
 	benchResumeCmd.Flags().Int("timeout", 1800, "Per-attempt timeout in seconds")

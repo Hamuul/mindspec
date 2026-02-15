@@ -14,12 +14,13 @@ import (
 
 // SessionDef describes one benchmark session configuration.
 type SessionDef struct {
-	Label       string // e.g., "a", "b", "c"
-	Description string // e.g., "no-docs", "baseline", "mindspec"
-	Port        int
-	Neutralize  func(wtPath string) error // nil for session C (full MindSpec)
-	EnableTrace bool
-	Prompt      string // per-session prompt override (if non-empty, overrides cfg.Prompt)
+	Label        string // e.g., "a", "b", "c"
+	Description  string // e.g., "no-docs", "baseline", "mindspec"
+	Port         int
+	Neutralize   func(wtPath string) error // nil for session C (full MindSpec)
+	EnableTrace  bool
+	Prompt       string // per-session prompt override (if non-empty, overrides cfg.Prompt)
+	ExternalOTLP string // if set, skip local collector and send OTLP here
 }
 
 // SessionResult holds the outcome of a single benchmark session.
@@ -33,7 +34,8 @@ type SessionResult struct {
 }
 
 // RunSession executes a single benchmark session: starts an in-process OTLP
-// collector, runs claude -p in the worktree, and captures output.
+// collector (unless ExternalOTLP is set), runs claude -p in the worktree, and
+// captures output.
 func RunSession(ctx context.Context, cfg *RunConfig, def *SessionDef, wtPath string) (*SessionResult, error) {
 	jsonlPath := filepath.Join(cfg.WorkDir, fmt.Sprintf("session-%s.jsonl", def.Label))
 	outputPath := filepath.Join(cfg.WorkDir, fmt.Sprintf("output-%s.txt", def.Label))
@@ -44,26 +46,31 @@ func RunSession(ctx context.Context, cfg *RunConfig, def *SessionDef, wtPath str
 		OutputPath: outputPath,
 	}
 
-	// Start in-process collector as goroutine
-	collector := NewCollector(def.Port, jsonlPath)
-	collectorCtx, collectorCancel := context.WithCancel(ctx)
-	defer collectorCancel()
+	// Start in-process collector (skip if using external OTLP endpoint)
+	var collectorCancel context.CancelFunc
+	var collectorDone chan error
+	if def.ExternalOTLP == "" {
+		collector := NewCollector(def.Port, jsonlPath)
+		var collectorCtx context.Context
+		collectorCtx, collectorCancel = context.WithCancel(ctx)
 
-	collectorDone := make(chan error, 1)
-	go func() {
-		collectorDone <- collector.Run(collectorCtx)
-	}()
+		collectorDone = make(chan error, 1)
+		go func() {
+			collectorDone <- collector.Run(collectorCtx)
+		}()
 
-	// Wait for collector port to be ready
-	if err := waitForPort(def.Port, 5*time.Second); err != nil {
-		collectorCancel()
-		return nil, fmt.Errorf("collector failed to start on port %d: %w", def.Port, err)
+		if err := waitForPort(def.Port, 5*time.Second); err != nil {
+			collectorCancel()
+			return nil, fmt.Errorf("collector failed to start on port %d: %w", def.Port, err)
+		}
 	}
 
 	// Create output file for tee
 	outFile, err := os.Create(outputPath)
 	if err != nil {
-		collectorCancel()
+		if collectorCancel != nil {
+			collectorCancel()
+		}
 		return nil, fmt.Errorf("creating output file: %w", err)
 	}
 	defer outFile.Close()
@@ -74,8 +81,13 @@ func RunSession(ctx context.Context, cfg *RunConfig, def *SessionDef, wtPath str
 		prompt = def.Prompt
 	}
 
-	// Build environment
-	env := buildSessionEnv(def.Port, cfg.WorkDir, def.Label, def.EnableTrace)
+	// Build environment — use external endpoint or per-session port
+	var env []string
+	if def.ExternalOTLP != "" {
+		env = buildSessionEnvEndpoint(def.ExternalOTLP, cfg.WorkDir, def.Label, def.EnableTrace)
+	} else {
+		env = buildSessionEnv(def.Port, cfg.WorkDir, def.Label, def.EnableTrace)
+	}
 
 	// Run claude
 	exitCode, timedOut, _ := runClaude(ctx, prompt, wtPath, env,
@@ -83,12 +95,14 @@ func RunSession(ctx context.Context, cfg *RunConfig, def *SessionDef, wtPath str
 	result.ExitCode = exitCode
 	result.TimedOut = timedOut
 
-	// Give collector time to flush remaining events
-	time.Sleep(2 * time.Second)
-	collectorCancel()
-	<-collectorDone
+	// Shut down local collector if we started one
+	if collectorCancel != nil {
+		time.Sleep(2 * time.Second)
+		collectorCancel()
+		<-collectorDone
+	}
 
-	// Count events
+	// Count events (only meaningful when using local collector)
 	if data, err := os.ReadFile(jsonlPath); err == nil {
 		for _, b := range data {
 			if b == '\n' {
@@ -183,6 +197,14 @@ func runClaude(ctx context.Context, prompt, wtPath string, env []string,
 
 // buildSessionEnv creates the environment for a benchmark Claude session.
 func buildSessionEnv(port int, workDir, label string, enableTrace bool) []string {
+	return buildSessionEnvEndpoint(
+		fmt.Sprintf("http://localhost:%d", port),
+		workDir, label, enableTrace,
+	)
+}
+
+// buildSessionEnvEndpoint creates the environment with an explicit OTLP endpoint.
+func buildSessionEnvEndpoint(endpoint, workDir, label string, enableTrace bool) []string {
 	env := os.Environ()
 	env = append(env,
 		"CLAUDECODE=",
@@ -190,7 +212,7 @@ func buildSessionEnv(port int, workDir, label string, enableTrace bool) []string
 		"OTEL_METRICS_EXPORTER=otlp",
 		"OTEL_LOGS_EXPORTER=otlp",
 		"OTEL_EXPORTER_OTLP_PROTOCOL=http/json",
-		fmt.Sprintf("OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:%d", port),
+		"OTEL_EXPORTER_OTLP_ENDPOINT="+endpoint,
 		"OTEL_LOG_TOOL_DETAILS=1",
 	)
 	if enableTrace {

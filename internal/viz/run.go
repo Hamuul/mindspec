@@ -12,14 +12,16 @@ func RunLive(ctx context.Context, otlpPort, uiPort int) error {
 	hub := NewHub()
 	go hub.Run(ctx)
 
+	receiver := NewLiveReceiver(otlpPort, graph, hub)
+
 	server := NewServer(uiPort, hub, graph)
+	server.SetLiveReceiver(receiver)
 	go func() {
 		if err := server.Run(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "UI server error: %v\n", err)
 		}
 	}()
 
-	receiver := NewLiveReceiver(otlpPort, graph, hub)
 	return receiver.Run(ctx)
 }
 

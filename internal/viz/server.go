@@ -24,6 +24,7 @@ type Server struct {
 	port   int
 	hub    *Hub
 	graph  *Graph
+	live   *LiveReceiver // optional, set for live mode
 	server *http.Server
 
 	// Active replay cancellation
@@ -40,6 +41,11 @@ func NewServer(port int, hub *Hub, graph *Graph) *Server {
 	}
 }
 
+// SetLiveReceiver attaches a live receiver for save-recording support.
+func (s *Server) SetLiveReceiver(lr *LiveReceiver) {
+	s.live = lr
+}
+
 // Run starts the HTTP server and blocks until ctx is cancelled.
 func (s *Server) Run(ctx context.Context) error {
 	webContent, err := fs.Sub(webFS, "web")
@@ -52,6 +58,7 @@ func (s *Server) Run(ctx context.Context) error {
 	mux.HandleFunc("/ws", s.handleWebSocket)
 	mux.HandleFunc("/api/replay", s.handleReplayUpload)
 	mux.HandleFunc("/api/reset", s.handleReset)
+	mux.HandleFunc("/api/save-recording", s.handleSaveRecording)
 
 	s.server = &http.Server{
 		Addr:    fmt.Sprintf(":%d", s.port),
@@ -201,4 +208,28 @@ func (s *Server) handleReplayUpload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "started"}) //nolint:errcheck
+}
+
+func (s *Server) handleSaveRecording(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.live == nil {
+		http.Error(w, "save-recording only available in live mode", http.StatusBadRequest)
+		return
+	}
+
+	data, count := s.live.EventsNDJSON()
+	if count == 0 {
+		http.Error(w, "no events captured", http.StatusNotFound)
+		return
+	}
+
+	filename := fmt.Sprintf("agentmind-%s.ndjson", time.Now().Format("20060102-150405"))
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	w.Write(data) //nolint:errcheck
 }

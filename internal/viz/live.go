@@ -2,10 +2,12 @@ package viz
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -21,6 +23,10 @@ type LiveReceiver struct {
 	eventCount atomic.Int64
 	sampling   atomic.Bool
 	startTime  time.Time
+
+	// Event buffer for save-recording
+	eventBuf   []bench.CollectedEvent
+	eventBufMu sync.Mutex
 }
 
 // NewLiveReceiver creates a new OTLP receiver for live mode.
@@ -107,6 +113,11 @@ func (l *LiveReceiver) handleMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 func (l *LiveReceiver) processEvents(events []bench.CollectedEvent) {
+	// Buffer all events for save-recording
+	l.eventBufMu.Lock()
+	l.eventBuf = append(l.eventBuf, events...)
+	l.eventBufMu.Unlock()
+
 	count := l.eventCount.Load()
 	elapsed := time.Since(l.startTime)
 	sampleN := int64(1)
@@ -151,6 +162,32 @@ func (l *LiveReceiver) processEvents(events []bench.CollectedEvent) {
 
 		l.hub.Broadcast(WSMessage{Type: MsgUpdate, Data: update})
 	}
+}
+
+// EventsNDJSON returns all buffered events as NDJSON bytes.
+func (l *LiveReceiver) EventsNDJSON() ([]byte, int) {
+	l.eventBufMu.Lock()
+	events := make([]bench.CollectedEvent, len(l.eventBuf))
+	copy(events, l.eventBuf)
+	l.eventBufMu.Unlock()
+
+	var buf []byte
+	for _, e := range events {
+		line, err := json.Marshal(e)
+		if err != nil {
+			continue
+		}
+		buf = append(buf, line...)
+		buf = append(buf, '\n')
+	}
+	return buf, len(events)
+}
+
+// ClearEvents resets the event buffer.
+func (l *LiveReceiver) ClearEvents() {
+	l.eventBufMu.Lock()
+	l.eventBuf = nil
+	l.eventBufMu.Unlock()
 }
 
 func (l *LiveReceiver) statsLoop(ctx context.Context) {

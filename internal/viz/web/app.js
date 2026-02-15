@@ -1110,6 +1110,7 @@ function showRecordDashboard() {
 }
 
 const btnRecord = document.getElementById('btn-record');
+const btnSave = document.getElementById('btn-save');
 const btnReplay = document.getElementById('btn-replay');
 
 btnRecord.addEventListener('click', () => {
@@ -1122,6 +1123,7 @@ btnRecord.addEventListener('click', () => {
     btnRecord.textContent = 'Stop';
     btnRecord.classList.add('recording');
     btnReplay.style.display = 'none';
+    btnSave.style.display = 'none';
     document.getElementById('record-dashboard').style.display = 'none';
   } else {
     // Stop recording
@@ -1129,10 +1131,35 @@ btnRecord.addEventListener('click', () => {
     btnRecord.textContent = 'Record';
     btnRecord.classList.remove('recording');
     showRecordDashboard();
+    btnSave.style.display = '';
     // Show replay button if we captured messages
     if (recording.messages.length > 0) {
       btnReplay.style.display = '';
     }
+  }
+});
+
+btnSave.addEventListener('click', async () => {
+  try {
+    const resp = await fetch('/api/save-recording');
+    if (!resp.ok) {
+      const text = await resp.text();
+      alert('Save failed: ' + text);
+      return;
+    }
+    const blob = await resp.blob();
+    const filename = resp.headers.get('Content-Disposition')?.match(/filename="?([^"]+)"?/)?.[1]
+      || 'agentmind-recording.ndjson';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert('Save failed: ' + err.message);
   }
 });
 
