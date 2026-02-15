@@ -141,6 +141,11 @@ type CollectedEvent struct {
 
 // extractLogEvents parses an OTLP ExportLogsServiceRequest JSON body
 // and extracts claude_code.api_request events.
+// ExtractLogEvents is the exported wrapper for extractLogEvents.
+func ExtractLogEvents(body []byte) []CollectedEvent {
+	return extractLogEvents(body)
+}
+
 func extractLogEvents(body []byte) []CollectedEvent {
 	// OTLP JSON structure (simplified):
 	// { "resourceLogs": [ { "scopeLogs": [ { "logRecords": [ ... ] } ] } ] }
@@ -165,15 +170,20 @@ func extractLogEvents(body []byte) []CollectedEvent {
 		for _, sl := range rl.ScopeLogs {
 			for _, lr := range sl.LogRecords {
 				attrs := flattenAttributes(lr.Attributes)
-				eventName, _ := attrs["event.name"].(string)
+
+				// Determine event name: prefer the longest/most-qualified name.
+				// Body has full name ("claude_code.api_request") in real Claude Code,
+				// event.name attr may have short name ("api_request") or full name.
+				bodyName := lr.Body.StringValue
+				attrName, _ := attrs["event.name"].(string)
+				eventName := bodyName
+				if len(attrName) > len(eventName) {
+					eventName = attrName
+				}
 				if eventName == "" {
-					// Try body for event name
-					if s := lr.Body.StringValue; s != "" {
-						eventName = s
-					}
+					eventName = bodyName
 				}
 
-				// We're interested in claude_code events
 				if eventName == "" {
 					continue
 				}
@@ -194,6 +204,11 @@ func extractLogEvents(body []byte) []CollectedEvent {
 
 // extractMetricEvents parses OTLP ExportMetricsServiceRequest JSON body
 // and extracts claude_code.token.usage and claude_code.cost.usage data points.
+// ExtractMetricEvents is the exported wrapper for extractMetricEvents.
+func ExtractMetricEvents(body []byte) []CollectedEvent {
+	return extractMetricEvents(body)
+}
+
 func extractMetricEvents(body []byte) []CollectedEvent {
 	var req struct {
 		ResourceMetrics []struct {
@@ -249,10 +264,11 @@ func extractMetricEvents(body []byte) []CollectedEvent {
 }
 
 // otlpValue represents an OTLP AnyValue.
+// IntValue uses json.RawMessage because OTLP sends it as either a string or number.
 type otlpValue struct {
-	StringValue string `json:"stringValue"`
-	IntValue    string `json:"intValue"`
-	DoubleValue *float64 `json:"doubleValue"`
+	StringValue string          `json:"stringValue"`
+	IntValue    json.RawMessage `json:"intValue"`
+	DoubleValue *float64        `json:"doubleValue"`
 }
 
 // otlpKeyValue represents an OTLP KeyValue.
@@ -267,10 +283,15 @@ func flattenAttributes(attrs []otlpKeyValue) map[string]any {
 	for _, a := range attrs {
 		if a.Value.StringValue != "" {
 			m[a.Key] = a.Value.StringValue
-		} else if a.Value.IntValue != "" {
-			// Parse int from string
+		} else if len(a.Value.IntValue) > 0 {
+			// IntValue can be a JSON string ("123") or number (123)
 			var v int64
-			fmt.Sscanf(a.Value.IntValue, "%d", &v)
+			s := string(a.Value.IntValue)
+			// Strip quotes if present
+			if len(s) >= 2 && s[0] == '"' {
+				s = s[1 : len(s)-1]
+			}
+			fmt.Sscanf(s, "%d", &v)
 			m[a.Key] = v
 		} else if a.Value.DoubleValue != nil {
 			m[a.Key] = *a.Value.DoubleValue
