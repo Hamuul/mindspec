@@ -213,6 +213,7 @@ func buildSessionEnvEndpoint(endpoint, workDir, label string, enableTrace bool) 
 		"OTEL_LOGS_EXPORTER=otlp",
 		"OTEL_EXPORTER_OTLP_PROTOCOL=http/json",
 		"OTEL_EXPORTER_OTLP_ENDPOINT="+endpoint,
+		"OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE=delta",
 		"OTEL_LOG_TOOL_DETAILS=1",
 	)
 	if enableTrace {
