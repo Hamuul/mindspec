@@ -352,6 +352,21 @@ func (g *Graph) Snapshot() GraphSnapshot {
 	}
 }
 
+// Reset clears all graph state.
+func (g *Graph) Reset() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.nodes = make(map[string]*Node)
+	g.edges = make(map[string]*Edge)
+	g.nodeN = make(map[string]int)
+	g.eventN = 0
+	g.capped = false
+	g.apiCalls = 0
+	g.totalTokens = 0
+	g.errorCount = 0
+	g.costUSD = 0
+}
+
 // NodeCount returns the number of nodes.
 func (g *Graph) NodeCount() int {
 	g.mu.RLock()

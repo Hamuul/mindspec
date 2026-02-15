@@ -5,8 +5,12 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
+	"os"
+	"strconv"
+	"sync"
 	"time"
 
 	"nhooyr.io/websocket"
@@ -21,6 +25,10 @@ type Server struct {
 	hub    *Hub
 	graph  *Graph
 	server *http.Server
+
+	// Active replay cancellation
+	replayMu     sync.Mutex
+	replayCancel context.CancelFunc
 }
 
 // NewServer creates a new visualization server.
@@ -42,6 +50,7 @@ func (s *Server) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.FS(webContent)))
 	mux.HandleFunc("/ws", s.handleWebSocket)
+	mux.HandleFunc("/api/replay", s.handleReplayUpload)
 
 	s.server = &http.Server{
 		Addr:    fmt.Sprintf(":%d", s.port),
@@ -96,4 +105,86 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	go client.WritePump(ctx)
 	client.ReadPump(ctx)
+}
+
+func (s *Server) handleReplayUpload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse speed from query param (default 1.0)
+	speed := 1.0
+	if sp := r.URL.Query().Get("speed"); sp != "" {
+		if v, err := strconv.ParseFloat(sp, 64); err == nil && v >= 0 {
+			speed = v
+		}
+	}
+
+	// Read uploaded file body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "failed to read body", http.StatusBadRequest)
+		return
+	}
+	if len(body) == 0 {
+		http.Error(w, "empty body", http.StatusBadRequest)
+		return
+	}
+
+	// Write to temp file for the Replay struct to read
+	tmpFile, err := os.CreateTemp("", "viz-replay-*.jsonl")
+	if err != nil {
+		http.Error(w, "failed to create temp file", http.StatusInternalServerError)
+		return
+	}
+	if _, err := tmpFile.Write(body); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		http.Error(w, "failed to write temp file", http.StatusInternalServerError)
+		return
+	}
+	tmpFile.Close()
+	tmpPath := tmpFile.Name()
+
+	// Cancel any in-progress replay
+	s.replayMu.Lock()
+	if s.replayCancel != nil {
+		s.replayCancel()
+	}
+
+	// Reset graph and notify clients
+	s.graph.Reset()
+	s.hub.Broadcast(WSMessage{Type: MsgSnapshot, Data: s.graph.Snapshot()})
+
+	// Start new replay in background
+	ctx, cancel := context.WithCancel(context.Background())
+	s.replayCancel = cancel
+	s.replayMu.Unlock()
+
+	go func() {
+		defer os.Remove(tmpPath)
+		defer cancel()
+
+		replay := NewReplay(tmpPath, speed, s.graph, s.hub)
+		if err := replay.Run(ctx); err != nil && err != context.Canceled {
+			fmt.Fprintf(os.Stderr, "UI replay error: %v\n", err)
+		}
+
+		// Broadcast final "done" stats
+		gstats := s.graph.Stats()
+		s.hub.Broadcast(WSMessage{
+			Type: MsgStats,
+			Data: StatsData{
+				EventsPerSec: 0,
+				ErrorCount:   gstats.ErrorCount,
+				Connected:    true,
+				Mode:         "replay-done",
+			},
+		})
+	}()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "started"}) //nolint:errcheck
 }
