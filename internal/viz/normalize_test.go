@@ -622,6 +622,45 @@ func TestNormalizeCodexAPIRequest(t *testing.T) {
 	}
 }
 
+func TestNormalizeAPIRequestStringTokenFields(t *testing.T) {
+	e := bench.CollectedEvent{
+		TS:    "2026-02-16T21:50:01.266Z",
+		Event: "claude_code.api_request",
+		Data: map[string]any{
+			"model":                 "claude-opus-4-6",
+			"input_tokens":          "3",
+			"output_tokens":         "553",
+			"cache_read_tokens":     "123034",
+			"cache_creation_tokens": "199",
+			"cost_usd":              "0.07660075",
+			"duration_ms":           "16456",
+		},
+	}
+
+	_, edges := NormalizeEvent(e)
+	if len(edges) != 1 {
+		t.Fatalf("expected 1 edge, got %d", len(edges))
+	}
+	if got := edges[0].Attributes["input_tokens"]; got != float64(3) {
+		t.Fatalf("input_tokens = %v, want 3", got)
+	}
+	if got := edges[0].Attributes["output_tokens"]; got != float64(553) {
+		t.Fatalf("output_tokens = %v, want 553", got)
+	}
+	if got := edges[0].Attributes["cache_read_input_tokens"]; got != float64(123034) {
+		t.Fatalf("cache_read_input_tokens = %v, want 123034", got)
+	}
+	if got := edges[0].Attributes["cache_creation_input_tokens"]; got != float64(199) {
+		t.Fatalf("cache_creation_input_tokens = %v, want 199", got)
+	}
+	if got := edges[0].Attributes["cost_usd"]; got != float64(0.07660075) {
+		t.Fatalf("cost_usd = %v, want 0.07660075", got)
+	}
+	if edges[0].Duration == 0 {
+		t.Fatal("duration should be parsed from string duration_ms")
+	}
+}
+
 func TestNormalizeCodexToolCallAlias(t *testing.T) {
 	e := bench.CollectedEvent{
 		TS:    "2026-02-14T12:00:00Z",
@@ -689,6 +728,43 @@ func TestNormalizeCodexSSEWebSearchInProgressIgnored(t *testing.T) {
 	}
 }
 
+func TestNormalizeCodexSSEResponseCompletedTokensAsMetricEdge(t *testing.T) {
+	e := bench.CollectedEvent{
+		TS:    "2026-02-16T17:40:07.404056Z",
+		Event: "codex.sse_event",
+		Data: map[string]any{
+			"event.kind":         "response.completed",
+			"model":              "gpt-5.3-codex",
+			"input_token_count":  "7825",
+			"output_token_count": "19",
+			"cached_token_count": float64(6912),
+		},
+	}
+
+	nodes, edges := NormalizeEvent(e)
+	if len(nodes) != 2 {
+		t.Fatalf("expected 2 nodes (agent + llm), got %d", len(nodes))
+	}
+	if len(edges) != 1 {
+		t.Fatalf("expected 1 model_call edge, got %d", len(edges))
+	}
+	if edges[0].Type != EdgeModelCall {
+		t.Fatalf("edge type = %s, want model_call", edges[0].Type)
+	}
+	if got := edges[0].Attributes["metric_only"]; got != true {
+		t.Fatalf("metric_only = %v, want true", got)
+	}
+	if got := edges[0].Attributes["input_tokens"]; got != float64(7825) {
+		t.Fatalf("input_tokens = %v, want 7825", got)
+	}
+	if got := edges[0].Attributes["output_tokens"]; got != float64(19) {
+		t.Fatalf("output_tokens = %v, want 19", got)
+	}
+	if got := edges[0].Attributes["cache_read_input_tokens"]; got != float64(6912) {
+		t.Fatalf("cache_read_input_tokens = %v, want 6912", got)
+	}
+}
+
 func TestNormalizeCodexTokenMetricCreatesModelEdge(t *testing.T) {
 	e := bench.CollectedEvent{
 		TS:    "2026-02-14T12:00:00Z",
@@ -744,5 +820,51 @@ func TestNormalizeCodexSessionFallbackIdentity(t *testing.T) {
 	}
 	if agentNode.Label != "Codex (a595bc37)" {
 		t.Fatalf("agent label = %q, want Codex (a595bc37)", agentNode.Label)
+	}
+}
+
+func TestNormalizeCodexConversationIdentityUsesOriginatorLabel(t *testing.T) {
+	e := bench.CollectedEvent{
+		TS:    "2026-02-16T21:59:56.02556Z",
+		Event: "codex.sse_event",
+		Data: map[string]any{
+			"event.kind":         "response.completed",
+			"conversation.id":    "019c686c-6659-7992-a397-3f9fce8645be",
+			"originator":         "Codex_Desktop",
+			"model":              "gpt-5.3-codex",
+			"input_token_count":  "184127",
+			"output_token_count": "381",
+		},
+		Resource: map[string]any{
+			"service.name": "codex_app_server",
+		},
+	}
+
+	nodes, edges := NormalizeEvent(e)
+	if len(nodes) != 2 {
+		t.Fatalf("expected 2 nodes (agent + llm), got %d", len(nodes))
+	}
+	if len(edges) != 1 {
+		t.Fatalf("expected 1 model_call edge, got %d", len(edges))
+	}
+	if edges[0].Src != "agent:codex:019c686c" {
+		t.Fatalf("edge src = %q, want agent:codex:019c686c", edges[0].Src)
+	}
+
+	var agentNode *NodeUpsert
+	for i := range nodes {
+		if nodes[i].Type == NodeAgent {
+			agentNode = &nodes[i]
+			break
+		}
+	}
+	if agentNode == nil {
+		t.Fatal("expected agent node")
+	}
+	if agentNode.ID != "agent:codex:019c686c" {
+		t.Fatalf("agent ID = %q, want agent:codex:019c686c", agentNode.ID)
+	}
+	if agentNode.Label != "Codex_Desktop (019c686c)" {
+		t.Fatalf("agent label = %q, want Codex_Desktop (019c686c)", agentNode.Label)
 	}
 }

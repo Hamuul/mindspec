@@ -1,6 +1,7 @@
 package viz
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -11,11 +12,30 @@ import (
 )
 
 // resolveAgentID derives an agent identity from OTLP resource attributes and event data.
-// Precedence: agent.name > service.name+service.instance.id > service.name+session.id
-// > session.id (truncated) > event-specific default.
+// Precedence:
+// 1. Codex conversation identity (originator + conversation/session id)
+// 2. agent.name
+// 3. service.name+service.instance.id
+// 4. service.name+session.id
+// 5. session.id (truncated)
+// 6. event-specific default.
 //
 // session.id (a UUID in event data) auto-differentiates multiple Claude Code instances.
 func resolveAgentID(eventName string, resource, data map[string]any) (id string, label string) {
+	defaultID, defaultLabel := defaultAgentIdentity(eventName)
+	sessionID := firstString(data, "session.id", "conversation.id")
+
+	// Codex telemetry often routes through a shared service.name (e.g. codex_app_server),
+	// so conversation.id is the primary stable identity for unique per-conversation nodes.
+	if isCodexEvent(eventName) && sessionID != "" {
+		short := truncateSessionID(sessionID)
+		originator := firstString(data, "originator", "agent.name")
+		if originator == "" {
+			originator = defaultLabel
+		}
+		return "agent:codex:" + short, originator + " (" + short + ")"
+	}
+
 	if name, ok := resource["agent.name"].(string); ok && name != "" {
 		return "agent:" + name, name
 	}
@@ -24,7 +44,6 @@ func resolveAgentID(eventName string, resource, data map[string]any) (id string,
 	if svcName != "" && svcInstance != "" {
 		return "agent:" + svcName + ":" + svcInstance, svcName
 	}
-	sessionID, _ := data["session.id"].(string)
 	if svcName != "" && sessionID != "" {
 		short := truncateSessionID(sessionID)
 		return "agent:" + svcName + ":" + short, svcName + " (" + short + ")"
@@ -33,7 +52,6 @@ func resolveAgentID(eventName string, resource, data map[string]any) (id string,
 		return "agent:" + svcName, svcName
 	}
 
-	defaultID, defaultLabel := defaultAgentIdentity(eventName)
 	if sessionID != "" {
 		short := truncateSessionID(sessionID)
 		if defaultID == "agent:claude-code" {
@@ -124,6 +142,42 @@ func NormalizeEvent(e bench.CollectedEvent) ([]NodeUpsert, []EdgeEvent) {
 			StartTime:  ts,
 			Duration:   dur,
 			Attributes: apiCallAttributes(e.Data, model),
+		})
+
+	case isCodexSSECompletedTokenEvent(e.Event, e.Data):
+		model := firstString(e.Data, "model", "gen_ai.request.model", "model_name")
+		if model == "" {
+			model = "unknown-model"
+		}
+		llmID := "llm:" + model
+
+		nodes = append(nodes, NodeUpsert{
+			ID:    llmID,
+			Type:  NodeLLM,
+			Label: model,
+			Attributes: map[string]any{
+				"model": model,
+			},
+		})
+		nodes = append(nodes, NodeUpsert{
+			ID:    agentID,
+			Type:  NodeAgent,
+			Label: agentLabel,
+		})
+
+		attrs := apiCallAttributes(e.Data, model)
+		// Codex already emits api_request, so treat SSE completion token updates as metric-only.
+		attrs["metric_only"] = true
+
+		edges = append(edges, EdgeEvent{
+			ID:         fmt.Sprintf("edge:%s->%s:%d", agentID, llmID, ts.UnixNano()),
+			Src:        agentID,
+			Dst:        llmID,
+			Type:       EdgeModelCall,
+			Status:     "ok",
+			StartTime:  ts,
+			Duration:   parseDuration(e.Data),
+			Attributes: attrs,
 		})
 
 	case isToolEvent(e.Event), isCodexSSEToolEvent(e.Event, e.Data):
@@ -356,6 +410,24 @@ func codexSSEToolName(eventName string, data map[string]any) (string, bool) {
 	}
 }
 
+func isCodexSSECompletedTokenEvent(eventName string, data map[string]any) bool {
+	if !isEventName(eventName, "sse_event") {
+		return false
+	}
+	kind := firstString(data, "event.kind", "event_kind", "kind")
+	if !strings.EqualFold(kind, "response.completed") {
+		return false
+	}
+
+	_, inTok := firstNumeric(data,
+		"input_token_count", "input_tokens", "gen_ai.usage.input_tokens")
+	_, outTok := firstNumeric(data,
+		"output_token_count", "output_tokens", "gen_ai.usage.output_tokens")
+	_, cacheReadTok := firstNumeric(data,
+		"cached_token_count", "cache_read_tokens", "cache_read_input_tokens", "gen_ai.usage.cache_read_input_tokens")
+	return inTok || outTok || cacheReadTok
+}
+
 func isTokenUsageMetricEvent(eventName string) bool {
 	return isEventName(eventName, "token.usage")
 }
@@ -380,16 +452,22 @@ func apiCallAttributes(data map[string]any, model string) map[string]any {
 		attrs["model"] = model
 	}
 
-	if v, ok := firstNumeric(data, "input_tokens", "gen_ai.usage.input_tokens", "token.input", "usage.input_tokens"); ok {
+	if v, ok := firstNumeric(data,
+		"input_tokens", "gen_ai.usage.input_tokens", "token.input", "usage.input_tokens", "input_token_count"); ok {
 		attrs["input_tokens"] = v
 	}
-	if v, ok := firstNumeric(data, "output_tokens", "gen_ai.usage.output_tokens", "token.output", "usage.output_tokens"); ok {
+	if v, ok := firstNumeric(data,
+		"output_tokens", "gen_ai.usage.output_tokens", "token.output", "usage.output_tokens", "output_token_count"); ok {
 		attrs["output_tokens"] = v
 	}
-	if v, ok := firstNumeric(data, "cache_read_input_tokens", "gen_ai.usage.cache_read_input_tokens", "token.cache_read", "usage.cache_read_input_tokens"); ok {
+	if v, ok := firstNumeric(data,
+		"cache_read_input_tokens", "gen_ai.usage.cache_read_input_tokens", "token.cache_read",
+		"usage.cache_read_input_tokens", "cache_read_tokens", "cached_token_count"); ok {
 		attrs["cache_read_input_tokens"] = v
 	}
-	if v, ok := firstNumeric(data, "cache_creation_input_tokens", "gen_ai.usage.cache_creation_input_tokens", "token.cache_creation", "usage.cache_creation_input_tokens"); ok {
+	if v, ok := firstNumeric(data,
+		"cache_creation_input_tokens", "gen_ai.usage.cache_creation_input_tokens", "token.cache_creation",
+		"usage.cache_creation_input_tokens", "cache_creation_tokens"); ok {
 		attrs["cache_creation_input_tokens"] = v
 	}
 	if v, ok := firstNumeric(data, "cost_usd", "cost", "gen_ai.usage.cost_usd"); ok {
@@ -499,6 +577,20 @@ func firstNumeric(data map[string]any, keys ...string) (float64, bool) {
 			return float64(n), true
 		case int32:
 			return float64(n), true
+		case json.Number:
+			f, err := n.Float64()
+			if err == nil {
+				return f, true
+			}
+		case string:
+			s := strings.TrimSpace(n)
+			if s == "" {
+				continue
+			}
+			f, err := strconv.ParseFloat(s, 64)
+			if err == nil {
+				return f, true
+			}
 		}
 	}
 	return 0, false
