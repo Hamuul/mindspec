@@ -47,8 +47,23 @@ func (s *Session) CacheHitRate() float64 {
 	return float64(s.CacheRead) / float64(total)
 }
 
-// ParseSession reads a collected NDJSON file and aggregates metrics.
+// ParseSession reads a collected NDJSON file and aggregates all events (no filtering).
+// Use this for standalone per-session files or backward compatibility with legacy files.
 func ParseSession(path, label string) (*Session, error) {
+	return parseSessionFiltered(path, label, "")
+}
+
+// ParseSessionByLabel reads a shared NDJSON file and aggregates only events
+// where Resource["bench.label"] matches the given label. This is used when
+// multiple sessions write to a single collector/file differentiated by
+// OTEL_RESOURCE_ATTRIBUTES.
+func ParseSessionByLabel(path, label string) (*Session, error) {
+	return parseSessionFiltered(path, label, label)
+}
+
+// parseSessionFiltered reads events from an NDJSON file. If filterLabel is non-empty,
+// only events where Resource["bench.label"] matches filterLabel are aggregated.
+func parseSessionFiltered(path, label, filterLabel string) (*Session, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("opening %s: %w", path, err)
@@ -67,75 +82,15 @@ func ParseSession(path, label string) (*Session, error) {
 			continue
 		}
 
-		// Parse timestamp for wall-clock duration
-		if ts, err := time.Parse(time.RFC3339Nano, e.TS); err == nil {
-			if s.FirstEvent.IsZero() || ts.Before(s.FirstEvent) {
-				s.FirstEvent = ts
-			}
-			if ts.After(s.LastEvent) {
-				s.LastEvent = ts
+		// Filter by bench.label if requested
+		if filterLabel != "" {
+			bl, _ := e.Resource["bench.label"].(string)
+			if bl != filterLabel {
+				continue
 			}
 		}
 
-		switch e.Event {
-		case "claude_code.api_request", "claude.api_request":
-			// Legacy log-based events with flat fields
-			s.APICallCount++
-
-			inputTok := toInt64(e.Data["input_tokens"])
-			outputTok := toInt64(e.Data["output_tokens"])
-			cacheRead := toInt64(e.Data["cache_read_tokens"])
-			cacheCreate := toInt64(e.Data["cache_creation_tokens"])
-			cost := toFloat64(e.Data["cost_usd"])
-			model, _ := e.Data["model"].(string)
-
-			s.InputTokens += inputTok
-			s.OutputTokens += outputTok
-			s.CacheRead += cacheRead
-			s.CacheCreate += cacheCreate
-			s.CostUSD += cost
-
-			if model != "" {
-				ms := getOrCreateModel(s, model)
-				ms.Calls++
-				ms.InputTokens += inputTok
-				ms.OutputTokens += outputTok
-				ms.CostUSD += cost
-			}
-
-		case "claude_code.token.usage":
-			// OTLP metric events: data.type = input|output|cacheRead|cacheCreation, data.value = delta
-			tokType, _ := e.Data["type"].(string)
-			val := toInt64(e.Data["value"])
-			switch tokType {
-			case "input":
-				s.InputTokens += val
-			case "output":
-				s.OutputTokens += val
-			case "cacheRead":
-				s.CacheRead += val
-			case "cacheCreation":
-				s.CacheCreate += val
-			}
-			if model, _ := e.Data["model"].(string); model != "" {
-				ms := getOrCreateModel(s, model)
-				switch tokType {
-				case "input":
-					ms.InputTokens += val
-				case "output":
-					ms.OutputTokens += val
-				}
-			}
-
-		case "claude_code.cost.usage":
-			// OTLP metric events: data.value = cost delta (USD)
-			cost := toFloat64(e.Data["value"])
-			s.CostUSD += cost
-			if model, _ := e.Data["model"].(string); model != "" {
-				ms := getOrCreateModel(s, model)
-				ms.CostUSD += cost
-			}
-		}
+		aggregateEvent(s, &e)
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -147,6 +102,113 @@ func ParseSession(path, label string) (*Session, error) {
 	}
 
 	return s, nil
+}
+
+// ExtractSessionIDs scans an NDJSON file for unique session.id values
+// where Resource["bench.label"] matches the given label.
+func ExtractSessionIDs(path, label string) []string {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	seen := make(map[string]struct{})
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		var e CollectedEvent
+		if err := json.Unmarshal(scanner.Bytes(), &e); err != nil {
+			continue
+		}
+		bl, _ := e.Resource["bench.label"].(string)
+		if bl != label {
+			continue
+		}
+		sid, _ := e.Data["session.id"].(string)
+		if sid != "" {
+			seen[sid] = struct{}{}
+		}
+	}
+
+	ids := make([]string, 0, len(seen))
+	for id := range seen {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// aggregateEvent adds one CollectedEvent's metrics to a Session.
+func aggregateEvent(s *Session, e *CollectedEvent) {
+	// Parse timestamp for wall-clock duration
+	if ts, err := time.Parse(time.RFC3339Nano, e.TS); err == nil {
+		if s.FirstEvent.IsZero() || ts.Before(s.FirstEvent) {
+			s.FirstEvent = ts
+		}
+		if ts.After(s.LastEvent) {
+			s.LastEvent = ts
+		}
+	}
+
+	switch e.Event {
+	case "claude_code.api_request", "claude.api_request":
+		// Legacy log-based events with flat fields
+		s.APICallCount++
+
+		inputTok := toInt64(e.Data["input_tokens"])
+		outputTok := toInt64(e.Data["output_tokens"])
+		cacheRead := toInt64(e.Data["cache_read_tokens"])
+		cacheCreate := toInt64(e.Data["cache_creation_tokens"])
+		cost := toFloat64(e.Data["cost_usd"])
+		model, _ := e.Data["model"].(string)
+
+		s.InputTokens += inputTok
+		s.OutputTokens += outputTok
+		s.CacheRead += cacheRead
+		s.CacheCreate += cacheCreate
+		s.CostUSD += cost
+
+		if model != "" {
+			ms := getOrCreateModel(s, model)
+			ms.Calls++
+			ms.InputTokens += inputTok
+			ms.OutputTokens += outputTok
+			ms.CostUSD += cost
+		}
+
+	case "claude_code.token.usage":
+		// OTLP metric events: data.type = input|output|cacheRead|cacheCreation, data.value = delta
+		tokType, _ := e.Data["type"].(string)
+		val := toInt64(e.Data["value"])
+		switch tokType {
+		case "input":
+			s.InputTokens += val
+		case "output":
+			s.OutputTokens += val
+		case "cacheRead":
+			s.CacheRead += val
+		case "cacheCreation":
+			s.CacheCreate += val
+		}
+		if model, _ := e.Data["model"].(string); model != "" {
+			ms := getOrCreateModel(s, model)
+			switch tokType {
+			case "input":
+				ms.InputTokens += val
+			case "output":
+				ms.OutputTokens += val
+			}
+		}
+
+	case "claude_code.cost.usage":
+		// OTLP metric events: data.value = cost delta (USD)
+		cost := toFloat64(e.Data["value"])
+		s.CostUSD += cost
+		if model, _ := e.Data["model"].(string); model != "" {
+			ms := getOrCreateModel(s, model)
+			ms.CostUSD += cost
+		}
+	}
 }
 
 // mergedModelNames returns the sorted union of model names from both sessions.

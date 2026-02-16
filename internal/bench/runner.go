@@ -32,11 +32,9 @@ type RunConfig struct {
 	Stdout io.Writer
 }
 
-const (
-	portA = 4318
-	portB = 4319
-	portC = 4320
-)
+// benchCollectorPort is the single OTLP collector port for all bench sessions.
+// Avoids 4318 (AgentMind live viz) and 4319 (per-spec recording collector).
+const benchCollectorPort = 4320
 
 // Run executes the full benchmark pipeline.
 func Run(cfg *RunConfig) error {
@@ -88,9 +86,9 @@ func Run(cfg *RunConfig) error {
 	// Define sessions
 	timestamp := time.Now().Format("20060102-150405")
 	sessions := []*SessionDef{
-		{Label: "a", Description: "no-docs", Port: portA, Neutralize: NeutralizeNoDocs},
-		{Label: "b", Description: "baseline", Port: portB, Neutralize: NeutralizeBaseline},
-		{Label: "c", Description: "mindspec", Port: portC, Neutralize: nil, EnableTrace: true},
+		{Label: "a", Description: "no-docs", Neutralize: NeutralizeNoDocs},
+		{Label: "b", Description: "baseline", Neutralize: NeutralizeBaseline},
+		{Label: "c", Description: "mindspec", Neutralize: nil, EnableTrace: true},
 	}
 
 	// Create worktrees
@@ -128,6 +126,23 @@ func Run(cfg *RunConfig) error {
 	wtC := filepath.Join(cfg.WorkDir, "wt-c")
 	prepareSessionC(wtC, cfg.SpecID)
 
+	// Start single shared OTLP collector for all sessions
+	benchEventsPath := filepath.Join(cfg.WorkDir, "bench-events.jsonl")
+	collector := NewCollector(benchCollectorPort, benchEventsPath)
+	collectorCtx, collectorCancel := context.WithCancel(context.Background())
+	defer collectorCancel()
+
+	collectorDone := make(chan error, 1)
+	go func() {
+		collectorDone <- collector.Run(collectorCtx)
+	}()
+
+	if err := waitForPort(benchCollectorPort, 5*time.Second); err != nil {
+		collectorCancel()
+		return fmt.Errorf("bench collector failed to start on port %d: %w", benchCollectorPort, err)
+	}
+	fmt.Fprintf(cfg.Stdout, "Collector started on port %d → %s\n", benchCollectorPort, benchEventsPath)
+
 	// Build per-session prompts
 	// Sessions A & B: generic feature prompt (no MindSpec workflow)
 	// Session C: MindSpec workflow prompt directing through spec→plan→implement
@@ -158,7 +173,7 @@ Follow the MindSpec workflow:
 			go func(idx int, d *SessionDef) {
 				defer wg.Done()
 				wtPath := filepath.Join(cfg.WorkDir, "wt-"+d.Label)
-				result, err := RunSessionWithRetries(ctx, cfg, d, wtPath)
+				result, err := RunSessionWithRetries(ctx, cfg, d, wtPath, benchEventsPath)
 				results[idx] = result
 				errs[idx] = err
 			}(i, def)
@@ -177,9 +192,9 @@ Follow the MindSpec workflow:
 		}
 	} else {
 		for i, def := range sessions {
-			fmt.Fprintf(cfg.Stdout, "\n━━━ Session %s (%s, port %d) ━━━\n\n", def.Label, def.Description, def.Port)
+			fmt.Fprintf(cfg.Stdout, "\n━━━ Session %s (%s) ━━━\n\n", def.Label, def.Description)
 			wtPath := filepath.Join(cfg.WorkDir, "wt-"+def.Label)
-			result, err := RunSessionWithRetries(ctx, cfg, def, wtPath)
+			result, err := RunSessionWithRetries(ctx, cfg, def, wtPath, benchEventsPath)
 			if err != nil {
 				return fmt.Errorf("session %s: %w", def.Label, err)
 			}
@@ -191,16 +206,22 @@ Follow the MindSpec workflow:
 		}
 	}
 
-	// Generate N-way quantitative report from local JSONL files
+	// Shut down collector before parsing (ensures all events are flushed)
+	time.Sleep(2 * time.Second)
+	collectorCancel()
+	<-collectorDone
+
+	// Generate N-way quantitative report from single shared JSONL file
 	fmt.Fprintln(cfg.Stdout, "\nGenerating quantitative report...")
 	var quantReport string
 	var parsedSessions []*Session
-	sessionLabels := []string{"no-docs", "baseline", "mindspec"}
-	for i, r := range results {
-		s, err := ParseSession(r.JSONLPath, sessionLabels[i])
+	displayLabels := []string{"no-docs", "baseline", "mindspec"}
+	for i, def := range sessions {
+		s, err := ParseSessionByLabel(benchEventsPath, def.Label)
 		if err != nil {
-			return fmt.Errorf("parsing session %s: %w", r.Label, err)
+			return fmt.Errorf("parsing session %s: %w", def.Label, err)
 		}
+		s.Label = displayLabels[i] // Use descriptive label for report display
 		parsedSessions = append(parsedSessions, s)
 	}
 	multiReport := CompareN(parsedSessions)
@@ -282,10 +303,8 @@ func checkPrerequisites(cfg *RunConfig) error {
 		}
 	}
 
-	for _, port := range []int{portA, portB, portC} {
-		if err := CheckPortFree(port); err != nil {
-			errors = append(errors, err.Error())
-		}
+	if err := CheckPortFree(benchCollectorPort); err != nil {
+		errors = append(errors, err.Error())
 	}
 
 	if len(errors) > 0 {

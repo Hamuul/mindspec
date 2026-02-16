@@ -36,9 +36,11 @@ func WriteResults(cfg *RunConfig, results []*SessionResult, quantReport string,
 		}
 	}
 
-	// Copy telemetry JSONL, output files, and trace
+	// Copy shared telemetry JSONL and per-session output files
+	if len(results) > 0 {
+		copyFile(results[0].JSONLPath, filepath.Join(dir, "bench-events.jsonl"))
+	}
 	for _, r := range results {
-		copyFile(r.JSONLPath, filepath.Join(dir, fmt.Sprintf("session-%s.jsonl", r.Label)))
 		copyFile(r.OutputPath, filepath.Join(dir, fmt.Sprintf("output-%s.txt", r.Label)))
 	}
 
@@ -106,14 +108,13 @@ func assembleReportMD(cfg *RunConfig, results []*SessionResult, quantReport stri
 		"b": "B (baseline)",
 		"c": "C (mindspec)",
 	}
-	ports := map[string]int{"a": 4318, "b": 4319, "c": 4320}
 
 	b.WriteString("\n## Sessions\n\n")
-	b.WriteString("| Session | Description | Port | Events |\n")
-	b.WriteString("|---------|-------------|------|--------|\n")
+	b.WriteString("| Session | Description | Label | Events |\n")
+	b.WriteString("|---------|-------------|-------|--------|\n")
 	for _, r := range results {
-		b.WriteString(fmt.Sprintf("| %s | %s | %d | %d |\n",
-			labels[r.Label], descriptions[r.Label], ports[r.Label], r.EventCount))
+		b.WriteString(fmt.Sprintf("| %s | %s | %s | %d |\n",
+			labels[r.Label], descriptions[r.Label], r.Label, r.EventCount))
 	}
 
 	// Quantitative comparison
@@ -140,9 +141,7 @@ func assembleReportMD(cfg *RunConfig, results []*SessionResult, quantReport stri
 	// Raw data note
 	b.WriteString("\n## Raw Data\n\n")
 	b.WriteString("Telemetry and output files are in this directory:\n")
-	for _, r := range results {
-		b.WriteString(fmt.Sprintf("- `session-%s.jsonl` — Session %s OTEL telemetry\n", r.Label, labels[r.Label]))
-	}
+	b.WriteString("- `bench-events.jsonl` — Shared OTEL telemetry (all sessions, filtered by `bench.label`)\n")
 	b.WriteString("- `trace-c.jsonl` — Session C MindSpec trace\n")
 	for _, r := range results {
 		b.WriteString(fmt.Sprintf("- `plan-%s.md` — Session %s plan artifact\n", r.Label, labels[r.Label]))

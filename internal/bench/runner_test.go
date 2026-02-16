@@ -342,10 +342,16 @@ func TestWriteResults(t *testing.T) {
 	dir := t.TempDir()
 	workDir := t.TempDir()
 
-	// Create fake session artifacts
-	os.WriteFile(filepath.Join(workDir, "session-a.jsonl"), []byte("{}\n"), 0644)
-	os.WriteFile(filepath.Join(workDir, "session-b.jsonl"), []byte("{}\n{}\n"), 0644)
-	os.WriteFile(filepath.Join(workDir, "session-c.jsonl"), []byte("{}\n{}\n{}\n"), 0644)
+	// Create fake session artifacts (single shared JSONL + per-session output)
+	benchEvents := `{"ts":"2026-01-01T00:00:00Z","event":"claude_code.api_request","data":{"input_tokens":100},"resource":{"bench.label":"a"}}
+{"ts":"2026-01-01T00:01:00Z","event":"claude_code.api_request","data":{"input_tokens":200},"resource":{"bench.label":"b"}}
+{"ts":"2026-01-01T00:02:00Z","event":"claude_code.api_request","data":{"input_tokens":300},"resource":{"bench.label":"b"}}
+{"ts":"2026-01-01T00:03:00Z","event":"claude_code.api_request","data":{"input_tokens":400},"resource":{"bench.label":"c"}}
+{"ts":"2026-01-01T00:04:00Z","event":"claude_code.api_request","data":{"input_tokens":500},"resource":{"bench.label":"c"}}
+{"ts":"2026-01-01T00:05:00Z","event":"claude_code.api_request","data":{"input_tokens":600},"resource":{"bench.label":"c"}}
+`
+	benchEventsPath := filepath.Join(workDir, "bench-events.jsonl")
+	os.WriteFile(benchEventsPath, []byte(benchEvents), 0644)
 	os.WriteFile(filepath.Join(workDir, "output-a.txt"), []byte("output a"), 0644)
 	os.WriteFile(filepath.Join(workDir, "output-b.txt"), []byte("output b"), 0644)
 	os.WriteFile(filepath.Join(workDir, "output-c.txt"), []byte("output c"), 0644)
@@ -359,9 +365,9 @@ func TestWriteResults(t *testing.T) {
 		WorkDir:     workDir,
 	}
 	results := []*SessionResult{
-		{Label: "a", JSONLPath: filepath.Join(workDir, "session-a.jsonl"), OutputPath: filepath.Join(workDir, "output-a.txt"), EventCount: 1},
-		{Label: "b", JSONLPath: filepath.Join(workDir, "session-b.jsonl"), OutputPath: filepath.Join(workDir, "output-b.txt"), EventCount: 2},
-		{Label: "c", JSONLPath: filepath.Join(workDir, "session-c.jsonl"), OutputPath: filepath.Join(workDir, "output-c.txt"), EventCount: 3},
+		{Label: "a", JSONLPath: benchEventsPath, OutputPath: filepath.Join(workDir, "output-a.txt"), EventCount: 1},
+		{Label: "b", JSONLPath: benchEventsPath, OutputPath: filepath.Join(workDir, "output-b.txt"), EventCount: 2},
+		{Label: "c", JSONLPath: benchEventsPath, OutputPath: filepath.Join(workDir, "output-c.txt"), EventCount: 3},
 	}
 
 	plans := map[string]string{
@@ -388,7 +394,7 @@ func TestWriteResults(t *testing.T) {
 	}
 
 	// Check artifacts copied
-	for _, name := range []string{"session-a.jsonl", "session-b.jsonl", "session-c.jsonl", "output-a.txt", "output-b.txt", "output-c.txt"} {
+	for _, name := range []string{"bench-events.jsonl", "output-a.txt", "output-b.txt", "output-c.txt"} {
 		if _, err := os.Stat(filepath.Join(benchDir, name)); os.IsNotExist(err) {
 			t.Errorf("%s not copied", name)
 		}

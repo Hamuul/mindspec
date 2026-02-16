@@ -245,3 +245,172 @@ func TestFormatJSON(t *testing.T) {
 		t.Error("output is not valid JSON")
 	}
 }
+
+func TestParseSessionByLabel(t *testing.T) {
+	dir := t.TempDir()
+
+	// Shared JSONL with events from 3 sessions differentiated by bench.label
+	events := []CollectedEvent{
+		{
+			TS:       "2026-01-01T00:00:00Z",
+			Event:    "claude_code.api_request",
+			Data:     map[string]any{"input_tokens": float64(100), "output_tokens": float64(50), "cost_usd": float64(0.01), "model": "opus"},
+			Resource: map[string]any{"bench.label": "a"},
+		},
+		{
+			TS:       "2026-01-01T00:01:00Z",
+			Event:    "claude_code.api_request",
+			Data:     map[string]any{"input_tokens": float64(200), "output_tokens": float64(100), "cost_usd": float64(0.02), "model": "opus"},
+			Resource: map[string]any{"bench.label": "b"},
+		},
+		{
+			TS:       "2026-01-01T00:02:00Z",
+			Event:    "claude_code.api_request",
+			Data:     map[string]any{"input_tokens": float64(300), "output_tokens": float64(150), "cost_usd": float64(0.03), "model": "sonnet"},
+			Resource: map[string]any{"bench.label": "a"},
+		},
+		{
+			TS:       "2026-01-01T00:03:00Z",
+			Event:    "claude_code.api_request",
+			Data:     map[string]any{"input_tokens": float64(400), "output_tokens": float64(200), "cost_usd": float64(0.04), "model": "opus"},
+			Resource: map[string]any{"bench.label": "c"},
+		},
+	}
+
+	path := writeFixture(t, dir, "bench-events.jsonl", events)
+
+	// Parse only session A events
+	s, err := ParseSessionByLabel(path, "a")
+	if err != nil {
+		t.Fatalf("ParseSessionByLabel(a): %v", err)
+	}
+	if s.APICallCount != 2 {
+		t.Errorf("session A: APICallCount = %d, want 2", s.APICallCount)
+	}
+	if s.InputTokens != 400 { // 100 + 300
+		t.Errorf("session A: InputTokens = %d, want 400", s.InputTokens)
+	}
+	if s.OutputTokens != 200 { // 50 + 150
+		t.Errorf("session A: OutputTokens = %d, want 200", s.OutputTokens)
+	}
+
+	// Parse only session B events
+	s, err = ParseSessionByLabel(path, "b")
+	if err != nil {
+		t.Fatalf("ParseSessionByLabel(b): %v", err)
+	}
+	if s.APICallCount != 1 {
+		t.Errorf("session B: APICallCount = %d, want 1", s.APICallCount)
+	}
+	if s.InputTokens != 200 {
+		t.Errorf("session B: InputTokens = %d, want 200", s.InputTokens)
+	}
+
+	// Parse only session C events
+	s, err = ParseSessionByLabel(path, "c")
+	if err != nil {
+		t.Fatalf("ParseSessionByLabel(c): %v", err)
+	}
+	if s.APICallCount != 1 {
+		t.Errorf("session C: APICallCount = %d, want 1", s.APICallCount)
+	}
+
+	// Non-existent label returns empty session
+	s, err = ParseSessionByLabel(path, "x")
+	if err != nil {
+		t.Fatalf("ParseSessionByLabel(x): %v", err)
+	}
+	if s.APICallCount != 0 {
+		t.Errorf("session X: APICallCount = %d, want 0", s.APICallCount)
+	}
+}
+
+func TestParseSessionBackwardCompat(t *testing.T) {
+	dir := t.TempDir()
+
+	// Standalone JSONL without bench.label (legacy format)
+	events := []CollectedEvent{
+		{
+			TS:    "2026-01-01T00:00:00Z",
+			Event: "claude_code.api_request",
+			Data:  map[string]any{"input_tokens": float64(100), "output_tokens": float64(50), "cost_usd": float64(0.01)},
+		},
+		{
+			TS:    "2026-01-01T00:01:00Z",
+			Event: "claude_code.api_request",
+			Data:  map[string]any{"input_tokens": float64(200), "output_tokens": float64(100), "cost_usd": float64(0.02)},
+		},
+	}
+
+	path := writeFixture(t, dir, "legacy-session.jsonl", events)
+
+	// ParseSession aggregates all events regardless of bench.label
+	s, err := ParseSession(path, "legacy")
+	if err != nil {
+		t.Fatalf("ParseSession: %v", err)
+	}
+	if s.APICallCount != 2 {
+		t.Errorf("APICallCount = %d, want 2", s.APICallCount)
+	}
+	if s.InputTokens != 300 {
+		t.Errorf("InputTokens = %d, want 300", s.InputTokens)
+	}
+	if s.Label != "legacy" {
+		t.Errorf("Label = %q, want 'legacy'", s.Label)
+	}
+}
+
+func TestExtractSessionIDs(t *testing.T) {
+	dir := t.TempDir()
+
+	events := []CollectedEvent{
+		{TS: "2026-01-01T00:00:00Z", Event: "claude_code.api_request", Data: map[string]any{"session.id": "uuid-1"}, Resource: map[string]any{"bench.label": "a"}},
+		{TS: "2026-01-01T00:01:00Z", Event: "claude_code.api_request", Data: map[string]any{"session.id": "uuid-2"}, Resource: map[string]any{"bench.label": "b"}},
+		{TS: "2026-01-01T00:02:00Z", Event: "claude_code.api_request", Data: map[string]any{"session.id": "uuid-1"}, Resource: map[string]any{"bench.label": "a"}},
+		{TS: "2026-01-01T00:03:00Z", Event: "claude_code.api_request", Data: map[string]any{"session.id": "uuid-3"}, Resource: map[string]any{"bench.label": "a"}},
+	}
+
+	path := writeFixture(t, dir, "bench-events.jsonl", events)
+
+	ids := ExtractSessionIDs(path, "a")
+	if len(ids) != 2 {
+		t.Fatalf("expected 2 session IDs for label a, got %d: %v", len(ids), ids)
+	}
+	// Sorted: uuid-1, uuid-3
+	if ids[0] != "uuid-1" || ids[1] != "uuid-3" {
+		t.Errorf("unexpected session IDs: %v", ids)
+	}
+
+	ids = ExtractSessionIDs(path, "b")
+	if len(ids) != 1 || ids[0] != "uuid-2" {
+		t.Errorf("expected [uuid-2] for label b, got %v", ids)
+	}
+
+	ids = ExtractSessionIDs(path, "x")
+	if len(ids) != 0 {
+		t.Errorf("expected 0 session IDs for label x, got %v", ids)
+	}
+}
+
+func TestCountEventsByLabel(t *testing.T) {
+	dir := t.TempDir()
+
+	events := []CollectedEvent{
+		{TS: "2026-01-01T00:00:00Z", Event: "e", Data: map[string]any{}, Resource: map[string]any{"bench.label": "a"}},
+		{TS: "2026-01-01T00:01:00Z", Event: "e", Data: map[string]any{}, Resource: map[string]any{"bench.label": "b"}},
+		{TS: "2026-01-01T00:02:00Z", Event: "e", Data: map[string]any{}, Resource: map[string]any{"bench.label": "a"}},
+		{TS: "2026-01-01T00:03:00Z", Event: "e", Data: map[string]any{}, Resource: map[string]any{"bench.label": "a"}},
+	}
+
+	path := writeFixture(t, dir, "bench-events.jsonl", events)
+
+	if c := countEventsByLabel(path, "a"); c != 3 {
+		t.Errorf("expected 3 events for label a, got %d", c)
+	}
+	if c := countEventsByLabel(path, "b"); c != 1 {
+		t.Errorf("expected 1 event for label b, got %d", c)
+	}
+	if c := countEventsByLabel(path, "x"); c != 0 {
+		t.Errorf("expected 0 events for label x, got %d", c)
+	}
+}

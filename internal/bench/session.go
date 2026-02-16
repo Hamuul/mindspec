@@ -1,6 +1,7 @@
 package bench
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -19,7 +20,6 @@ import (
 type SessionDef struct {
 	Label       string // e.g., "a", "b", "c"
 	Description string // e.g., "no-docs", "baseline", "mindspec"
-	Port        int
 	Neutralize  func(wtPath string) error // nil for session C (full MindSpec)
 	EnableTrace bool
 	Prompt      string // per-session prompt override (if non-empty, overrides cfg.Prompt)
@@ -33,48 +33,35 @@ type SessionResult struct {
 	EventCount int
 	ExitCode   int
 	TimedOut   bool
+	SessionIDs []string // unique session.id UUIDs from OTLP events for this label
 }
 
 // RunSessionWithRetries executes a benchmark session with retry-based auto-approve.
 // After each attempt, it checks whether implementation code was produced. If not,
 // it auto-approves any pending workflow gates (spec/plan for session C) and retries
 // with an escalating prompt directing the agent to implement.
-func RunSessionWithRetries(ctx context.Context, cfg *RunConfig, def *SessionDef, wtPath string) (*SessionResult, error) {
-	jsonlPath := filepath.Join(cfg.WorkDir, fmt.Sprintf("session-%s.jsonl", def.Label))
+//
+// The collector is managed externally (by Run); this function only runs Claude sessions.
+// benchEventsPath is the shared JSONL file written by the single collector.
+func RunSessionWithRetries(ctx context.Context, cfg *RunConfig, def *SessionDef, wtPath, benchEventsPath string) (*SessionResult, error) {
 	outputPath := filepath.Join(cfg.WorkDir, fmt.Sprintf("output-%s.txt", def.Label))
 
 	result := &SessionResult{
 		Label:      def.Label,
-		JSONLPath:  jsonlPath,
+		JSONLPath:  benchEventsPath,
 		OutputPath: outputPath,
 	}
 
 	baseCommit := getCurrentCommit(wtPath)
 
-	// Start in-process collector for the entire retry loop
-	collector := NewCollector(def.Port, jsonlPath)
-	collectorCtx, collectorCancel := context.WithCancel(ctx)
-	defer collectorCancel()
-
-	collectorDone := make(chan error, 1)
-	go func() {
-		collectorDone <- collector.Run(collectorCtx)
-	}()
-
-	if err := waitForPort(def.Port, 5*time.Second); err != nil {
-		collectorCancel()
-		return nil, fmt.Errorf("collector failed to start on port %d: %w", def.Port, err)
-	}
-
 	// Create output file (append across retries)
 	outFile, err := os.Create(outputPath)
 	if err != nil {
-		collectorCancel()
 		return nil, fmt.Errorf("creating output file: %w", err)
 	}
 	defer outFile.Close()
 
-	env := buildSessionEnv(def.Port, cfg.WorkDir, def.Label, def.EnableTrace)
+	env := buildSessionEnv(benchCollectorPort, cfg.WorkDir, def.Label, def.EnableTrace)
 
 	prompt := def.Prompt
 	if prompt == "" {
@@ -113,19 +100,9 @@ func RunSessionWithRetries(ctx context.Context, cfg *RunConfig, def *SessionDef,
 		}
 	}
 
-	// Shut down collector
-	time.Sleep(2 * time.Second)
-	collectorCancel()
-	<-collectorDone
-
-	// Count events
-	if data, err := os.ReadFile(jsonlPath); err == nil {
-		for _, b := range data {
-			if b == '\n' {
-				result.EventCount++
-			}
-		}
-	}
+	// Extract session IDs and count events for this label from the shared JSONL
+	result.SessionIDs = ExtractSessionIDs(benchEventsPath, def.Label)
+	result.EventCount = countEventsByLabel(benchEventsPath, def.Label)
 
 	return result, nil
 }
@@ -209,7 +186,8 @@ func runClaude(ctx context.Context, prompt, wtPath string, env []string,
 }
 
 // buildSessionEnv creates the environment for a benchmark Claude session,
-// pointing OTLP at the local per-session collector.
+// pointing OTLP at the shared bench collector and injecting bench.label
+// for session discrimination.
 func buildSessionEnv(port int, workDir, label string, enableTrace bool) []string {
 	env := os.Environ()
 	env = append(env,
@@ -219,12 +197,36 @@ func buildSessionEnv(port int, workDir, label string, enableTrace bool) []string
 		"OTEL_LOGS_EXPORTER=otlp",
 		"OTEL_EXPORTER_OTLP_PROTOCOL=http/json",
 		fmt.Sprintf("OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:%d", port),
+		fmt.Sprintf("OTEL_RESOURCE_ATTRIBUTES=bench.label=%s", label),
 	)
 	if enableTrace {
 		tracePath := filepath.Join(workDir, fmt.Sprintf("trace-%s.jsonl", label))
 		env = append(env, "MINDSPEC_TRACE="+tracePath)
 	}
 	return env
+}
+
+// countEventsByLabel counts events in an NDJSON file where Resource["bench.label"] matches.
+func countEventsByLabel(path, label string) int {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+
+	count := 0
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		var e CollectedEvent
+		if err := json.Unmarshal(scanner.Bytes(), &e); err != nil {
+			continue
+		}
+		bl, _ := e.Resource["bench.label"].(string)
+		if bl == label {
+			count++
+		}
+	}
+	return count
 }
 
 // getCurrentCommit returns the HEAD commit SHA of a worktree.
