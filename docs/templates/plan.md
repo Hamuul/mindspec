@@ -25,11 +25,8 @@ work_chunks:
     verify:
       - "<Verification step>"
     depends_on: [1]
-# Machine-generated metadata (written by `mindspec bead plan`):
-# generated:
-#   bead_ids:
-#     "1": beads-xxx
-#     "2": beads-yyy
+# Machine-generated metadata (written on plan approval):
+# The spec-lifecycle molecule tracks bead IDs via state.json stepMapping
 ---
 
 # Plan: Spec <NNN> — <Title>

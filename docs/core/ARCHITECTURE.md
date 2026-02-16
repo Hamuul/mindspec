@@ -11,7 +11,7 @@ MindSpec is a **spec-driven development and context management framework** (Clau
 │ MindSpec Operating Model                            │
 │                                                     │
 │  Modes: Spec → Plan → Implement                     │
-│  Gates: human approval, ADR compliance, doc-sync    │
+│  Approvals: human gates, ADR compliance, doc-sync   │
 │  Context: deterministic, budgeted Context Packs     │
 │                                                     │
 ├──────────────┬──────────────┬───────────────────────┤
@@ -31,7 +31,7 @@ MindSpec is a **spec-driven development and context management framework** (Clau
 | Domain architecture and documentation | `/docs/domains/<domain>/` |
 | ADR lifecycle | `/docs/adr/` and `/docs/domains/<domain>/adr/` |
 | Deterministic context assembly | MindSpec Context Pack builder |
-| Workflow orchestration (modes, gates) | MindSpec mode system |
+| Workflow orchestration (modes, approvals) | MindSpec mode system + spec-lifecycle formula |
 | Roadmap hierarchy | Beads (release/milestone → spec beads → implementation beads) |
 | Isolated execution | Git worktrees |
 

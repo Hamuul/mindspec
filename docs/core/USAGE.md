@@ -64,11 +64,10 @@ Runs `mindspec approve spec <id>`
 ### What the CLI does (single command)
 1. **Validates** — `validate.ValidateSpec()` checks required sections, acceptance criteria quality
 2. **Updates frontmatter** — sets `Status: APPROVED` in spec.md
-3. **Creates spec bead** — creates the spec gate bead in Beads (best-effort)
-4. **Resolves gate** — resolves `[GATE spec-approve <id>]` so downstream work becomes visible
-5. **Generates context pack** — runs `contextpack.Build()` automatically (best-effort)
-6. **Sets state** — `{mode: "plan", activeSpec: "<id>"}`
-7. **Instruct-tail** — emits Plan Mode guidance
+3. **Closes molecule step** — closes the `spec-approve` step in the spec-lifecycle molecule (created at `spec-init`), which unblocks the `plan` step
+4. **Generates context pack** — runs `contextpack.Build()` automatically (best-effort)
+5. **Sets state** — `{mode: "plan", activeSpec: "<id>"}`
+6. **Instruct-tail** — emits Plan Mode guidance
 
 ### Agent immediately begins planning
 The spec approval **is** the authorization to start planning — no second confirmation needed.
@@ -141,10 +140,9 @@ Runs `mindspec approve plan <id>`
 ### What the CLI does (single command)
 1. **Validates** — `validate.ValidatePlan()` checks frontmatter, bead sections, verification steps
 2. **Updates frontmatter** — sets `status: Approved`, `approved_at`, `approved_by`
-3. **Creates implementation beads** — creates molecule parent + task beads from `work_chunks`, wires dependencies, writes bead IDs back to `plan.md` frontmatter (best-effort)
-4. **Resolves gate** — resolves `[GATE plan-approve <id>]` so impl beads become ready
-5. **Sets state** — stays `plan` mode (deliberately NOT implement — need to claim a bead first)
-6. **Instruct-tail** — emits guidance telling user to run `mindspec next`
+3. **Closes molecule step** — closes the `plan-approve` step in the spec-lifecycle molecule, which unblocks the `implement` step
+4. **Sets state** — stays `plan` mode (deliberately NOT implement — need to claim a bead first)
+5. **Instruct-tail** — emits guidance telling user to run `mindspec next`
 
 ### The agent then tells the human
 > Run `mindspec next` to claim the first ready bead and enter Implementation Mode.
@@ -158,7 +156,7 @@ Runs `mindspec approve plan <id>`
 
 ### What the CLI does
 1. **Clean tree check** — fails if uncommitted changes
-2. **Query ready work** — searches for molecule children via `bd ready --parent`, falls back to `bd ready`
+2. **Query ready work** — reads `ActiveMolecule` from state, queries `bd ready --parent <mol-id>` for molecule children, falls back to `bd ready` if no molecule
 3. **Display & select** — shows available beads, picks first (or `--pick=N`)
 4. **Claim** — `bd update <id> in_progress`
 5. **Create worktree** — `bd worktree create worktree-<beadID> bead/<beadID>`
@@ -234,8 +232,9 @@ Runs `mindspec approve impl <id>`
 
 ### What the CLI does
 1. **Verifies** review mode is active for the given spec
-2. **Sets state** → `idle`
-3. **Instruct-tail** — emits idle mode guidance
+2. **Closes molecule step** — closes the `review` step in the spec-lifecycle molecule, completing the entire lifecycle
+3. **Sets state** → `idle`
+4. **Instruct-tail** — emits idle mode guidance
 
 The feature is now complete.
 

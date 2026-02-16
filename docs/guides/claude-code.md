@@ -53,7 +53,7 @@ You and the agent fill in the spec: goal, requirements, acceptance criteria, imp
 
 **3. Approve the spec**
 
-Type `/spec-approve`. This validates the spec, updates its frontmatter to `APPROVED`, creates a spec bead, generates a context pack, and transitions to Plan Mode.
+Type `/spec-approve`. This validates the spec, updates its frontmatter to `APPROVED`, closes the spec-approve molecule step, generates a context pack, and transitions to Plan Mode.
 
 **4. Draft the plan**
 
@@ -61,7 +61,7 @@ The agent reviews domain docs and ADRs, then creates `docs/specs/001-my-feature/
 
 **5. Approve the plan**
 
-Type `/plan-approve`. This validates the plan, updates frontmatter, creates implementation beads with wired dependencies, and transitions toward Implementation Mode.
+Type `/plan-approve`. This validates the plan, updates frontmatter, closes the plan-approve molecule step (unblocking the implement step), and transitions toward Implementation Mode.
 
 **6. Claim work**
 

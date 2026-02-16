@@ -18,7 +18,7 @@ Discuss user-facing value and how to validate it. Spec Mode is intentionally **i
 
 ### Output
 
-A **Spec Bead** (parent bead in Beads) containing:
+A specification containing:
 
 - Problem statement and target user outcome
 - Acceptance criteria and validation plan (manual + automated where applicable)
@@ -60,7 +60,7 @@ To leave Spec Mode, the spec must:
 
 ### Objective
 
-Turn an approved spec bead into bounded, executable work chunks.
+Turn an approved spec into bounded, executable work chunks.
 
 ### Required Review
 
@@ -123,7 +123,7 @@ If the planner detects that an accepted ADR blocks progress or is unfit:
 ### Forbidden Actions
 
 - Writing implementation code
-- Widening scope beyond the spec bead's defined user value
+- Widening scope beyond the spec's defined user value
 
 ### Exit Gate
 

@@ -20,7 +20,7 @@ Turn the approved spec into bounded, executable work chunks (implementation bead
 ## Permitted Actions
 
 - Create/edit `docs/specs/{{.ActiveSpec}}/plan.md`
-- Create implementation beads in Beads (`bd create`)
+- Define implementation beads as work chunks in the plan (the spec-lifecycle formula creates the molecule at spec-init; implementation beads are tracked via the molecule's step mapping)
 - Propose new ADRs if divergence detected (`mindspec adr create --supersedes <old-id>`)
 - Update documentation to clarify scope
 

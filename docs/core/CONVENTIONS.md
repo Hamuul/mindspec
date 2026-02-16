@@ -76,7 +76,7 @@ docs/specs/NNN-slug/
    bead_ids: [beads-xxx, beads-yyy]
    adr_citations: [ADR-NNNN]
    ```
-4. **On approval** — Create/confirm implementation beads in Beads and write bead IDs back into `plan.md`.
+4. **On approval** — The `plan-approve` molecule step is closed, unblocking the `implement` step. Implementation beads are tracked via the molecule's step mapping in state.
 
 Frontmatter is the **single source of truth** for plan status. No separate approval section at the bottom.
 
@@ -109,16 +109,7 @@ Bead titles use bracketed prefixes for idempotent lookup and convention enforcem
 - **Spec beads**: `[SPEC <spec-id>] <title>` — e.g., `[SPEC 006-validate] Workflow Validation`
 - **Impl beads**: `[IMPL <spec-id>.<chunk-id>] <chunk-title>` — e.g., `[IMPL 007-beads-tooling.1] bdcli wrapper`
 
-`mindspec bead spec` and `mindspec bead plan` create beads using these conventions. The bracket prefix enables reliable search-based idempotency.
-
-### Gate Title Conventions
-
-Human gates use the `[GATE ...]` prefix for idempotent lookup:
-
-- **Spec approval gate**: `[GATE spec-approve <spec-id>]` — child of the spec bead. Resolved by `mindspec approve spec`.
-- **Plan approval gate**: `[GATE plan-approve <spec-id>]` — child of the molecule parent. Resolved by `mindspec approve plan`.
-
-Gates control `bd ready` visibility: implementation beads depend on the plan gate, which depends on the spec gate. Until both gates are resolved, `bd ready` will not show impl beads.
+The bracket prefix enables reliable search-based idempotency. Beads are created automatically by the spec-lifecycle formula when `mindspec spec-init` is run.
 
 ### Structured Descriptions
 
@@ -147,25 +138,20 @@ work_chunks:
 
 Each chunk has a stable `id` (integer), `title`, `scope`, `verify` (list), and `depends_on` (list of chunk IDs).
 
-### Molecule-Based Plan Decomposition
+### Spec-Lifecycle Formula
 
-Plans are decomposed into **Beads molecules**. `mindspec bead plan` creates:
+The entire spec lifecycle is orchestrated by a **beads formula** (`.beads/formulas/spec-lifecycle.formula.toml`). When `mindspec spec-init` runs, it pours this formula via `bd mol pour spec-lifecycle --var spec_id=<id>`, creating a molecule with 6 steps:
 
-1. A **molecule parent** (epic type) with title `[PLAN <spec-id>] Plan decomposition`
-2. **Task children** per work chunk with title `[IMPL <spec-id>.<chunk-id>] <title>`
-3. **Dependencies** wired between children based on `depends_on`
+1. `spec` — Write the specification
+2. `spec-approve` — Human approval gate (depends on `spec`)
+3. `plan` — Write the plan (depends on `spec-approve`)
+4. `plan-approve` — Human approval gate (depends on `plan`)
+5. `implement` — Execute implementation beads (depends on `plan-approve`)
+6. `review` — Human review gate (depends on `implement`)
 
-The molecule parent ID and per-chunk bead IDs are written back to the plan frontmatter under `generated`:
+The molecule ID and step-to-bead-ID mapping are stored in `.mindspec/state.json` as `activeMolecule` and `stepMapping`. Approval commands (`mindspec approve spec/plan/impl`) close the corresponding molecule step, which automatically unblocks downstream steps via beads' native dependency enforcement.
 
-```yaml
-generated:
-  mol_parent_id: beads-xxx
-  bead_ids:
-    "1": beads-abc
-    "2": beads-def
-```
-
-`mindspec next` queries ready children within the molecule via `bd ready --parent <mol-parent-id>`. `mindspec complete` uses the molecule parent to determine state advancement (next ready child, blocked children, or all done).
+`mindspec next` reads `activeMolecule` from state and queries ready children via `bd ready --parent <mol-id>`. `mindspec complete` uses the molecule to determine state advancement (next ready child, blocked children, or all done).
 
 ### Worktree Lifecycle
 
@@ -265,9 +251,18 @@ Use stable Markdown header anchors for deterministic section retrieval:
 Schema:
 ```json
 {
-  "mode": "idle|spec|plan|implement",
+  "mode": "idle|spec|plan|implement|review",
   "activeSpec": "004-instruct",
   "activeBead": "beads-xxx",
+  "activeMolecule": "beads-mol-xxx",
+  "stepMapping": {
+    "spec": "beads-aaa",
+    "spec-approve": "beads-bbb",
+    "plan": "beads-ccc",
+    "plan-approve": "beads-ddd",
+    "implement": "beads-eee",
+    "review": "beads-fff"
+  },
   "lastUpdated": "2026-02-12T10:00:00Z"
 }
 ```
@@ -281,9 +276,9 @@ The primary interface is the Go CLI binary. Key commands:
 - `mindspec context pack <spec-id>`: Generate context for an agent session
 - `mindspec state set|show`: Manage workflow state (ADR-0005)
 - `mindspec instruct`: Emit mode-appropriate operating guidance (ADR-0003)
-- `mindspec bead spec|plan|worktree|hygiene`: Beads lifecycle tooling (Spec 007)
+- `mindspec bead hygiene`: Workset hygiene audit (Spec 007)
 - `mindspec validate spec|plan|docs`: Check artifact quality (Spec 006)
-- `mindspec approve spec|plan <id>`: Validate, update frontmatter, resolve gate, set state, emit instruct (Spec 008b)
+- `mindspec approve spec|plan|impl <id>`: Validate, update frontmatter, close molecule step, set state, emit instruct (Spec 008b, 009)
 - `mindspec next`: Select and claim next ready work (Spec 005)
 - `mindspec complete`: Close bead, remove worktree, advance state (Spec 008)
 
