@@ -1,20 +1,32 @@
-# AgentMind — Real-Time AI Agent Visualization
+# AgentMind — AI Agent Observability
 
-AgentMind renders your AI agent's activity as an interactive 3D force-directed graph with a starfield aesthetic. Agents, tools, MCP servers, data sources, and LLM endpoints appear as nodes; calls between them appear as animated edges — all updating in real time.
+AgentMind is a real-time observability dashboard for AI coding agents. It combines a 3D activity graph with token consumption tracking, cost estimation, tool analytics, and session benchmarking — all from standard OpenTelemetry data.
 
-## What You'll See
+## What You Get
 
-A 3D constellation where each node type has a distinct color:
+**3D Activity Graph** — Agents, tools, MCP servers, data sources, and LLM endpoints rendered as an interactive force-directed constellation with a starfield aesthetic. Edges animate on activity, nodes scale with usage.
 
-| Node Type | What It Represents |
-|:----------|:-------------------|
-| `agent` | An AI agent (Claude Code, Codex, custom) |
-| `tool` | A tool the agent calls (file read, web search, etc.) |
-| `mcp_server` | An MCP server providing tools |
-| `data_source` | A file, database, or external data source |
-| `llm_endpoint` | The LLM API being called |
+**Token & Cost Tracking** — Input tokens, output tokens, cache reads, and cache creation tokens tracked per model. Estimated USD cost aggregated in real time. Cache hit rate calculated automatically.
 
-Edges represent calls between nodes. Thicker edges indicate higher call frequency. The HUD shows live metrics: events/sec, active nodes, total edges.
+**Tool & MCP Analytics** — Every tool call and MCP server interaction counted and categorized. The UI shows frequency histograms so you can see which tools dominate a session.
+
+**Model Statistics** — Per-model breakdown of API calls, token usage, and cost. Supports multi-model sessions (e.g., Opus for planning, Haiku for quick lookups).
+
+**Session Recording & Replay** — Capture full sessions as NDJSON files. Replay at 0.5x to 50x speed, or instant. Filter replay by lifecycle phase.
+
+**Benchmarking** — Compare agentic workflows head-to-head with automated A/B/C testing, pairwise delta reporting, and AI-driven qualitative analysis.
+
+## Node Types
+
+| Node Type | Color | What It Represents |
+|:----------|:------|:-------------------|
+| `agent` | Teal/Cyan | An AI agent (Claude Code, Codex, custom) |
+| `tool` | Green | A tool the agent calls (file read, web search, etc.) |
+| `mcp_server` | Purple | An MCP server providing tools |
+| `data_source` | Orange | A file, database, or external data source |
+| `llm_endpoint` | Yellow | The LLM API being called |
+
+Edges represent calls between nodes: `model_call` (LLM requests with token counts), `tool_call`, `mcp_call`, `retrieval`, `write`, and `spawn` (agent hierarchy).
 
 ## Quick Start (< 2 minutes)
 
@@ -66,9 +78,61 @@ Point the standard OpenTelemetry environment variables to `http://localhost:4318
 
 Navigate to [http://localhost:8420](http://localhost:8420) in your browser. Activity appears as your agent starts working.
 
+## What the UI Shows
+
+### Live HUD Metrics
+
+The heads-up display in the top-right corner shows:
+
+| Metric | What It Means |
+|:-------|:-------------|
+| Events/sec | Live telemetry ingestion rate |
+| Errors | Parse/processing error count |
+| Avg latency | Response time in milliseconds |
+| Nodes | Active nodes in the graph |
+| Edges | Active connections between nodes |
+| Sampling | Whether auto-sampling is active (kicks in at 100+ events/sec) |
+
+### Detail Cards
+
+Click any node or edge to see its detail card:
+
+- **Agent nodes**: API call count, cumulative tokens (in/out), estimated cost
+- **Tool nodes**: Call count, category (retrieval/write/generic)
+- **MCP server nodes**: Call frequency, connected tools
+- **LLM endpoint nodes**: Per-model token breakdown, cost
+- **Edges**: Call count, input/output token counts for model calls
+
+### Recording Dashboard
+
+When a session completes or you save a recording, the dashboard shows:
+
+- Session duration
+- Total events, nodes, and edges
+- Cumulative token usage (input, output, cache read, cache create)
+- Estimated cost in USD
+- Tool call histogram with relative frequency bars
+- MCP server call counts
+
+## Token & Cost Metrics
+
+AgentMind collects token and cost data from OTLP metrics:
+
+| Metric | Source |
+|:-------|:-------|
+| Input tokens | `claude_code.token.usage` (type: input) |
+| Output tokens | `claude_code.token.usage` (type: output) |
+| Cache read tokens | `claude_code.token.usage` (type: cacheRead) |
+| Cache creation tokens | `claude_code.token.usage` (type: cacheCreation) |
+| Cost (USD) | `claude_code.cost.usage` |
+
+All metrics are aggregated per model, so you can see exactly how much each model variant contributes to token usage and cost in a multi-model session.
+
+**Cache hit rate** is calculated as: `cache_read / (input + cache_read + cache_create)`
+
 ## Recording Sessions
 
-Capture events to an NDJSON file for later replay:
+Capture events to an NDJSON file for later replay or benchmarking:
 
 ```bash
 ./bin/mindspec agentmind serve --output session.ndjson
@@ -92,7 +156,51 @@ Replay a recorded session:
 
 # Replay a specific spec's recording
 ./bin/mindspec agentmind replay --spec 022-agentmind-viz-mvp
+
+# Filter to a specific lifecycle phase
+./bin/mindspec agentmind replay session.ndjson --phase implement
 ```
+
+Replay accumulates the same metrics as live mode — token counts, cost, tool histograms — so you can analyze completed sessions after the fact.
+
+## Benchmarking
+
+AgentMind includes a benchmarking framework for comparing agentic workflows against each other.
+
+### Setup
+
+```bash
+mindspec bench setup --spec 025-my-feature
+```
+
+This creates three isolated sessions: `no-docs` (baseline without MindSpec docs), `baseline` (with docs but no workflow), and `mindspec` (full MindSpec workflow). Each session runs in its own git worktree.
+
+### Collect
+
+```bash
+mindspec bench collect --spec 025-my-feature
+```
+
+Runs all three sessions with configurable timeouts, max turns, and auto-retry. Each session's telemetry is recorded as NDJSON.
+
+### Report
+
+```bash
+mindspec bench report --spec 025-my-feature
+```
+
+Generates a comparative report with:
+
+| Metric | What's Compared |
+|:-------|:---------------|
+| API calls | Total LLM requests per session |
+| Input/output tokens | Absolute counts and deltas |
+| Cache hit rate | How efficiently each workflow uses context caching |
+| Cost (USD) | Estimated spend per session, per model |
+| Output/input ratio | How "chatty" the agent is relative to context consumed |
+| Per-model breakdown | Token and cost deltas for each model variant |
+
+Reports are available in table format (human-readable) and JSON (programmatic). N-way comparison supports 3+ sessions side-by-side.
 
 ## Customizing Agent Labels
 
@@ -110,13 +218,11 @@ Multiple agents can send telemetry to the same AgentMind instance. Each agent ap
 
 | Control | Action |
 |:--------|:-------|
-| **Click** node or edge | Show detail card |
-| **Search** field | Filter nodes by name |
+| **Click** node or edge | Show detail card with metrics |
+| **Search** field | Filter nodes by name, type, or ID |
 | **Pause/Resume** button | Freeze/unfreeze the graph |
 | **Camera Reset** button | Reset the 3D camera position |
 | **Save Recording** button | Download events as NDJSON |
-
-The HUD in the top-right shows live metrics: events per second, active node count, and total edge count.
 
 ## Server Options
 
@@ -131,8 +237,17 @@ The HUD in the top-right shows live metrics: events per second, active node coun
 
 AgentMind runs as a single process with three components:
 
-1. **OTLP/HTTP receiver** on `:4318` — accepts standard OpenTelemetry trace/metric/log data
-2. **WebSocket server** — pushes events to connected browsers in real time
-3. **Three.js frontend** — renders a force-directed 3D graph in the browser
+1. **OTLP/HTTP receiver** on `:4318` — accepts standard OpenTelemetry log and metric data
+2. **WebSocket server** — pushes graph updates and stats to connected browsers (~500ms intervals)
+3. **Three.js frontend** — renders a force-directed 3D graph with real-time metric overlays
 
-Performance caps: 500 nodes, 2000 edges, auto-sampling kicks in at 100+ events/sec.
+Performance caps: 500 nodes, 2000 edges, auto-sampling at 100+ events/sec.
+
+### What Gets Collected
+
+| OTLP Endpoint | Events |
+|:--------------|:-------|
+| `/v1/logs` | API requests, tool calls, tool results, MCP calls |
+| `/v1/metrics` | Token usage (input, output, cache read, cache create), cost (USD) |
+
+Events are normalized into graph nodes and edges, with metrics aggregated per node for the detail cards and dashboard.

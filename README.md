@@ -2,11 +2,18 @@
 
 **See what your AI agent is thinking. Then structure how it works.**
 
-MindSpec is a CLI framework with two capabilities: **AgentMind**, a real-time 3D visualization of AI agent activity, and a **spec-driven development workflow** that structures how agents move from idea to implementation.
+MindSpec is a CLI framework with two capabilities: **AgentMind**, a real-time observability dashboard for AI agent activity, and a **spec-driven development workflow** that structures how agents move from idea to implementation.
 
-## AgentMind — Real-Time Agent Visualization
+## AgentMind — AI Agent Observability
 
-AgentMind renders your AI agent's activity as an interactive 3D force-directed graph. Agents, tools, MCP servers, and data sources appear as nodes; calls between them appear as edges — all updating in real time.
+AgentMind gives you real-time visibility into what your AI agent is doing, what it's spending, and how efficiently it's working.
+
+- **3D Activity Graph** — Agents, tools, MCP servers, and LLM endpoints rendered as an interactive force-directed constellation, updating live
+- **Token & Cost Tracking** — Input tokens, output tokens, cache reads, cache creation tokens, and estimated USD cost — broken down per model
+- **Tool & MCP Analytics** — Every tool call and MCP server interaction counted and categorized, with frequency histograms
+- **Model Statistics** — Per-model breakdown of API calls, token usage, and cost across multi-model sessions
+- **Session Recording & Replay** — Capture full sessions as NDJSON, replay at any speed, filter by lifecycle phase
+- **Benchmarking** — Compare agentic workflows side-by-side with automated A/B/C testing, delta reporting, and qualitative analysis
 
 <!-- TODO: Add screenshot or GIF -->
 
@@ -100,12 +107,14 @@ Bounded contexts reduce ambiguity. Specs declare impacted domains. Context packs
 
 ## CLI Reference
 
-### AgentMind
+### AgentMind & Observability
 
 | Command | Description |
 |:--------|:------------|
-| `mindspec agentmind serve` | Start OTLP receiver + web UI for real-time visualization |
-| `mindspec agentmind replay <file>` | Replay a recorded NDJSON session |
+| `mindspec agentmind serve` | Start OTLP receiver + web UI (tokens, cost, tool analytics, 3D graph) |
+| `mindspec agentmind replay <file>` | Replay a recorded NDJSON session at any speed |
+| `mindspec bench setup\|collect\|report` | A/B/C benchmark agent workflows with comparative reporting |
+| `mindspec trace summary <file>` | Summarize NDJSON trace events |
 
 ### Workflow
 
@@ -135,13 +144,6 @@ Bounded contexts reduce ambiguity. Specs declare impacted domains. Context packs
 | `mindspec init` | Bootstrap project structure |
 | `mindspec spec-init <id>` | Create new specification |
 | `mindspec doctor` | Project health checks |
-
-### Observability
-
-| Command | Description |
-|:--------|:------------|
-| `mindspec trace summary <file>` | Summarize NDJSON trace events |
-| `mindspec bench setup\|collect\|report` | Benchmark agent sessions |
 
 ## Project Structure
 
