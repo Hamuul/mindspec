@@ -175,7 +175,7 @@ All resolved via experimentation with `bd mol pour` on 2026-02-16:
 
 ## Approval
 
-- **Status**: DRAFT
-- **Approved By**: —
-- **Approval Date**: —
-- **Notes**: —
+- **Status**: APPROVED
+- **Approved By**: user
+- **Approval Date**: 2026-02-16
+- **Notes**: Approved via mindspec approve spec
