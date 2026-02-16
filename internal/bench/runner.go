@@ -27,8 +27,7 @@ type RunConfig struct {
 	SkipQualitative bool
 	SkipCommit      bool
 
-	Parallel     bool   // Run all sessions concurrently
-	OTLPEndpoint string // External OTLP endpoint (skip per-session collectors)
+	Parallel bool // Run all sessions concurrently
 
 	Stdout io.Writer
 }
@@ -146,13 +145,6 @@ Follow the MindSpec workflow:
 		}
 	}
 
-	// When using an external OTLP endpoint, override all session ports
-	if cfg.OTLPEndpoint != "" {
-		for _, def := range sessions {
-			def.ExternalOTLP = cfg.OTLPEndpoint
-		}
-	}
-
 	// Run sessions with retry-based auto-approve
 	ctx := context.Background()
 	results := make([]*SessionResult, len(sessions))
@@ -199,25 +191,20 @@ Follow the MindSpec workflow:
 		}
 	}
 
-	// Generate N-way quantitative report (skip when using external OTLP — no local JSONL)
+	// Generate N-way quantitative report from local JSONL files
+	fmt.Fprintln(cfg.Stdout, "\nGenerating quantitative report...")
 	var quantReport string
-	if cfg.OTLPEndpoint != "" {
-		fmt.Fprintln(cfg.Stdout, "\nSkipping quantitative report (telemetry sent to external OTLP endpoint)")
-		quantReport = "(telemetry sent to external OTLP endpoint — no local session data)\n"
-	} else {
-		fmt.Fprintln(cfg.Stdout, "\nGenerating quantitative report...")
-		var parsedSessions []*Session
-		sessionLabels := []string{"no-docs", "baseline", "mindspec"}
-		for i, r := range results {
-			s, err := ParseSession(r.JSONLPath, sessionLabels[i])
-			if err != nil {
-				return fmt.Errorf("parsing session %s: %w", r.Label, err)
-			}
-			parsedSessions = append(parsedSessions, s)
+	var parsedSessions []*Session
+	sessionLabels := []string{"no-docs", "baseline", "mindspec"}
+	for i, r := range results {
+		s, err := ParseSession(r.JSONLPath, sessionLabels[i])
+		if err != nil {
+			return fmt.Errorf("parsing session %s: %w", r.Label, err)
 		}
-		multiReport := CompareN(parsedSessions)
-		quantReport = FormatTableN(multiReport)
+		parsedSessions = append(parsedSessions, s)
 	}
+	multiReport := CompareN(parsedSessions)
+	quantReport = FormatTableN(multiReport)
 
 	// Collect plans and diffs
 	fmt.Fprintln(cfg.Stdout, "Collecting diffs and plans...")
@@ -295,12 +282,9 @@ func checkPrerequisites(cfg *RunConfig) error {
 		}
 	}
 
-	// Check ports (skip when using external OTLP endpoint)
-	if cfg.OTLPEndpoint == "" {
-		for _, port := range []int{portA, portB, portC} {
-			if err := CheckPortFree(port); err != nil {
-				errors = append(errors, err.Error())
-			}
+	for _, port := range []int{portA, portB, portC} {
+		if err := CheckPortFree(port); err != nil {
+			errors = append(errors, err.Error())
 		}
 	}
 

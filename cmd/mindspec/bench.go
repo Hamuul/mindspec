@@ -163,8 +163,6 @@ comparative benchmark report.
 		}
 
 		parallel, _ := cmd.Flags().GetBool("parallel")
-		otlpEndpoint, _ := cmd.Flags().GetString("otlp-endpoint")
-
 		maxRetries, _ := cmd.Flags().GetInt("max-retries")
 
 		cfg := &bench.RunConfig{
@@ -179,7 +177,6 @@ comparative benchmark report.
 			SkipQualitative: skipQual,
 			SkipCommit:      skipCommit,
 			Parallel:        parallel,
-			OTLPEndpoint:    otlpEndpoint,
 			Stdout:          os.Stdout,
 		}
 
@@ -226,7 +223,6 @@ func init() {
 	benchRunCmd.Flags().Bool("skip-qualitative", false, "Skip qualitative analysis (quantitative only)")
 	benchRunCmd.Flags().Bool("skip-commit", false, "Don't commit results to docs/specs/")
 	benchRunCmd.Flags().Bool("parallel", false, "Run all sessions concurrently")
-	benchRunCmd.Flags().String("otlp-endpoint", "", "Send all sessions to an external OTLP endpoint (skip per-session collectors)")
 	benchRunCmd.Flags().Int("max-retries", 3, "Max auto-approve retry attempts per session")
 
 	benchCmd.AddCommand(benchSetupCmd)
