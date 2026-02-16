@@ -88,12 +88,13 @@ Equivalent Codex settings:
 
 ```toml
 [otel]
-exporter = { "otlp-http" = { endpoint = "http://localhost:4318", protocol = "json" } }
+exporter = { "otlp-http" = { endpoint = "http://localhost:4318/v1/logs", protocol = "json" } }
 trace_exporter = "none"
 log_user_prompt = false
 ```
 
 By default, this keeps `otel.log_user_prompt = false` so prompt text is redacted in telemetry unless you explicitly opt in.
+Codex expects the full OTLP logs path, so the endpoint includes `/v1/logs`.
 
 #### Any OTLP-Compatible Agent
 
@@ -154,6 +155,7 @@ AgentMind collects token and cost data from OTLP metrics:
 All metrics are aggregated per model, so you can see exactly how much each model variant contributes to token usage and cost in a multi-model session.
 
 Codex OTEL aliases such as `codex.api_request`, `codex.token.usage`, and `codex.cost.usage` are normalized into the same model/token pathways used by Claude telemetry.
+Codex `codex.sse_event` records with `event.kind=response.web_search_call.completed` are normalized into `WebSearch` tool-call edges.
 
 **Cache hit rate** is calculated as: `cache_read / (input + cache_read + cache_create)`
 

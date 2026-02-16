@@ -3,6 +3,7 @@ package viz
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -125,8 +126,11 @@ func NormalizeEvent(e bench.CollectedEvent) ([]NodeUpsert, []EdgeEvent) {
 			Attributes: apiCallAttributes(e.Data, model),
 		})
 
-	case isToolEvent(e.Event):
+	case isToolEvent(e.Event), isCodexSSEToolEvent(e.Event, e.Data):
 		toolName := firstString(e.Data, "tool_name", "tool.name", "name")
+		if toolName == "" {
+			toolName, _ = codexSSEToolName(e.Event, e.Data)
+		}
 		if toolName == "" {
 			return nil, nil
 		}
@@ -154,7 +158,7 @@ func NormalizeEvent(e bench.CollectedEvent) ([]NodeUpsert, []EdgeEvent) {
 			status = "error"
 		}
 
-		attrs := safeMeta(e.Data, "tool_name", "tool.name", "name", "duration_ms", "status")
+		attrs := safeMeta(e.Data, "tool_name", "tool.name", "name", "duration_ms", "status", "event.kind", "event_kind")
 		attrs["tool_name"] = toolName
 		attrs["tool_category"] = string(toolCategory)
 		attrs["event"] = e.Event
@@ -330,6 +334,28 @@ func isMCPCallEvent(eventName string) bool {
 	return isEventName(eventName, "mcp_call")
 }
 
+func isCodexSSEToolEvent(eventName string, data map[string]any) bool {
+	_, ok := codexSSEToolName(eventName, data)
+	return ok
+}
+
+func codexSSEToolName(eventName string, data map[string]any) (string, bool) {
+	if !isEventName(eventName, "sse_event") {
+		return "", false
+	}
+	kind := firstString(data, "event.kind", "event_kind", "kind")
+	switch {
+	case strings.HasPrefix(kind, "response.web_search_call."):
+		// Emit one tool-call edge when the web-search call completes.
+		if strings.HasSuffix(kind, ".completed") {
+			return "WebSearch", true
+		}
+		return "", false
+	default:
+		return "", false
+	}
+}
+
 func isTokenUsageMetricEvent(eventName string) bool {
 	return isEventName(eventName, "token.usage")
 }
@@ -492,6 +518,11 @@ func parseDuration(data map[string]any) time.Duration {
 	}
 	if ms, ok := data["duration_ms"].(int64); ok {
 		return time.Duration(ms) * time.Millisecond
+	}
+	if ms, ok := data["duration_ms"].(string); ok {
+		if n, err := strconv.ParseFloat(strings.TrimSpace(ms), 64); err == nil {
+			return time.Duration(n * float64(time.Millisecond))
+		}
 	}
 	return 0
 }

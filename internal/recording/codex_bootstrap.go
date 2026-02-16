@@ -30,7 +30,7 @@ func DefaultCodexConfigPath(homeDir string) string {
 func EnsureCodexOTLP(configPath string, force bool) (CodexOTLPResult, error) {
 	result := CodexOTLPResult{
 		ConfigPath:       configPath,
-		ExpectedEndpoint: fmt.Sprintf("http://localhost:%d", defaultRecordingPort),
+		ExpectedEndpoint: fmt.Sprintf("http://localhost:%d/v1/logs", defaultRecordingPort),
 	}
 
 	content, err := readIfExists(configPath)

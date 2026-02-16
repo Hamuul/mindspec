@@ -643,6 +643,52 @@ func TestNormalizeCodexToolCallAlias(t *testing.T) {
 	}
 }
 
+func TestNormalizeCodexSSEWebSearchCompletedAsToolCall(t *testing.T) {
+	e := bench.CollectedEvent{
+		TS:    "2026-02-16T17:43:27.954Z",
+		Event: "codex.sse_event",
+		Data: map[string]any{
+			"event.kind":  "response.web_search_call.completed",
+			"duration_ms": "2165",
+		},
+	}
+
+	nodes, edges := NormalizeEvent(e)
+	if len(nodes) != 2 {
+		t.Fatalf("expected 2 nodes (agent + tool), got %d", len(nodes))
+	}
+	if len(edges) != 1 {
+		t.Fatalf("expected 1 tool_call edge, got %d", len(edges))
+	}
+	if edges[0].Type != EdgeToolCall {
+		t.Fatalf("edge type = %s, want tool_call", edges[0].Type)
+	}
+	if edges[0].Src != "agent:codex" {
+		t.Fatalf("edge src = %s, want agent:codex", edges[0].Src)
+	}
+	if edges[0].Dst != "tool:WebSearch" {
+		t.Fatalf("edge dst = %s, want tool:WebSearch", edges[0].Dst)
+	}
+	if edges[0].Attributes["tool_name"] != "WebSearch" {
+		t.Fatalf("tool_name = %v, want WebSearch", edges[0].Attributes["tool_name"])
+	}
+}
+
+func TestNormalizeCodexSSEWebSearchInProgressIgnored(t *testing.T) {
+	e := bench.CollectedEvent{
+		TS:    "2026-02-16T17:43:25.752Z",
+		Event: "codex.sse_event",
+		Data: map[string]any{
+			"event.kind": "response.web_search_call.in_progress",
+		},
+	}
+
+	nodes, edges := NormalizeEvent(e)
+	if len(nodes) != 0 || len(edges) != 0 {
+		t.Fatalf("expected no graph changes for in_progress, got nodes=%d edges=%d", len(nodes), len(edges))
+	}
+}
+
 func TestNormalizeCodexTokenMetricCreatesModelEdge(t *testing.T) {
 	e := bench.CollectedEvent{
 		TS:    "2026-02-14T12:00:00Z",

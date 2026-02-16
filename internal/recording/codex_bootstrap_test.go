@@ -29,7 +29,7 @@ func TestEnsureCodexOTLPFreshAndIdempotent(t *testing.T) {
 	got := string(raw)
 
 	assertContainsLine(t, got, `[otel]`)
-	assertContainsLine(t, got, `exporter = { "otlp-http" = { endpoint = "http://localhost:4318", protocol = "json" } }`)
+	assertContainsLine(t, got, `exporter = { "otlp-http" = { endpoint = "http://localhost:4318/v1/logs", protocol = "json" } }`)
 	assertContainsLine(t, got, `trace_exporter = "none"`)
 	assertContainsLine(t, got, `log_user_prompt = false`)
 	assertNotContainsLine(t, got, `[otel.exporter."otlp-http"]`)
@@ -83,7 +83,7 @@ func TestEnsureCodexOTLPMergesExistingConfig(t *testing.T) {
 	assertContainsLine(t, got, `[model]`)
 	assertContainsLine(t, got, `provider = "openai"`)
 	assertContainsLine(t, got, `environment = "prod"`)
-	assertContainsLine(t, got, `exporter = { "otlp-http" = { endpoint = "http://localhost:4318", protocol = "json" } }`)
+	assertContainsLine(t, got, `exporter = { "otlp-http" = { endpoint = "http://localhost:4318/v1/logs", protocol = "json" } }`)
 	assertContainsLine(t, got, `trace_exporter = "none"`)
 	assertContainsLine(t, got, `log_user_prompt = false`)
 }
@@ -156,7 +156,7 @@ func TestEnsureCodexOTLPConflictWithForce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertContainsLine(t, string(raw), `exporter = { "otlp-http" = { endpoint = "http://localhost:4318", protocol = "json" } }`)
+	assertContainsLine(t, string(raw), `exporter = { "otlp-http" = { endpoint = "http://localhost:4318/v1/logs", protocol = "json" } }`)
 }
 
 func TestEnsureCodexOTLPMigratesLegacyExporterSection(t *testing.T) {
@@ -169,7 +169,7 @@ func TestEnsureCodexOTLPMigratesLegacyExporterSection(t *testing.T) {
 		`log_user_prompt = false`,
 		``,
 		`[otel.exporter."otlp-http"]`,
-		`endpoint = "http://localhost:4318"`,
+		`endpoint = "http://localhost:4318/v1/logs"`,
 		``,
 	}, "\n")
 	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
@@ -195,7 +195,7 @@ func TestEnsureCodexOTLPMigratesLegacyExporterSection(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := string(raw)
-	assertContainsLine(t, got, `exporter = { "otlp-http" = { endpoint = "http://localhost:4318", protocol = "json" } }`)
+	assertContainsLine(t, got, `exporter = { "otlp-http" = { endpoint = "http://localhost:4318/v1/logs", protocol = "json" } }`)
 	assertNotContainsLine(t, got, `[otel.exporter."otlp-http"]`)
 }
 
