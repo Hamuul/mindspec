@@ -147,10 +147,10 @@ func RenderJSON(ctx *Context) (string, error) {
 func gatesForMode(mode string) []string {
 	switch mode {
 	case state.ModeSpec:
-		return []string{"Spec approval (use /spec-approve)"}
+		return []string{"Spec approval (run mindspec approve spec <id>)"}
 	case state.ModePlan:
 		return []string{
-			"Plan approval (use /plan-approve)",
+			"Plan approval (run mindspec approve plan <id>)",
 			"ADR divergence (stop and inform user if ADR blocks progress)",
 		}
 	case state.ModeImplement:
@@ -160,7 +160,7 @@ func gatesForMode(mode string) []string {
 		}
 	case state.ModeReview:
 		return []string{
-			"Implementation approval (use /impl-approve)",
+			"Implementation approval (run mindspec approve impl <id>)",
 		}
 	default:
 		return []string{}

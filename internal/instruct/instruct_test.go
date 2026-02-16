@@ -75,8 +75,8 @@ func TestRender_IdleMode(t *testing.T) {
 	if !strings.Contains(output, "001-skeleton") {
 		t.Error("expected available specs to be listed")
 	}
-	if !strings.Contains(output, "/spec-init") {
-		t.Error("expected /spec-init suggestion")
+	if !strings.Contains(output, "mindspec spec-init") {
+		t.Error("expected mindspec spec-init suggestion")
 	}
 }
 
@@ -103,8 +103,8 @@ func TestRender_SpecMode(t *testing.T) {
 	if !strings.Contains(output, "Forbidden Actions") {
 		t.Error("expected forbidden actions section")
 	}
-	if !strings.Contains(output, "/spec-approve") {
-		t.Error("expected /spec-approve gate")
+	if !strings.Contains(output, "mindspec approve spec") {
+		t.Error("expected mindspec approve spec gate")
 	}
 }
 
@@ -128,8 +128,16 @@ func TestRender_PlanMode(t *testing.T) {
 	if !strings.Contains(output, "Required Review") {
 		t.Error("expected required review section")
 	}
-	if !strings.Contains(output, "/plan-approve") {
-		t.Error("expected /plan-approve gate")
+	if !strings.Contains(output, "mindspec approve plan") {
+		t.Error("expected mindspec approve plan gate")
+	}
+
+	// Plan is approved in test fixture → should show post-approval guidance
+	if !ctx.PlanApproved {
+		t.Error("expected PlanApproved=true for approved plan")
+	}
+	if !strings.Contains(output, "mindspec next") {
+		t.Error("expected 'mindspec next' guidance for approved plan")
 	}
 }
 

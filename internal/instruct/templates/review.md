@@ -32,11 +32,11 @@ All implementation beads are complete. Present the work for human review before 
 
 ## Human Gate
 
-- **Implementation approval**: Use `/impl-approve` when the human accepts the implementation
+- **Implementation approval**: Run `mindspec approve impl <id>` when the human accepts the implementation
 
 ## Next Action
 
-Read the spec's acceptance criteria, verify each one, and present the review summary to the human. When they approve, run `/impl-approve`.
+Read the spec's acceptance criteria, verify each one, and present the review summary to the human. When they approve, run `mindspec approve impl {{.ActiveSpec}}`.
 
 ## Session Close
 

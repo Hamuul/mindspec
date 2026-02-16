@@ -34,11 +34,11 @@ A spec containing:
 
 ## Human Gates
 
-- **Spec approval**: Use `/spec-approve` when the spec is ready for planning
+- **Spec approval**: Run `mindspec approve spec <id>` when the spec is ready for planning
 
 ## Next Action
 
-Complete the spec at `docs/specs/{{.ActiveSpec}}/spec.md`, then run `/spec-approve`.
+Complete the spec at `docs/specs/{{.ActiveSpec}}/spec.md`, then run `mindspec approve spec {{.ActiveSpec}}`.
 
 ## Session Close
 
