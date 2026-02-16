@@ -12,7 +12,7 @@ Mindspec maintains `internal/bead/` — effectively a Go SDK for the `bd` CLI. E
 
 - **gate.go** has been broken since inception (`bd create --type=gate` was never valid — gates are formula step primitives, not standalone issue types). Silent fallbacks hid the failure, meaning approval gates were never enforced.
 - **propagate.go** reimplements parent-child status propagation that beads molecules handle natively.
-- **plan.go** manually creates molecules by calling `Create()` + `DepAdd()` in loops — `bd pour` does this in one command.
+- **plan.go** manually creates molecules by calling `Create()` + `DepAdd()` in loops — `bd mol pour` does this in one command.
 - **next/beads.go** reimplements molecule-aware work discovery — `bd ready --parent` already does this.
 
 ### What mindspec actually owns
@@ -36,7 +36,7 @@ Beads provides everything mindspec needs for work tracking:
 | Mindspec needs | Beads provides |
 |---|---|
 | Lifecycle phases with gates | Formulas with `type = "human"` steps + `needs` dependencies |
-| Molecule creation from plan | `bd pour <formula> --var spec_id=<id>` |
+| Molecule creation from plan | `bd mol pour <formula> --var spec_id=<id>` |
 | Work discovery | `bd ready` (respects `needs` dependencies) |
 | Approval enforcement | Step dependencies — downstream steps blocked until predecessor closes |
 | Parent-child status sync | Molecule parent auto-progression |
@@ -47,7 +47,7 @@ Beads provides everything mindspec needs for work tracking:
 
 - **bead**: `internal/bead/` — delete gate.go, spec.go, plan.go, propagate.go; reduce bdcli.go to a minimal `bd` exec helper (JSON parsing, error handling) used only where multi-step orchestration genuinely benefits from Go
 - **approve**: `internal/approve/*.go` — simplify to: validate artifact → update frontmatter → `bd close <step-id>` → transition state
-- **specinit**: `internal/specinit/specinit.go` — add `bd pour spec-lifecycle --var spec_id=<id>`
+- **specinit**: `internal/specinit/specinit.go` — add `bd mol pour spec-lifecycle --var spec_id=<id>`
 - **complete**: `internal/complete/complete.go` — simplify to `bd close` + `bd ready` + state transition
 - **next**: `internal/next/beads.go` — replace molecule-aware discovery with `bd ready`
 - **state**: `internal/state/state.go` — add `ActiveMolecule` field
@@ -69,7 +69,7 @@ Beads provides everything mindspec needs for work tracking:
    - `plan-approve` (human, needs: plan) — human approval gate
    - `implement` (task, needs: plan-approve) — implementation work
    - `review` (human, needs: implement) — final review
-2. `mindspec spec-init` pours the formula: `bd pour spec-lifecycle --var spec_id=<id> --json`
+2. `mindspec spec-init` pours the formula: `bd mol pour spec-lifecycle --var spec_id=<id> --json`
 3. Store molecule root ID in `.mindspec/state.json` (`activeMolecule` field)
 4. `mindspec approve spec` = validate spec + update frontmatter + `bd close <spec-approve-step>` + set state to plan
 5. `mindspec approve plan` = validate plan + update frontmatter + `bd close <plan-approve-step>` + set state to implement
@@ -79,7 +79,7 @@ Beads provides everything mindspec needs for work tracking:
 ### Delete the wrapper layer
 
 8. Delete `internal/bead/gate.go` — replaced by molecule step dependencies
-9. Delete `internal/bead/spec.go` — replaced by `bd pour` at spec-init
+9. Delete `internal/bead/spec.go` — replaced by `bd mol pour` at spec-init
 10. Delete `internal/bead/plan.go` — plan decomposition moves to approve/plan.go as direct `bd` calls (or replaced entirely by formula sub-steps if plan work chunks map to formula variables)
 11. Delete `internal/bead/propagate.go` — molecules handle this natively
 12. Reduce `internal/bead/bdcli.go` — keep only: `Preflight()`, `RunBD()` (generic exec helper with JSON parsing), and the `BeadInfo` struct. Delete all single-purpose wrapper functions.
@@ -109,7 +109,7 @@ Beads provides everything mindspec needs for work tracking:
 - `internal/approve/impl.go` — simplify
 - `internal/complete/complete.go` — simplify
 - `internal/next/beads.go` — simplify
-- `internal/specinit/specinit.go` — add `bd pour`
+- `internal/specinit/specinit.go` — add `bd mol pour`
 - `internal/state/state.go` — add `ActiveMolecule`
 - `internal/instruct/worktree.go` — inline bd call
 - Test files for all changed packages
@@ -136,9 +136,9 @@ Beads provides everything mindspec needs for work tracking:
 ## Acceptance Criteria
 
 - [ ] `.beads/formulas/spec-lifecycle.formula.toml` exists with 6 steps and correct `needs` chain
-- [ ] `mindspec spec-init 999-test` creates a beads molecule via `bd pour`; `bd mol list --json` confirms it
+- [ ] `mindspec spec-init 999-test` creates a beads molecule via `bd mol pour`; `bd mol list --json` confirms it
 - [ ] `bd dep tree <mol-id>` shows 6 steps with correct dependency chain
-- [ ] `mindspec approve spec 999-test` closes the spec-approve step; `bd ready` shows the plan step
+- [ ] `mindspec approve spec 999-test` closes the spec-approve step; `bd ready --mol <mol-id>` shows the plan step
 - [ ] `mindspec approve plan 999-test` fails if spec-approve step is still open
 - [ ] `mindspec approve plan 999-test` succeeds after spec approval, closes plan-approve step
 - [ ] `.mindspec/state.json` contains `activeMolecule` after spec-init
@@ -153,16 +153,25 @@ Beads provides everything mindspec needs for work tracking:
 
 - `mindspec spec-init 999-test && bd mol list --json`: molecule exists with spec-lifecycle formula
 - `bd dep tree <mol-id>`: shows step hierarchy with human gate steps
-- `mindspec approve spec 999-test && bd ready`: plan step appears in ready queue
+- `mindspec approve spec 999-test && bd ready --mol <mol-id>`: plan step appears in ready steps
 - `mindspec approve plan 999-test` (before spec approval): non-zero exit
 - `wc -l internal/bead/*.go`: significant line count reduction (target: <200 lines total, down from ~800+)
 - `make test`: all tests pass
 
 ## Open Questions
 
-- [ ] Does `bd pour` return the molecule root ID in `--json` output? Need to verify the exact output format before implementation.
-- [ ] What is the step ID format — `<mol-id>.1`, `<mol-id>.2`? Are step numbers assigned in formula declaration order?
-- [ ] Can the formula define sub-steps for implementation work (one step per plan work chunk), or should implementation remain a single step with mindspec managing granularity via separate beads issues?
+All resolved via experimentation with `bd mol pour` on 2026-02-16:
+
+- [x] **`bd mol pour` returns molecule root ID in JSON.** The `--json` output includes `new_epic_id` (the molecule root) and `id_mapping` (a map from formula step IDs like `test-lifecycle.spec-approve` to assigned beads IDs like `mindspec-mol-9dc`). The `id_mapping` is the key — mindspec can look up step IDs by formula step name.
+- [x] **Step IDs are hash-based, not sequential.** Steps get hash IDs (e.g., `mindspec-mol-9dc`), NOT `<mol-id>.1` format. The `id_mapping` in the pour output maps formula step IDs to assigned IDs. Mindspec must store this mapping (or the molecule root ID and query via `bd mol show`).
+- [x] **Implementation sub-steps: use separate beads issues.** The formula defines a single `implement` step. Plan work chunks should be created as separate beads issues (children of the implement step) after plan approval, not as formula steps. Formulas are templates — they can't know the work chunks at definition time.
+
+### Additional findings
+
+- **CLI is `bd mol pour`, not `bd mol pour`** — the docs were inaccurate; `pour` is a subcommand of `mol`.
+- **`bd ready` excludes molecule children by default.** Use `bd ready --mol <mol-id>` to see ready steps within a molecule. This is important — mindspec's `next` command must use `--mol` to discover work within the active molecule.
+- **Dependency enforcement works correctly.** Closing a step unblocks the next step in the `needs` chain. `bd blocked` confirms the chain.
+- **The cook step is optional for pour.** `bd mol pour` accepts formula names directly and cooks inline — no separate `bd cook` step needed.
 
 ## Approval
 
