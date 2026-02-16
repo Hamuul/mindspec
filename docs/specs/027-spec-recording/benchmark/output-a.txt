@@ -1,0 +1,19 @@
+The plan is ready for your review. Here's a summary:
+
+**17 files** (5 new, 12 modified) organized in 5 phases:
+
+1. **Foundation**: New `internal/recording/` package with manifest management, lifecycle marker emission, OTLP bootstrap, and collector lifecycle (detached background process via hidden `mindspec record collect` subcommand)
+
+2. **CLI**: `mindspec record status` and `mindspec record stop` commands
+
+3. **Workflow Integration**: Best-effort hooks in spec-init (start), approve spec/plan (phase markers), next (bead start), complete (bead complete), approve impl (end + stop)
+
+4. **Replay Integration**: `--spec` and `--phase` flags on `mindspec agentmind replay`
+
+5. **SessionStart Health Check**: Auto-restart dead collectors in `PersistentPreRunE`
+
+Key design decisions:
+- Recording calls are **best-effort with warnings** — never block workflow
+- **Graceful no-op** when no recording dir exists (pre-existing specs work fine)
+- **Detached process** via `SysProcAttr{Setsid: true}` survives session boundaries
+- Integration at **CLI layer**, keeping business logic testable

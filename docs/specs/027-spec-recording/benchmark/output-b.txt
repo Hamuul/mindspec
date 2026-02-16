@@ -1,0 +1,8 @@
+The plan is ready for your review. It covers:
+
+- **New `internal/recording/` package** with 6 files: manifest CRUD, lifecycle markers, OTLP bootstrap, collector lifecycle management, high-level orchestration, and phase filtering
+- **1 new CLI file** (`cmd/mindspec/record.go`) with `status`, `stop`, and hidden `collect` subcommands
+- **7 existing files modified** for workflow integration (specinit, 3 approve files, next, complete, viz)
+- **Minimal change to `bench/collector.go`** (add `appendMode` field, 5 lines)
+- **Detached background process** approach for the collector (survives session boundaries)
+- **All recording operations are best-effort** — never fail the primary workflow command

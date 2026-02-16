@@ -1,0 +1,35 @@
+Implementation is complete. Here's a summary of what was built:
+
+## Summary: 027-spec-recording Implementation
+
+### New Package: `internal/recording/`
+- **manifest.go** — `Manifest` struct with phases/beads tracking, `ReadManifest`/`WriteManifest`, path helpers
+- **bootstrap.go** — `EnsureOTLP(root)` writes OTLP env vars to `.claude/settings.local.json` (port 4319, idempotent, preserves existing)
+- **collector.go** — `StartCollector` launches `mindspec record collect` as a detached subprocess; `StopCollector` sends SIGTERM
+- **health.go** — `HealthCheck` probes PID liveness; `RestartIfDead` restarts dead collectors
+- **markers.go** — `EmitMarker`, `EmitPhaseMarker`, `EmitBeadMarker` append lifecycle events to `events.ndjson`
+- **recording.go** — `StartRecording`/`StopRecording` orchestrate the full lifecycle; `UpdatePhase`/`AddBeadToPhase` manage manifest state
+- **recording_test.go** — 12 tests covering manifest round-trip, markers, bootstrap idempotency, phase updates
+
+### Workflow Integration (all best-effort, graceful no-op on pre-existing specs)
+- **spec-init** → `EnsureOTLP` + `StartRecording` + `lifecycle.start` marker
+- **approve spec** → `lifecycle.phase` (spec→plan) marker + manifest update
+- **approve plan** → `lifecycle.phase` (plan→plan-approved) marker + manifest update
+- **next** → `lifecycle.bead.start` marker + manifest bead tracking
+- **complete** → `lifecycle.bead.complete` marker
+- **approve impl** → `lifecycle.end` marker + `StopRecording`
+
+### CLI Commands
+- `mindspec record status [--spec ID]` — collector health, event count, phase, elapsed
+- `mindspec record stop [--spec ID]` — graceful shutdown
+- `mindspec record health` (hidden) — SessionStart hook restarts dead collectors
+- `mindspec record collect` (hidden) — background collector process target
+
+### Replay Enhancements
+- `--spec <id>` flag resolves to `docs/specs/<id>/recording/events.ndjson`
+- `--phase <name>` flag filters events to the matching lifecycle phase
+
+### Infrastructure
+- `bench.NewCollectorAppend` for append-mode file opens (restart without data loss)
+- `workspace.RecordingDir` path helper
+- SessionStart hook chains `record health` before `instruct`

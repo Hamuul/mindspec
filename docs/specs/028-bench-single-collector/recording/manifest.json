@@ -1,0 +1,13 @@
+{
+  "spec_id": "028-bench-single-collector",
+  "started_at": "2026-02-16T09:48:42Z",
+  "collector_pid": 33645,
+  "collector_port": 4319,
+  "status": "recording",
+  "phases": [
+    {
+      "phase": "spec",
+      "started_at": "2026-02-16T09:48:42Z"
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{"ts":"2026-02-16T00:23:05.683762Z","event":"command.start","run_id":"5551e5c100a8b2a1","data":{"args":[],"command":"show"}}
+{"ts":"2026-02-16T00:23:05.685054Z","event":"command.end","run_id":"5551e5c100a8b2a1","dur_ms":1.813292,"data":{"command":"show"}}
+{"ts":"2026-02-16T00:23:06.797469Z","event":"command.start","run_id":"c8fe3a682f4663da","data":{"args":[],"command":"instruct"}}
+{"ts":"2026-02-16T00:23:06.862514Z","event":"instruct.render","run_id":"c8fe3a682f4663da","spec_id":"027-spec-recording","tokens":1104,"data":{"mode":"spec","template":"spec.md","tokens_total":1104}}
+{"ts":"2026-02-16T00:23:06.862586Z","event":"command.end","run_id":"c8fe3a682f4663da","dur_ms":65.166333,"data":{"command":"instruct"}}
+{"ts":"2026-02-16T00:32:42.648398Z","event":"command.start","run_id":"71f681b0dec4aade","data":{"args":[],"command":"show"}}
+{"ts":"2026-02-16T00:32:42.649226Z","event":"command.end","run_id":"71f681b0dec4aade","dur_ms":1.381208,"data":{"command":"show"}}
+{"ts":"2026-02-16T00:32:42.661568Z","event":"command.start","run_id":"87fd05d22381e9ac","data":{"args":[],"command":"instruct"}}
+{"ts":"2026-02-16T00:32:42.773115Z","event":"instruct.render","run_id":"87fd05d22381e9ac","spec_id":"027-spec-recording","tokens":1104,"data":{"mode":"spec","template":"spec.md","tokens_total":1104}}
+{"ts":"2026-02-16T00:32:42.773299Z","event":"command.end","run_id":"87fd05d22381e9ac","dur_ms":111.7875,"data":{"command":"instruct"}}
+{"ts":"2026-02-16T08:26:52.331599Z","event":"command.start","run_id":"426ee389a668a4bd","data":{"args":[],"command":"show"}}
+{"ts":"2026-02-16T08:26:52.332357Z","event":"command.end","run_id":"426ee389a668a4bd","dur_ms":1.206792,"data":{"command":"show"}}
+{"ts":"2026-02-16T08:26:55.925666Z","event":"command.start","run_id":"0bb72ba9e3873dd7","data":{"args":["027-spec-recording"],"command":"spec"}}
+{"ts":"2026-02-16T08:26:56.121689Z","event":"bead.cli","run_id":"0bb72ba9e3873dd7","dur_ms":186.390291,"data":{"args":["search","[SPEC 027-spec-recording]","--json","--status=open"],"ok":true,"op":"search"}}
+{"ts":"2026-02-16T08:26:56.265912Z","event":"bead.cli","run_id":"0bb72ba9e3873dd7","dur_ms":144.082417,"data":{"args":["create","[SPEC 027-spec-recording] Automatic Per-Spec Agent Telemetry Recording","--description=Summary: Automatically capture agent telemetry for the full lifecycle of every spec — from `spec-init` through `impl-approve...\nSpec: docs/specs/027-spec-recording/spec.md\nDomains: workflow, viz, observability","--type=feature","--priority=2","--json"],"ok":true,"op":"create"}}
+{"ts":"2026-02-16T08:26:56.37007Z","event":"bead.cli","run_id":"0bb72ba9e3873dd7","dur_ms":104.020209,"data":{"args":["search","[GATE spec-approve 027-spec-recording]","--json","--status=open"],"ok":true,"op":"search"}}
+{"ts":"2026-02-16T08:26:56.619492Z","event":"state.transition","run_id":"0bb72ba9e3873dd7","spec_id":"027-spec-recording","data":{"from":"spec","spec_id":"027-spec-recording","to":"plan"}}
+{"ts":"2026-02-16T08:26:56.727378Z","event":"command.end","run_id":"0bb72ba9e3873dd7","dur_ms":801.781542,"data":{"command":"spec"}}
+{"ts":"2026-02-16T08:30:58.981881Z","event":"command.start","run_id":"f4a09ed043b842d1","data":{"args":[],"command":"show"}}
+{"ts":"2026-02-16T08:30:58.983165Z","event":"command.end","run_id":"f4a09ed043b842d1","dur_ms":1.612166,"data":{"command":"show"}}
+{"ts":"2026-02-16T08:31:02.492546Z","event":"command.start","run_id":"29ffa4f9e6ac4eda","data":{"args":["027-spec-recording"],"command":"plan"}}
+{"ts":"2026-02-16T08:31:29.797274Z","event":"command.start","run_id":"961e54a7c284a756","data":{"args":["027-spec-recording"],"command":"plan"}}
+{"ts":"2026-02-16T08:31:53.372761Z","event":"command.start","run_id":"7d14976b7655d72a","data":{"args":["027-spec-recording"],"command":"plan"}}
+{"ts":"2026-02-16T08:32:59.485764Z","event":"command.start","run_id":"072c8d73f7fbed29","data":{"args":["027-spec-recording"],"command":"plan"}}
+{"ts":"2026-02-16T08:33:00.137815Z","event":"state.transition","run_id":"072c8d73f7fbed29","spec_id":"027-spec-recording","data":{"from":"plan","spec_id":"027-spec-recording","to":"plan"}}
+{"ts":"2026-02-16T08:33:00.207231Z","event":"command.end","run_id":"072c8d73f7fbed29","dur_ms":721.717916,"data":{"command":"plan"}}
+{"ts":"2026-02-16T08:33:03.976766Z","event":"command.start","run_id":"fa60ca538b0e706f","data":{"args":[],"command":"next"}}
+{"ts":"2026-02-16T08:33:13.739072Z","event":"command.start","run_id":"ff9cf124bb5bb59d","data":{"args":[],"command":"next"}}
+{"ts":"2026-02-16T08:33:13.857376Z","event":"bead.cli","run_id":"ff9cf124bb5bb59d","dur_ms":108.049959,"data":{"args":["search","[PLAN ","--json","--status=open"],"ok":true,"op":"search"}}
+{"ts":"2026-02-16T08:33:14.078133Z","event":"bead.cli","run_id":"ff9cf124bb5bb59d","dur_ms":115.736083,"data":{"args":["update","mindspec-vmo","--status=in_progress"],"ok":true,"op":"update"}}
+{"ts":"2026-02-16T08:33:14.186823Z","event":"bead.cli","run_id":"ff9cf124bb5bb59d","dur_ms":108.599792,"data":{"args":["worktree","list","--json"],"ok":true,"op":"worktree-list"}}
+{"ts":"2026-02-16T08:33:14.475407Z","event":"bead.cli","run_id":"ff9cf124bb5bb59d","dur_ms":288.477625,"data":{"args":["worktree","create","worktree-mindspec-vmo","--branch=bead/mindspec-vmo"],"ok":true,"op":"worktree-create"}}
+{"ts":"2026-02-16T08:33:14.586723Z","event":"bead.cli","run_id":"ff9cf124bb5bb59d","dur_ms":111.271208,"data":{"args":["worktree","list","--json"],"ok":true,"op":"worktree-list"}}
+{"ts":"2026-02-16T08:33:14.587067Z","event":"state.transition","run_id":"ff9cf124bb5bb59d","data":{"from":"plan","spec_id":"","to":"implement"}}
+{"ts":"2026-02-16T08:33:19.702098Z","event":"command.start","run_id":"84d276c2be129305","data":{"args":[],"command":"show"}}
+{"ts":"2026-02-16T08:33:19.702922Z","event":"command.end","run_id":"84d276c2be129305","dur_ms":1.196625,"data":{"command":"show"}}
+{"ts":"2026-02-16T08:34:03.060857Z","event":"command.start","run_id":"3f9846e2397ba79d","data":{"args":[],"command":"next"}}
+{"ts":"2026-02-16T08:34:19.296357Z","event":"command.start","run_id":"cc46c18cd60a3088","data":{"args":[],"command":"next"}}
+{"ts":"2026-02-16T08:34:19.421247Z","event":"bead.cli","run_id":"cc46c18cd60a3088","dur_ms":110.263083,"data":{"args":["search","[PLAN ","--json","--status=open"],"ok":true,"op":"search"}}
+{"ts":"2026-02-16T08:34:19.641143Z","event":"bead.cli","run_id":"cc46c18cd60a3088","dur_ms":114.999792,"data":{"args":["update","mindspec-rl6","--status=in_progress"],"ok":true,"op":"update"}}
+{"ts":"2026-02-16T08:34:19.753536Z","event":"bead.cli","run_id":"cc46c18cd60a3088","dur_ms":112.333209,"data":{"args":["worktree","list","--json"],"ok":true,"op":"worktree-list"}}
+{"ts":"2026-02-16T08:34:20.010677Z","event":"bead.cli","run_id":"cc46c18cd60a3088","dur_ms":257.025084,"data":{"args":["worktree","create","worktree-mindspec-rl6","--branch=bead/mindspec-rl6"],"ok":true,"op":"worktree-create"}}
+{"ts":"2026-02-16T08:34:20.121448Z","event":"bead.cli","run_id":"cc46c18cd60a3088","dur_ms":110.694625,"data":{"args":["worktree","list","--json"],"ok":true,"op":"worktree-list"}}
+{"ts":"2026-02-16T08:34:20.225772Z","event":"bead.cli","run_id":"cc46c18cd60a3088","dur_ms":103.810542,"data":{"args":["search","[PLAN 027-spec-recording]","--json"],"ok":true,"op":"search-any"}}
+{"ts":"2026-02-16T08:34:20.343341Z","event":"bead.cli","run_id":"cc46c18cd60a3088","dur_ms":117.502542,"data":{"args":["search","[SPEC 027-spec-recording]","--json"],"ok":true,"op":"search-any"}}
+{"ts":"2026-02-16T08:34:20.34403Z","event":"state.transition","run_id":"cc46c18cd60a3088","spec_id":"027-spec-recording","data":{"from":"plan","spec_id":"027-spec-recording","to":"plan"}}
+{"ts":"2026-02-16T08:34:20.409026Z","event":"command.end","run_id":"cc46c18cd60a3088","dur_ms":1112.882042,"data":{"command":"next"}}
+{"ts":"2026-02-16T08:42:54.947187Z","event":"command.start","run_id":"7e6aa05a969ce757","data":{"args":[],"command":"status"}}
+{"ts":"2026-02-16T08:42:54.9485Z","event":"command.end","run_id":"7e6aa05a969ce757","dur_ms":1.394666,"data":{"command":"status"}}
+{"ts":"2026-02-16T08:42:59.56482Z","event":"command.start","run_id":"52d1cbb34c2a0718","data":{"args":[],"command":"health"}}
+{"ts":"2026-02-16T08:42:59.56499Z","event":"command.end","run_id":"52d1cbb34c2a0718","dur_ms":0.265292,"data":{"command":"health"}}
