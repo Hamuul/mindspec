@@ -102,6 +102,51 @@ func TestRunSetsState(t *testing.T) {
 	}
 }
 
+func TestRunRejectsInvalidSpecID(t *testing.T) {
+	root := setupTestRoot(t)
+
+	tests := []struct {
+		id      string
+		wantErr bool
+	}{
+		// Valid
+		{"010-my-feature", false},
+		{"001-a", false},
+		{"0001-long-number", false},
+		{"999-three-part-slug", false},
+
+		// Invalid: no numeric prefix
+		{"my-feature", true},
+		// Invalid: fewer than 3 digits
+		{"01-short", true},
+		{"1-x", true},
+		// Invalid: no slug after number
+		{"010", true},
+		// Invalid: uppercase
+		{"010-My-Feature", true},
+		// Invalid: spaces
+		{"010-my feature", true},
+		// Invalid: slug starts with digit
+		{"010-1bad", true},
+		// Invalid: trailing hyphen
+		{"010-bad-", true},
+		// Invalid: double hyphen
+		{"010-bad--slug", true},
+		// Invalid: free-form text
+		{"a feature to allow something", true},
+	}
+
+	for _, tt := range tests {
+		err := Run(root, tt.id, "")
+		if tt.wantErr && err == nil {
+			t.Errorf("Run(%q): expected error, got nil", tt.id)
+		}
+		if !tt.wantErr && err != nil {
+			t.Errorf("Run(%q): unexpected error: %v", tt.id, err)
+		}
+	}
+}
+
 func TestTitleFromSlug(t *testing.T) {
 	tests := []struct {
 		input string

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/mindspec/mindspec/internal/recording"
@@ -11,10 +12,17 @@ import (
 	"github.com/mindspec/mindspec/internal/workspace"
 )
 
+// specIDPattern matches NNN-kebab-case where NNN is 3+ digits.
+var specIDPattern = regexp.MustCompile(`^\d{3,}-[a-z][a-z0-9]*(-[a-z0-9]+)*$`)
+
 // Run creates a new spec directory with a spec.md from the template,
 // then sets state to spec mode. If title is empty, it is derived from
 // the slug portion of specID (e.g. "010-spec-init-cmd" → "Spec Init Cmd").
 func Run(root, specID, title string) error {
+	if !specIDPattern.MatchString(specID) {
+		return fmt.Errorf("invalid spec ID %q: must match NNN-kebab-case (e.g. 010-my-feature)", specID)
+	}
+
 	specDir := workspace.SpecDir(root, specID)
 	if _, err := os.Stat(specDir); err == nil {
 		return fmt.Errorf("spec directory already exists: %s", specDir)
