@@ -1,0 +1,23 @@
+{
+  "spec_id": "031-agentmind-codex-support",
+  "started_at": "2026-02-16T13:14:01Z",
+  "collector_pid": 0,
+  "collector_port": 0,
+  "status": "recording",
+  "phases": [
+    {
+      "phase": "spec",
+      "started_at": "2026-02-16T13:14:01Z",
+      "ended_at": "2026-02-16T13:31:50Z"
+    },
+    {
+      "phase": "plan",
+      "started_at": "2026-02-16T13:31:50Z",
+      "ended_at": "2026-02-16T13:40:41Z"
+    },
+    {
+      "phase": "plan-approved",
+      "started_at": "2026-02-16T13:40:41Z"
+    }
+  ]
+}

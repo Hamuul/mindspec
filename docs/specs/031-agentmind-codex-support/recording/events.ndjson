@@ -1,0 +1,2 @@
+{"ts":"2026-02-16T13:31:50.7123Z","event":"lifecycle.phase","data":{"from":"spec","spec_id":"031-agentmind-codex-support","to":"plan"}}
+{"ts":"2026-02-16T13:40:41.885845Z","event":"lifecycle.phase","data":{"from":"plan","spec_id":"031-agentmind-codex-support","to":"plan-approved"}}
