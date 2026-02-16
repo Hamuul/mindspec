@@ -28,6 +28,8 @@ Idle ──→ Spec Mode ──human gate──→ Plan Mode ──human gate─
 
 **Review Mode** — Validate against the original spec's acceptance criteria. Human approves to return to idle.
 
+Documentation stays current because the system won't let you skip it — beads can't close without doc-sync, architecture decisions are tracked as ADRs that plans must cite, and every spec produces versioned artifacts that persist alongside the code.
+
 ---
 
 ## AgentMind — AI Agent Observability UI
