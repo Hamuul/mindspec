@@ -525,7 +525,6 @@ function elasticOut(t) {
 
 // Always-on label state (must be before animate loop)
 const LABEL_CONFIG = {
-  TOP_N: 8,
   RECALC_MS: 2000,
   FADE_MS: 500,
   FONT_SIZE: 3,
@@ -1482,23 +1481,21 @@ window.addEventListener('keydown', (e) => {
 // ─── Always-On Node Labels ──────────────────────────────────
 
 function updateActiveLabels() {
-  // Rank nodes by activityCount
-  const ranked = Array.from(state.nodes.values())
-    .filter(n => !n.stale)
-    .sort((a, b) => (b.activityCount || 0) - (a.activityCount || 0))
-    .slice(0, LABEL_CONFIG.TOP_N);
+  // Label all nodes (sorted by activity for consistent iteration order)
+  const allNodes = Array.from(state.nodes.values())
+    .sort((a, b) => (b.activityCount || 0) - (a.activityCount || 0));
 
-  const topIds = new Set(ranked.map(n => n.id));
+  const currentIds = new Set(allNodes.map(n => n.id));
 
-  // Fade out labels for nodes no longer in top N
+  // Fade out labels for nodes that no longer exist
   for (const [nodeId, label] of activeLabels) {
-    if (!topIds.has(nodeId) && !label.fadeStart) {
+    if (!currentIds.has(nodeId) && !label.fadeStart) {
       label.fadeStart = performance.now();
     }
   }
 
-  // Add labels for new top-N nodes
-  for (const node of ranked) {
+  // Add labels for new nodes
+  for (const node of allNodes) {
     if (activeLabels.has(node.id)) {
       // Re-entered top N — cancel fade
       const existing = activeLabels.get(node.id);
