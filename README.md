@@ -28,6 +28,8 @@ Idle ──→ Spec Mode ──human gate──→ Plan Mode ──human gate─
 
 **Review Mode** — Validate against the original spec's acceptance criteria. Human approves to return to idle.
 
+The work graph is tracked by [Beads](https://github.com/steveyegge/beads), a git-native issue tracker that survives across sessions without external services. Human approval gates are modeled as dependency-blocking beads — when you approve a plan, the gate resolves and implementation beads become ready. This makes the human-in-the-loop workflow a natural part of the dependency graph rather than a special case.
+
 Documentation stays current because the system won't let you skip it — beads can't close without doc-sync, architecture decisions are tracked as ADRs that plans must cite, and every spec produces versioned artifacts that persist alongside the code.
 
 ---
