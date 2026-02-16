@@ -2,12 +2,15 @@ package bench
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -33,10 +36,11 @@ type SessionResult struct {
 	TimedOut   bool
 }
 
-// RunSession executes a single benchmark session: starts an in-process OTLP
-// collector (unless ExternalOTLP is set), runs claude -p in the worktree, and
-// captures output.
-func RunSession(ctx context.Context, cfg *RunConfig, def *SessionDef, wtPath string) (*SessionResult, error) {
+// RunSessionWithRetries executes a benchmark session with retry-based auto-approve.
+// After each attempt, it checks whether implementation code was produced. If not,
+// it auto-approves any pending workflow gates (spec/plan for session C) and retries
+// with an escalating prompt directing the agent to implement.
+func RunSessionWithRetries(ctx context.Context, cfg *RunConfig, def *SessionDef, wtPath string) (*SessionResult, error) {
 	jsonlPath := filepath.Join(cfg.WorkDir, fmt.Sprintf("session-%s.jsonl", def.Label))
 	outputPath := filepath.Join(cfg.WorkDir, fmt.Sprintf("output-%s.txt", def.Label))
 
@@ -46,7 +50,9 @@ func RunSession(ctx context.Context, cfg *RunConfig, def *SessionDef, wtPath str
 		OutputPath: outputPath,
 	}
 
-	// Start in-process collector (skip if using external OTLP endpoint)
+	baseCommit := getCurrentCommit(wtPath)
+
+	// Start in-process collector for the entire retry loop (skip if using external OTLP)
 	var collectorCancel context.CancelFunc
 	var collectorDone chan error
 	if def.ExternalOTLP == "" {
@@ -65,7 +71,7 @@ func RunSession(ctx context.Context, cfg *RunConfig, def *SessionDef, wtPath str
 		}
 	}
 
-	// Create output file for tee
+	// Create output file (append across retries)
 	outFile, err := os.Create(outputPath)
 	if err != nil {
 		if collectorCancel != nil {
@@ -75,12 +81,6 @@ func RunSession(ctx context.Context, cfg *RunConfig, def *SessionDef, wtPath str
 	}
 	defer outFile.Close()
 
-	// Determine prompt
-	prompt := cfg.Prompt
-	if def.Prompt != "" {
-		prompt = def.Prompt
-	}
-
 	// Build environment — use external endpoint or per-session port
 	var env []string
 	if def.ExternalOTLP != "" {
@@ -89,11 +89,42 @@ func RunSession(ctx context.Context, cfg *RunConfig, def *SessionDef, wtPath str
 		env = buildSessionEnv(def.Port, cfg.WorkDir, def.Label, def.EnableTrace)
 	}
 
-	// Run claude
-	exitCode, timedOut, _ := runClaude(ctx, prompt, wtPath, env,
-		cfg.MaxTurns, cfg.Model, cfg.Timeout, cfg.Stdout, outFile)
-	result.ExitCode = exitCode
-	result.TimedOut = timedOut
+	prompt := def.Prompt
+	if prompt == "" {
+		prompt = cfg.Prompt
+	}
+
+	maxRetries := cfg.MaxRetries
+	if maxRetries <= 0 {
+		maxRetries = 3
+	}
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			fmt.Fprintf(cfg.Stdout, "\n── Retry %d/%d (auto-approve) ──\n\n", attempt, maxRetries)
+			fmt.Fprintf(outFile, "\n\n--- RETRY %d/%d ---\n\n", attempt, maxRetries)
+		}
+
+		exitCode, timedOut, _ := runClaude(ctx, prompt, wtPath, env,
+			cfg.MaxTurns, cfg.Model, cfg.Timeout, cfg.Stdout, outFile)
+		result.ExitCode = exitCode
+		result.TimedOut = timedOut
+
+		// Commit any uncommitted changes
+		commitWorktreeChanges(wtPath, fmt.Sprintf("%s-attempt-%d", def.Label, attempt))
+
+		// Check if implementation code was produced
+		if hasCodeChanges(wtPath, baseCommit) {
+			fmt.Fprintf(cfg.Stdout, "  Implementation detected.\n")
+			break
+		}
+
+		if attempt < maxRetries {
+			fmt.Fprintf(cfg.Stdout, "  No implementation code detected. Auto-approving...\n")
+			autoApprove(def.Label, wtPath, cfg.SpecID)
+			prompt = buildRetryPrompt(def.Label, wtPath, cfg.SpecID, attempt+1)
+		}
+	}
 
 	// Shut down local collector if we started one
 	if collectorCancel != nil {
@@ -110,9 +141,6 @@ func RunSession(ctx context.Context, cfg *RunConfig, def *SessionDef, wtPath str
 			}
 		}
 	}
-
-	// Auto-commit changes in worktree
-	commitWorktreeChanges(wtPath, def.Label)
 
 	return result, nil
 }
@@ -219,4 +247,231 @@ func buildSessionEnvEndpoint(endpoint, workDir, label string, enableTrace bool) 
 		env = append(env, "MINDSPEC_TRACE="+tracePath)
 	}
 	return env
+}
+
+// getCurrentCommit returns the HEAD commit SHA of a worktree.
+func getCurrentCommit(wtPath string) string {
+	cmd := exec.Command("git", "-C", wtPath, "rev-parse", "HEAD")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return trimNewline(string(out))
+}
+
+// hasCodeChanges checks if implementation source files were created since baseCommit.
+func hasCodeChanges(wtPath, baseCommit string) bool {
+	cmd := exec.Command("git", "-C", wtPath, "diff", "--name-only", baseCommit+"..HEAD")
+	out, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+
+	codeExts := regexp.MustCompile(`\.(go|js|ts|html|css|jsx|tsx)$`)
+	excludeDirs := []string{"docs/", ".claude/", ".mindspec/", ".beads/"}
+
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if !codeExts.MatchString(line) {
+			continue
+		}
+		excluded := false
+		for _, dir := range excludeDirs {
+			if strings.HasPrefix(line, dir) {
+				excluded = true
+				break
+			}
+		}
+		if !excluded {
+			return true
+		}
+	}
+	return false
+}
+
+// autoApprove advances workflow gates between retries.
+func autoApprove(label, wtPath, specID string) {
+	if label != "c" {
+		return // A/B: no state to advance, rely on retry prompt
+	}
+
+	// Read MindSpec state
+	stateData, err := os.ReadFile(filepath.Join(wtPath, ".mindspec", "state.json"))
+	if err != nil {
+		return
+	}
+	var state map[string]string
+	if err := json.Unmarshal(stateData, &state); err != nil {
+		return
+	}
+
+	mode := state["mode"]
+	switch mode {
+	case "spec":
+		// Approve the spec: update frontmatter, advance to plan mode
+		specPath := findSpecFile(wtPath, specID)
+		if specPath != "" {
+			updateFrontmatterApproval(specPath)
+		}
+		writeState(wtPath, "plan", specID, "")
+
+	case "plan":
+		// Approve the plan: update frontmatter, advance to implement mode
+		planPath := filepath.Join(wtPath, "docs", "specs", specID, "plan.md")
+		if _, err := os.Stat(planPath); err == nil {
+			updateFrontmatterApproval(planPath)
+		}
+		writeState(wtPath, "implement", specID, "bench-impl")
+	}
+}
+
+// buildRetryPrompt generates the prompt for a retry attempt.
+func buildRetryPrompt(label, wtPath, specID string, attempt int) string {
+	if label != "c" {
+		// Sessions A/B: escalating implementation prompts
+		if attempt == 1 {
+			return "Your plan is approved. Proceed to implementation. Write all code and tests, then commit your changes."
+		}
+		return "Implementation is required. Write the code now and commit all changes."
+	}
+
+	// Session C: check MindSpec state and give workflow-appropriate prompt
+	stateData, err := os.ReadFile(filepath.Join(wtPath, ".mindspec", "state.json"))
+	if err != nil {
+		return "Continue implementing. Write all remaining code and commit."
+	}
+	var state map[string]string
+	if err := json.Unmarshal(stateData, &state); err != nil {
+		return "Continue implementing. Write all remaining code and commit."
+	}
+
+	switch state["mode"] {
+	case "plan":
+		return fmt.Sprintf("The spec is approved. Create a plan at docs/specs/%s/plan.md, then use /plan-approve to approve it. After approval, implement all code and tests. Commit your changes when complete.", specID)
+	case "implement":
+		return "The plan is approved. Implement all code and tests described in the plan. Commit your changes when complete."
+	default:
+		return "Continue implementing. Write all remaining code and commit."
+	}
+}
+
+// prepareSessionC sets MindSpec state to spec mode so hooks emit spec-mode guidance.
+func prepareSessionC(wtPath, specID string) {
+	stateDir := filepath.Join(wtPath, ".mindspec")
+	os.MkdirAll(stateDir, 0755) //nolint:errcheck
+
+	state := map[string]string{
+		"mode":        "spec",
+		"activeSpec":  specID,
+		"activeBead":  "",
+		"lastUpdated": time.Now().UTC().Format(time.RFC3339),
+	}
+
+	data, _ := json.MarshalIndent(state, "", "  ")
+	data = append(data, '\n')
+	os.WriteFile(filepath.Join(stateDir, "state.json"), data, 0644) //nolint:errcheck
+}
+
+// updateFrontmatterApproval updates a markdown file's YAML frontmatter to set
+// status: Approved and record the approval date.
+func updateFrontmatterApproval(filePath string) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return
+	}
+
+	content := string(data)
+
+	// Replace status field
+	statusRe := regexp.MustCompile(`(?mi)^(\s*(?:-\s+)?\*?\*?Status\*?\*?\s*:\s*).*$`)
+	if statusRe.MatchString(content) {
+		content = statusRe.ReplaceAllString(content, "${1}APPROVED")
+	}
+
+	// Also handle YAML frontmatter status field
+	fmStatusRe := regexp.MustCompile(`(?m)^status:\s*.*$`)
+	if fmStatusRe.MatchString(content) {
+		content = fmStatusRe.ReplaceAllString(content, "status: Approved")
+	}
+
+	// Set approval date in frontmatter
+	approvedAtRe := regexp.MustCompile(`(?m)^approved_at:\s*.*$`)
+	now := time.Now().UTC().Format(time.RFC3339)
+	if approvedAtRe.MatchString(content) {
+		content = approvedAtRe.ReplaceAllString(content, fmt.Sprintf("approved_at: %q", now))
+	}
+
+	approvedByRe := regexp.MustCompile(`(?m)^approved_by:\s*.*$`)
+	if approvedByRe.MatchString(content) {
+		content = approvedByRe.ReplaceAllString(content, "approved_by: bench")
+	}
+
+	// Handle markdown-style approval section
+	mdApprovedBy := regexp.MustCompile(`(?mi)^(\s*-\s+\*\*Approved By\*\*:\s*).*$`)
+	if mdApprovedBy.MatchString(content) {
+		content = mdApprovedBy.ReplaceAllString(content, "${1}bench")
+	}
+	mdApprovedDate := regexp.MustCompile(`(?mi)^(\s*-\s+\*\*Approval Date\*\*:\s*).*$`)
+	if mdApprovedDate.MatchString(content) {
+		content = mdApprovedDate.ReplaceAllString(content, fmt.Sprintf("${1}%s", time.Now().Format("2006-01-02")))
+	}
+
+	os.WriteFile(filePath, []byte(content), 0644) //nolint:errcheck
+}
+
+// writeState writes a MindSpec state.json file.
+func writeState(wtPath, mode, specID, beadID string) {
+	stateDir := filepath.Join(wtPath, ".mindspec")
+	os.MkdirAll(stateDir, 0755) //nolint:errcheck
+
+	state := map[string]string{
+		"mode":        mode,
+		"activeSpec":  specID,
+		"activeBead":  beadID,
+		"lastUpdated": time.Now().UTC().Format(time.RFC3339),
+	}
+
+	data, _ := json.MarshalIndent(state, "", "  ")
+	data = append(data, '\n')
+	os.WriteFile(filepath.Join(stateDir, "state.json"), data, 0644) //nolint:errcheck
+}
+
+// findSpecFile locates the spec.md for a given spec ID in the worktree.
+func findSpecFile(wtPath, specID string) string {
+	// Try the standard location first
+	p := filepath.Join(wtPath, "docs", "specs", specID, "spec.md")
+	if _, err := os.Stat(p); err == nil {
+		return p
+	}
+	// Try without the full slug (e.g., "022" instead of "022-agentmind-viz-mvp")
+	entries, err := os.ReadDir(filepath.Join(wtPath, "docs", "specs"))
+	if err != nil {
+		return ""
+	}
+	prefix := strings.SplitN(specID, "-", 2)[0]
+	for _, e := range entries {
+		if e.IsDir() && strings.HasPrefix(e.Name(), prefix) {
+			p := filepath.Join(wtPath, "docs", "specs", e.Name(), "spec.md")
+			if _, err := os.Stat(p); err == nil {
+				return p
+			}
+		}
+	}
+	return ""
+}
+
+// findSpecRelPath returns the relative path to spec.md from the worktree root.
+func findSpecRelPath(wtPath, specID string) string {
+	abs := findSpecFile(wtPath, specID)
+	if abs == "" {
+		return fmt.Sprintf("docs/specs/%s/spec.md", specID)
+	}
+	rel, err := filepath.Rel(wtPath, abs)
+	if err != nil {
+		return fmt.Sprintf("docs/specs/%s/spec.md", specID)
+	}
+	return rel
 }

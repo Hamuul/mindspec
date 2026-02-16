@@ -17,6 +17,7 @@ type RunConfig struct {
 	Prompt    string
 	Timeout   time.Duration
 	MaxTurns  int
+	MaxRetries int // Auto-approve retry attempts per session (0 = single attempt)
 	Model     string
 	WorkDir   string
 	RepoRoot  string
@@ -64,12 +65,17 @@ func Run(cfg *RunConfig) error {
 		cfg.WorkDir = filepath.Join(os.TempDir(), "mindspec-bench-"+cfg.SpecID)
 	}
 
+	if cfg.MaxRetries <= 0 {
+		cfg.MaxRetries = 3
+	}
+
 	// Print banner
 	fmt.Fprintf(cfg.Stdout, "MindSpec E2E Benchmark\n")
-	fmt.Fprintf(cfg.Stdout, "  Spec:    %s\n", cfg.SpecID)
-	fmt.Fprintf(cfg.Stdout, "  Commit:  %s\n", cfg.BenchCommit)
-	fmt.Fprintf(cfg.Stdout, "  Timeout: %s per session\n", cfg.Timeout)
-	fmt.Fprintf(cfg.Stdout, "  Work:    %s\n\n", cfg.WorkDir)
+	fmt.Fprintf(cfg.Stdout, "  Spec:       %s\n", cfg.SpecID)
+	fmt.Fprintf(cfg.Stdout, "  Commit:     %s\n", cfg.BenchCommit)
+	fmt.Fprintf(cfg.Stdout, "  Timeout:    %s per attempt\n", cfg.Timeout)
+	fmt.Fprintf(cfg.Stdout, "  MaxRetries: %d\n", cfg.MaxRetries)
+	fmt.Fprintf(cfg.Stdout, "  Work:       %s\n\n", cfg.WorkDir)
 
 	// Prerequisites
 	if err := checkPrerequisites(cfg); err != nil {
@@ -119,6 +125,27 @@ func Run(cfg *RunConfig) error {
 		}
 	}
 
+	// Prepare session C: set MindSpec state to spec mode so hooks work
+	wtC := filepath.Join(cfg.WorkDir, "wt-c")
+	prepareSessionC(wtC, cfg.SpecID)
+
+	// Build per-session prompts
+	// Sessions A & B: generic feature prompt (no MindSpec workflow)
+	// Session C: MindSpec workflow prompt directing through spec→plan→implement
+	for _, def := range sessions {
+		if def.Label == "c" {
+			specRelPath := findSpecRelPath(wtC, cfg.SpecID)
+			def.Prompt = fmt.Sprintf(`The specification at %s is ready for review.
+Follow the MindSpec workflow:
+1. Review the spec, then use /spec-approve to approve it
+2. Create a plan at docs/specs/%s/plan.md, then use /plan-approve
+3. Implement all code and tests described in the plan
+4. Commit your changes when complete`, specRelPath, cfg.SpecID)
+		} else {
+			def.Prompt = cfg.Prompt
+		}
+	}
+
 	// When using an external OTLP endpoint, override all session ports
 	if cfg.OTLPEndpoint != "" {
 		for _, def := range sessions {
@@ -126,7 +153,7 @@ func Run(cfg *RunConfig) error {
 		}
 	}
 
-	// Run sessions
+	// Run sessions with retry-based auto-approve
 	ctx := context.Background()
 	results := make([]*SessionResult, len(sessions))
 
@@ -139,7 +166,7 @@ func Run(cfg *RunConfig) error {
 			go func(idx int, d *SessionDef) {
 				defer wg.Done()
 				wtPath := filepath.Join(cfg.WorkDir, "wt-"+d.Label)
-				result, err := RunSession(ctx, cfg, d, wtPath)
+				result, err := RunSessionWithRetries(ctx, cfg, d, wtPath)
 				results[idx] = result
 				errs[idx] = err
 			}(i, def)
@@ -160,7 +187,7 @@ func Run(cfg *RunConfig) error {
 		for i, def := range sessions {
 			fmt.Fprintf(cfg.Stdout, "\n━━━ Session %s (%s, port %d) ━━━\n\n", def.Label, def.Description, def.Port)
 			wtPath := filepath.Join(cfg.WorkDir, "wt-"+def.Label)
-			result, err := RunSession(ctx, cfg, def, wtPath)
+			result, err := RunSessionWithRetries(ctx, cfg, def, wtPath)
 			if err != nil {
 				return fmt.Errorf("session %s: %w", def.Label, err)
 			}
@@ -216,7 +243,7 @@ func Run(cfg *RunConfig) error {
 
 	// Write results
 	fmt.Fprintln(cfg.Stdout, "Writing results...")
-	if err := WriteResults(cfg, results, quantReport, qual, traceSummary); err != nil {
+	if err := WriteResults(cfg, results, quantReport, qual, traceSummary, plans, diffs); err != nil {
 		return fmt.Errorf("writing results: %w", err)
 	}
 
@@ -237,6 +264,8 @@ func Run(cfg *RunConfig) error {
 	if qual != nil && qual.Improvements != "" {
 		fmt.Fprintln(cfg.Stdout, "  improvements.md  — actionable findings from A/B")
 	}
+	fmt.Fprintln(cfg.Stdout, "  plan-{a,b,c}.md  — plan artifacts from each session")
+	fmt.Fprintln(cfg.Stdout, "  diff-{a,b,c}.patch — implementation diffs from each session")
 
 	return nil
 }

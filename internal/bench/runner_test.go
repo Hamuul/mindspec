@@ -364,7 +364,18 @@ func TestWriteResults(t *testing.T) {
 		{Label: "c", JSONLPath: filepath.Join(workDir, "session-c.jsonl"), OutputPath: filepath.Join(workDir, "output-c.txt"), EventCount: 3},
 	}
 
-	err := WriteResults(cfg, results, "quant report", nil, "")
+	plans := map[string]string{
+		"a": "# Plan A\nImplement feature X",
+		"b": "(No plan artifact found for Session B)",
+		"c": "# Plan C\nFull MindSpec plan",
+	}
+	diffs := map[string]string{
+		"a": "diff --git a/foo.go\n+func foo() {}",
+		"b": "",
+		"c": "diff --git a/bar.go\n+func bar() {}",
+	}
+
+	err := WriteResults(cfg, results, "quant report", nil, "", plans, diffs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -381,6 +392,36 @@ func TestWriteResults(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(benchDir, name)); os.IsNotExist(err) {
 			t.Errorf("%s not copied", name)
 		}
+	}
+
+	// Check plan artifacts persisted
+	if data, err := os.ReadFile(filepath.Join(benchDir, "plan-a.md")); err != nil {
+		t.Error("plan-a.md not created")
+	} else if string(data) != plans["a"] {
+		t.Errorf("plan-a.md content mismatch: got %q", string(data))
+	}
+	if _, err := os.Stat(filepath.Join(benchDir, "plan-b.md")); !os.IsNotExist(err) {
+		t.Error("plan-b.md should not be created for missing plan")
+	}
+	if data, err := os.ReadFile(filepath.Join(benchDir, "plan-c.md")); err != nil {
+		t.Error("plan-c.md not created")
+	} else if string(data) != plans["c"] {
+		t.Errorf("plan-c.md content mismatch: got %q", string(data))
+	}
+
+	// Check diff artifacts persisted
+	if data, err := os.ReadFile(filepath.Join(benchDir, "diff-a.patch")); err != nil {
+		t.Error("diff-a.patch not created")
+	} else if string(data) != diffs["a"] {
+		t.Errorf("diff-a.patch content mismatch: got %q", string(data))
+	}
+	if _, err := os.Stat(filepath.Join(benchDir, "diff-b.patch")); !os.IsNotExist(err) {
+		t.Error("diff-b.patch should not be created for empty diff")
+	}
+	if data, err := os.ReadFile(filepath.Join(benchDir, "diff-c.patch")); err != nil {
+		t.Error("diff-c.patch not created")
+	} else if string(data) != diffs["c"] {
+		t.Errorf("diff-c.patch content mismatch: got %q", string(data))
 	}
 }
 
@@ -494,6 +535,84 @@ func TestFormatTableNEmptySessions(t *testing.T) {
 	if FormatTableN(report) != "" {
 		t.Error("FormatTableN should return empty string for empty sessions")
 	}
+}
+
+func TestBuildRetryPrompt(t *testing.T) {
+	// Sessions A/B: escalating prompts
+	p1 := buildRetryPrompt("a", "/tmp", "test-spec", 1)
+	if !strings.Contains(p1, "approved") {
+		t.Error("first retry for A should mention approval")
+	}
+	p2 := buildRetryPrompt("b", "/tmp", "test-spec", 2)
+	if !strings.Contains(p2, "required") {
+		t.Error("second retry for B should escalate")
+	}
+
+	// Session C: state-dependent prompts
+	wtDir := t.TempDir()
+	os.MkdirAll(filepath.Join(wtDir, ".mindspec"), 0755)
+
+	// Plan mode → should mention plan creation
+	os.WriteFile(filepath.Join(wtDir, ".mindspec", "state.json"),
+		[]byte(`{"mode":"plan","activeSpec":"test-spec"}`), 0644)
+	p := buildRetryPrompt("c", wtDir, "test-spec", 1)
+	if !strings.Contains(p, "plan") {
+		t.Error("plan mode retry should mention plan")
+	}
+
+	// Implement mode → should mention implementation
+	os.WriteFile(filepath.Join(wtDir, ".mindspec", "state.json"),
+		[]byte(`{"mode":"implement","activeSpec":"test-spec"}`), 0644)
+	p = buildRetryPrompt("c", wtDir, "test-spec", 1)
+	if !strings.Contains(p, "Implement") {
+		t.Error("implement mode retry should mention implementation")
+	}
+}
+
+func TestAutoApproveSessionC(t *testing.T) {
+	wtDir := t.TempDir()
+	os.MkdirAll(filepath.Join(wtDir, ".mindspec"), 0755)
+	os.MkdirAll(filepath.Join(wtDir, "docs", "specs", "test-spec"), 0755)
+
+	// Write initial state: spec mode
+	os.WriteFile(filepath.Join(wtDir, ".mindspec", "state.json"),
+		[]byte(`{"mode":"spec","activeSpec":"test-spec"}`), 0644)
+
+	// Write a spec with frontmatter
+	os.WriteFile(filepath.Join(wtDir, "docs", "specs", "test-spec", "spec.md"),
+		[]byte("---\nstatus: Draft\napproved_at: \"\"\napproved_by: \"\"\n---\n# Spec\n"), 0644)
+
+	// Auto-approve should advance spec → plan
+	autoApprove("c", wtDir, "test-spec")
+
+	// Check state advanced to plan
+	data, _ := os.ReadFile(filepath.Join(wtDir, ".mindspec", "state.json"))
+	if !strings.Contains(string(data), `"plan"`) {
+		t.Errorf("state should be plan, got: %s", string(data))
+	}
+
+	// Check spec frontmatter was updated
+	specData, _ := os.ReadFile(filepath.Join(wtDir, "docs", "specs", "test-spec", "spec.md"))
+	if !strings.Contains(string(specData), "Approved") {
+		t.Error("spec status should be Approved")
+	}
+
+	// Now write a plan and auto-approve plan → implement
+	os.WriteFile(filepath.Join(wtDir, "docs", "specs", "test-spec", "plan.md"),
+		[]byte("---\nstatus: Draft\napproved_at: \"\"\napproved_by: \"\"\n---\n# Plan\n"), 0644)
+
+	autoApprove("c", wtDir, "test-spec")
+
+	data, _ = os.ReadFile(filepath.Join(wtDir, ".mindspec", "state.json"))
+	if !strings.Contains(string(data), `"implement"`) {
+		t.Errorf("state should be implement, got: %s", string(data))
+	}
+}
+
+func TestAutoApproveNoopForAB(t *testing.T) {
+	// autoApprove should be a no-op for sessions A and B
+	autoApprove("a", "/nonexistent", "test-spec") // should not panic
+	autoApprove("b", "/nonexistent", "test-spec") // should not panic
 }
 
 // Verify N-way backward compat: 2 sessions via bench report still works
