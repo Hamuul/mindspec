@@ -56,6 +56,7 @@ Beads provides everything mindspec needs for work tracking:
 ## ADR Touchpoints
 
 - [ADR-0012](../../adr/ADR-0012.md): Compose with external CLIs, don't wrap them — this spec is the primary implementation of that decision
+- [ADR-0013](../../adr/ADR-0013.md): Use beads formulas for spec lifecycle orchestration — declares the spec lifecycle as a TOML formula rather than imperative Go
 
 ## Requirements
 
