@@ -154,6 +154,8 @@ AgentMind collects token and cost data from OTLP metrics:
 
 All metrics are aggregated per model, so you can see exactly how much each model variant contributes to token usage and cost in a multi-model session.
 
+Codex OTEL aliases such as `codex.api_request`, `codex.token.usage`, and `codex.cost.usage` are normalized into the same model/token pathways used by Claude telemetry.
+
 **Cache hit rate** is calculated as: `cache_read / (input + cache_read + cache_create)`
 
 ## Recording Sessions
