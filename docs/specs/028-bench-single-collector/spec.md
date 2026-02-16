@@ -124,7 +124,7 @@ ADR-0009 explicitly confirms that Claude Code passes `OTEL_RESOURCE_ATTRIBUTES` 
 
 ## Approval
 
-- **Status**: DRAFT
-- **Approved By**: —
-- **Approval Date**: —
-- **Notes**: —
+- **Status**: APPROVED
+- **Approved By**: user
+- **Approval Date**: 2026-02-16
+- **Notes**: Approved via mindspec approve spec
