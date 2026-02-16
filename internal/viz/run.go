@@ -7,12 +7,16 @@ import (
 )
 
 // RunLive creates the full live visualization pipeline and blocks until ctx is cancelled.
-func RunLive(ctx context.Context, otlpPort, uiPort int) error {
+// If outputPath is non-empty, events are also written to an NDJSON file on disk.
+func RunLive(ctx context.Context, otlpPort, uiPort int, outputPath string) error {
 	graph := NewGraph(DefaultGraphConfig())
 	hub := NewHub()
 	go hub.Run(ctx)
 
 	receiver := NewLiveReceiver(otlpPort, graph, hub)
+	if outputPath != "" {
+		receiver.SetOutput(outputPath)
+	}
 
 	server := NewServer(uiPort, hub, graph)
 	server.SetLiveReceiver(receiver)

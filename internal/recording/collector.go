@@ -3,42 +3,21 @@ package recording
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"syscall"
 	"time"
+
+	"github.com/mindspec/mindspec/internal/agentmind"
 )
 
-// StartCollector launches a detached background collector process.
-// It runs `mindspec record collect` as a subprocess that survives session boundaries.
+// StartCollector launches AgentMind as a detached background process
+// to collect OTLP telemetry and write NDJSON to the spec's recording directory.
 func StartCollector(root, specID string) error {
 	eventsPath := EventsPath(root, specID)
-	port := defaultRecordingPort
 
-	// Find mindspec binary
-	binPath, err := findMindspecBinary(root)
+	pid, err := agentmind.AutoStart(root, agentmind.DefaultOTLPPort, agentmind.DefaultUIPort, eventsPath)
 	if err != nil {
-		return fmt.Errorf("finding mindspec binary: %w", err)
+		return fmt.Errorf("starting AgentMind collector: %w", err)
 	}
-
-	cmd := exec.Command(binPath, "record", "collect",
-		"--port", fmt.Sprintf("%d", port),
-		"--output", eventsPath,
-	)
-
-	// Detach: new session, no stdin/stdout/stderr
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	cmd.Stdin = nil
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("starting collector: %w", err)
-	}
-
-	pid := cmd.Process.Pid
-
-	// Release the process so it isn't reaped when we exit
-	cmd.Process.Release() //nolint:errcheck
 
 	// Update manifest with PID and port
 	m, err := ReadManifest(root, specID)
@@ -46,19 +25,16 @@ func StartCollector(root, specID string) error {
 		return fmt.Errorf("reading manifest for PID update: %w", err)
 	}
 	m.CollectorPID = pid
-	m.CollectorPort = port
+	m.CollectorPort = agentmind.DefaultOTLPPort
 	m.Status = "recording"
 	if err := WriteManifest(root, specID, m); err != nil {
 		return fmt.Errorf("writing manifest with PID: %w", err)
 	}
 
-	// Brief wait for collector to start listening
-	time.Sleep(500 * time.Millisecond)
-
 	return nil
 }
 
-// StopCollector sends SIGTERM to the collector process and updates the manifest.
+// StopCollector sends SIGTERM to the AgentMind process and updates the manifest.
 func StopCollector(root, specID string) error {
 	m, err := ReadManifest(root, specID)
 	if err != nil {
@@ -86,21 +62,4 @@ func StopCollector(root, specID string) error {
 	}
 
 	return WriteManifest(root, specID, m)
-}
-
-// findMindspecBinary locates the mindspec binary.
-func findMindspecBinary(root string) (string, error) {
-	// Try ./bin/mindspec relative to root
-	binPath := root + "/bin/mindspec"
-	if _, err := os.Stat(binPath); err == nil {
-		return binPath, nil
-	}
-
-	// Try PATH
-	path, err := exec.LookPath("mindspec")
-	if err == nil {
-		return path, nil
-	}
-
-	return "", fmt.Errorf("mindspec binary not found in %s/bin/ or PATH", root)
 }

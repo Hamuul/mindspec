@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/mindspec/mindspec/internal/agentmind"
 )
 
 // RunConfig holds the configuration for a full benchmark run.
@@ -32,9 +34,8 @@ type RunConfig struct {
 	Stdout io.Writer
 }
 
-// benchCollectorPort is the single OTLP collector port for all bench sessions.
-// Avoids 4318 (AgentMind live viz) and 4319 (per-spec recording collector).
-const benchCollectorPort = 4320
+// agentMindPort is the OTLP port used for bench collection via AgentMind.
+const agentMindPort = agentmind.DefaultOTLPPort
 
 // Run executes the full benchmark pipeline.
 func Run(cfg *RunConfig) error {
@@ -126,22 +127,18 @@ func Run(cfg *RunConfig) error {
 	wtC := filepath.Join(cfg.WorkDir, "wt-c")
 	prepareSessionC(wtC, cfg.SpecID)
 
-	// Start single shared OTLP collector for all sessions
+	// Start AgentMind as OTLP collector for all sessions
 	benchEventsPath := filepath.Join(cfg.WorkDir, "bench-events.jsonl")
-	collector := NewCollector(benchCollectorPort, benchEventsPath)
-	collectorCtx, collectorCancel := context.WithCancel(context.Background())
-	defer collectorCancel()
-
-	collectorDone := make(chan error, 1)
-	go func() {
-		collectorDone <- collector.Run(collectorCtx)
-	}()
-
-	if err := waitForPort(benchCollectorPort, 5*time.Second); err != nil {
-		collectorCancel()
-		return fmt.Errorf("bench collector failed to start on port %d: %w", benchCollectorPort, err)
+	agentMindPID, err := agentmind.AutoStart(cfg.RepoRoot, agentMindPort, agentmind.DefaultUIPort, benchEventsPath)
+	if err != nil {
+		return fmt.Errorf("starting AgentMind collector: %w", err)
 	}
-	fmt.Fprintf(cfg.Stdout, "Collector started on port %d → %s\n", benchCollectorPort, benchEventsPath)
+	if agentMindPID > 0 {
+		fmt.Fprintf(cfg.Stdout, "AgentMind started (PID %d) → %s\n", agentMindPID, benchEventsPath)
+	} else {
+		fmt.Fprintf(cfg.Stdout, "AgentMind already running on :%d\n", agentMindPort)
+	}
+	fmt.Fprintf(cfg.Stdout, "Watch live at http://localhost:%d\n", agentmind.DefaultUIPort)
 
 	// Build per-session prompts
 	// Sessions A & B: generic feature prompt (no MindSpec workflow)
@@ -206,10 +203,8 @@ Follow the MindSpec workflow:
 		}
 	}
 
-	// Shut down collector before parsing (ensures all events are flushed)
+	// Brief pause to ensure all events are flushed to disk
 	time.Sleep(2 * time.Second)
-	collectorCancel()
-	<-collectorDone
 
 	// Generate N-way quantitative report from single shared JSONL file
 	fmt.Fprintln(cfg.Stdout, "\nGenerating quantitative report...")
@@ -303,9 +298,7 @@ func checkPrerequisites(cfg *RunConfig) error {
 		}
 	}
 
-	if err := CheckPortFree(benchCollectorPort); err != nil {
-		errors = append(errors, err.Error())
-	}
+	// No port check needed — AgentMind may already be running (reused)
 
 	if len(errors) > 0 {
 		msg := "prerequisites check failed:\n"

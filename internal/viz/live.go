@@ -27,6 +27,11 @@ type LiveReceiver struct {
 	// Event buffer for save-recording
 	eventBuf   []bench.CollectedEvent
 	eventBufMu sync.Mutex
+
+	// NDJSON disk output (optional)
+	outputPath string
+	outputFile *os.File
+	outputMu   sync.Mutex
 }
 
 // NewLiveReceiver creates a new OTLP receiver for live mode.
@@ -39,8 +44,21 @@ func NewLiveReceiver(otlpPort int, graph *Graph, hub *Hub) *LiveReceiver {
 	}
 }
 
+// SetOutput configures NDJSON disk output. Must be called before Run().
+// Events are appended to the file as they arrive.
+func (l *LiveReceiver) SetOutput(path string) {
+	l.outputPath = path
+}
+
 // Run starts the OTLP HTTP server and blocks until ctx is cancelled.
 func (l *LiveReceiver) Run(ctx context.Context) error {
+	if l.outputPath != "" {
+		f, err := os.OpenFile(l.outputPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return fmt.Errorf("opening output file: %w", err)
+		}
+		l.outputFile = f
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/logs", l.handleLogs)
 	mux.HandleFunc("/v1/metrics", l.handleMetrics)
@@ -71,7 +89,16 @@ func (l *LiveReceiver) Run(ctx context.Context) error {
 
 	shutCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	return l.server.Shutdown(shutCtx)
+	if err := l.server.Shutdown(shutCtx); err != nil {
+		return err
+	}
+
+	if l.outputFile != nil {
+		l.outputMu.Lock()
+		defer l.outputMu.Unlock()
+		return l.outputFile.Close()
+	}
+	return nil
 }
 
 func (l *LiveReceiver) handleLogs(w http.ResponseWriter, r *http.Request) {
@@ -117,6 +144,20 @@ func (l *LiveReceiver) processEvents(events []bench.CollectedEvent) {
 	l.eventBufMu.Lock()
 	l.eventBuf = append(l.eventBuf, events...)
 	l.eventBufMu.Unlock()
+
+	// Write to NDJSON disk output if configured
+	if l.outputFile != nil {
+		l.outputMu.Lock()
+		for _, e := range events {
+			data, err := json.Marshal(e)
+			if err != nil {
+				continue
+			}
+			data = append(data, '\n')
+			l.outputFile.Write(data) //nolint:errcheck
+		}
+		l.outputMu.Unlock()
+	}
 
 	// Debug: log event details to stderr for tool_result events
 	for _, e := range events {

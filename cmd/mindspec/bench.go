@@ -40,10 +40,10 @@ export CLAUDE_CODE_ENABLE_TELEMETRY=1
 export OTEL_METRICS_EXPORTER=otlp
 export OTEL_LOGS_EXPORTER=otlp
 export OTEL_EXPORTER_OTLP_PROTOCOL=http/json
-export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4319
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 
-# In a separate terminal, start the collector:
-#   mindspec bench collect --port 4319 --output /tmp/bench-session-b.jsonl
+# AgentMind serves as the unified collector — start it if not running:
+#   mindspec agentmind serve --output /tmp/bench-session-b.jsonl
 
 # ─── After both sessions complete ──────────────────────────
 # mindspec bench report /tmp/bench-session-a.jsonl /tmp/bench-session-b.jsonl --labels "mindspec,baseline"
@@ -56,6 +56,7 @@ var benchCollectCmd = &cobra.Command{
 	Use:   "collect",
 	Short: "Start an OTLP/HTTP collector to capture Claude Code telemetry",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		fmt.Fprintln(os.Stderr, "Deprecated: use 'mindspec agentmind serve --output <path>' instead")
 		port, _ := cmd.Flags().GetInt("port")
 		output, _ := cmd.Flags().GetString("output")
 

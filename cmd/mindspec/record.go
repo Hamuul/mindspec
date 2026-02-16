@@ -145,6 +145,7 @@ var recordCollectCmd = &cobra.Command{
 	Short:  "Run OTLP collector (internal — used by recording subsystem)",
 	Hidden: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		fmt.Fprintln(os.Stderr, "Deprecated: use 'mindspec agentmind serve --output <path>' instead")
 		port, _ := cmd.Flags().GetInt("port")
 		output, _ := cmd.Flags().GetString("output")
 
@@ -170,7 +171,7 @@ var recordCollectCmd = &cobra.Command{
 func init() {
 	recordStatusCmd.Flags().String("spec", "", "Spec ID (defaults to active spec)")
 	recordStopCmd.Flags().String("spec", "", "Spec ID (defaults to active spec)")
-	recordCollectCmd.Flags().Int("port", 4319, "Port for OTLP/HTTP receiver")
+	recordCollectCmd.Flags().Int("port", 4318, "Port for OTLP/HTTP receiver")
 	recordCollectCmd.Flags().String("output", "", "Output NDJSON file path")
 
 	recordCmd.AddCommand(recordStatusCmd)

@@ -34,6 +34,7 @@ var agentmindServeCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		otlpPort, _ := cmd.Flags().GetInt("otlp-port")
 		uiPort, _ := cmd.Flags().GetInt("ui-port")
+		output, _ := cmd.Flags().GetString("output")
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
@@ -44,7 +45,7 @@ var agentmindServeCmd = &cobra.Command{
 			cancel()
 		}()
 
-		return viz.RunLive(ctx, otlpPort, uiPort)
+		return viz.RunLive(ctx, otlpPort, uiPort, output)
 	},
 }
 
@@ -101,6 +102,7 @@ var agentmindReplayCmd = &cobra.Command{
 func init() {
 	agentmindServeCmd.Flags().Int("otlp-port", 4318, "Port for OTLP/HTTP receiver")
 	agentmindServeCmd.Flags().Int("ui-port", 8420, "Port for web UI")
+	agentmindServeCmd.Flags().String("output", "", "Write events to NDJSON file (append mode)")
 
 	agentmindReplayCmd.Flags().Float64("speed", 1, "Replay speed multiplier (1, 5, 10, or 0 for max)")
 	agentmindReplayCmd.Flags().Int("ui-port", 8420, "Port for web UI")

@@ -18,7 +18,7 @@ func TestManifestRoundTrip(t *testing.T) {
 		SpecID:        specID,
 		StartedAt:     "2026-01-01T00:00:00Z",
 		CollectorPID:  12345,
-		CollectorPort: 4319,
+		CollectorPort: 4318,
 		Status:        "recording",
 		Phases: []Phase{
 			{Phase: "spec", StartedAt: "2026-01-01T00:00:00Z"},
@@ -238,8 +238,8 @@ func TestEnsureOTLPIdempotent(t *testing.T) {
 		t.Fatal("expected env block in settings")
 	}
 
-	if env["OTEL_EXPORTER_OTLP_ENDPOINT"] != "http://localhost:4319" {
-		t.Errorf("endpoint = %v, want http://localhost:4319", env["OTEL_EXPORTER_OTLP_ENDPOINT"])
+	if env["OTEL_EXPORTER_OTLP_ENDPOINT"] != "http://localhost:4318" {
+		t.Errorf("endpoint = %v, want http://localhost:4318", env["OTEL_EXPORTER_OTLP_ENDPOINT"])
 	}
 
 	// Second call should be idempotent
@@ -292,7 +292,7 @@ func TestEnsureOTLPPreservesExisting(t *testing.T) {
 	if env["MY_VAR"] != "keep-me" {
 		t.Error("existing env var was lost")
 	}
-	if env["OTEL_EXPORTER_OTLP_ENDPOINT"] != "http://localhost:4319" {
+	if env["OTEL_EXPORTER_OTLP_ENDPOINT"] != "http://localhost:4318" {
 		t.Error("OTLP endpoint not written")
 	}
 }

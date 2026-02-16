@@ -21,6 +21,7 @@ type Context struct {
 	ActiveSpec     string   `json:"active_spec"`
 	ActiveBead     string   `json:"active_bead"`
 	SpecGoal       string   `json:"spec_goal,omitempty"`
+	PlanApproved   bool     `json:"plan_approved,omitempty"`
 	AvailableSpecs []string `json:"available_specs,omitempty"`
 	BeadsContext   string   `json:"beads_context,omitempty"`
 	Warnings       []string `json:"warnings,omitempty"`
@@ -48,6 +49,11 @@ func BuildContext(root string, s *state.State) *Context {
 	// Load spec goal if we have an active spec
 	if s.ActiveSpec != "" {
 		ctx.SpecGoal = readSpecGoal(root, s.ActiveSpec)
+	}
+
+	// Check plan approval status in plan mode
+	if s.Mode == state.ModePlan && s.ActiveSpec != "" {
+		ctx.PlanApproved = isPlanApproved(root, s.ActiveSpec)
 	}
 
 	// List available specs for idle mode
@@ -159,6 +165,32 @@ func gatesForMode(mode string) []string {
 	default:
 		return []string{}
 	}
+}
+
+// isPlanApproved checks whether the plan frontmatter has status: Approved.
+func isPlanApproved(root, specID string) bool {
+	planPath := filepath.Join(root, "docs", "specs", specID, "plan.md")
+	data, err := os.ReadFile(planPath)
+	if err != nil {
+		return false
+	}
+
+	// Quick scan: find "status:" in YAML frontmatter
+	lines := bytes.Split(data, []byte("\n"))
+	if len(lines) == 0 || string(bytes.TrimSpace(lines[0])) != "---" {
+		return false
+	}
+	for _, line := range lines[1:] {
+		trimmed := bytes.TrimSpace(line)
+		if string(trimmed) == "---" {
+			break
+		}
+		if bytes.HasPrefix(trimmed, []byte("status:")) {
+			val := string(bytes.TrimSpace(bytes.TrimPrefix(trimmed, []byte("status:"))))
+			return val == "Approved" || val == "\"Approved\""
+		}
+	}
+	return false
 }
 
 // readSpecGoal extracts the Goal section from a spec file.

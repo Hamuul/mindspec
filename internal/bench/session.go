@@ -61,7 +61,7 @@ func RunSessionWithRetries(ctx context.Context, cfg *RunConfig, def *SessionDef,
 	}
 	defer outFile.Close()
 
-	env := buildSessionEnv(benchCollectorPort, cfg.WorkDir, def.Label, def.EnableTrace)
+	env := buildSessionEnv(agentMindPort, cfg.WorkDir, def.Label, def.EnableTrace)
 
 	prompt := def.Prompt
 	if prompt == "" {

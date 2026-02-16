@@ -47,8 +47,13 @@ ADR Fitness evaluation (`## ADR Fitness` section in plan.md)
 - **ADR divergence**: If a better design would diverge from an accepted ADR, **stop planning**. Present: (1) which ADR, (2) why it should be superseded, (3) the proposed alternative. Wait for human approval before proceeding. Use `mindspec adr create --supersedes <ADR-NNNN>` to create the superseding ADR once approved.
 
 ## Next Action
+{{- if .PlanApproved}}
+
+Plan is approved. Run `mindspec next` to claim the first bead and enter Implementation Mode. Do NOT manually set state to implement — `mindspec next` handles bead selection and state transition together.
+{{- else}}
 
 Complete the plan at `docs/specs/{{.ActiveSpec}}/plan.md`, then run `/plan-approve`.
+{{- end}}
 
 ## Session Close
 

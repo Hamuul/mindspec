@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 )
 
-const defaultRecordingPort = 4319
+const defaultRecordingPort = 4318 // AgentMind OTLP port (unified collector)
 
 // EnsureOTLP checks .claude/settings.local.json for OTLP env vars.
-// If not present, adds them with the recording collector port (4319).
+// If not present, adds them with the AgentMind OTLP port (4318).
 // If already present with a different endpoint, warns and does not override.
 // Returns true if new config was written (first-run), false otherwise.
 func EnsureOTLP(root string) (bool, error) {
