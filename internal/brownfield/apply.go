@@ -114,6 +114,13 @@ func canonicalTarget(path, category string) (string, bool) {
 		return filepath.ToSlash(filepath.Join(".mindspec", "docs", "context-map.md")), true
 	case "glossary":
 		return filepath.ToSlash(filepath.Join(".mindspec", "docs", "glossary.md")), true
+	case "user-docs":
+		lower := strings.ToLower(path)
+		rel := path
+		if strings.HasPrefix(lower, "docs/") {
+			rel = path[len("docs/"):]
+		}
+		return filepath.ToSlash(filepath.Join(".mindspec", "docs", "user", rel)), true
 	}
 	return "", false
 }

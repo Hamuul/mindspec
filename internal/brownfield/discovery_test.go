@@ -31,6 +31,8 @@ func TestDiscoverMarkdown_DeterministicAndFiltered(t *testing.T) {
 	mk("notes/todo.txt")
 	mk(".git/ignored.md")
 	mk(".beads/internal.md")
+	mk(".claude/commands/spec-init.md")
+	mk("internal/instruct/templates/spec.md")
 
 	got, err := DiscoverMarkdown(root)
 	if err != nil {
@@ -188,6 +190,56 @@ func TestRun_ApplyPromotesCanonicalAndArchivesSources(t *testing.T) {
 	}
 	if state.Stage != stageApplied {
 		t.Fatalf("expected stage %q, got %q", stageApplied, state.Stage)
+	}
+}
+
+func TestRun_ApplyPromotesUserDocsCategory(t *testing.T) {
+	t.Setenv("MINDSPEC_LLM_PROVIDER", "off")
+	t.Setenv("MINDSPEC_LLM_MODEL", "")
+
+	root := t.TempDir()
+	mk := func(rel, content string) {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", rel, err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatalf("write %s: %v", rel, err)
+		}
+	}
+
+	mk("docs/core/ARCHITECTURE.md", "# arch\n")
+	mk("AGENTS.md", "# agent hints\n")
+	mk("docs/archive/legacy.md", "# old doc\n")
+	mk("docs/templates/plan.md", "# old template\n")
+
+	report, err := Run(root, RunOptions{Apply: true, ArchiveMode: "copy", RunID: "run-user"})
+	if err != nil {
+		t.Fatalf("apply run failed: %v", err)
+	}
+	if report == nil {
+		t.Fatal("expected report")
+	}
+
+	for _, rel := range []string{
+		".mindspec/docs/core/ARCHITECTURE.md",
+		".mindspec/docs/user/AGENTS.md",
+		".mindspec/docs/user/archive/legacy.md",
+		".mindspec/docs/user/templates/plan.md",
+	} {
+		if _, statErr := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); statErr != nil {
+			t.Fatalf("expected canonical user-doc artifact %s: %v", rel, statErr)
+		}
+	}
+	for _, rel := range []string{
+		"AGENTS.md",
+		"docs/archive/legacy.md",
+		"docs/templates/plan.md",
+	} {
+		archived := filepath.Join(root, "docs_archive", "run-user", filepath.FromSlash(rel))
+		if _, statErr := os.Stat(archived); statErr != nil {
+			t.Fatalf("expected archived user-doc source %s: %v", rel, statErr)
+		}
 	}
 }
 

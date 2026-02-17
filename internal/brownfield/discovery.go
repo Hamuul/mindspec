@@ -90,7 +90,7 @@ func DiscoverMarkdown(root string) (*Report, error) {
 		if d.IsDir() {
 			name := d.Name()
 			// Skip VCS and bead internals from brownfield corpus discovery.
-			if name == ".git" || name == ".beads" || name == "docs_archive" {
+			if name == ".git" || name == ".beads" || name == ".claude" || name == "docs_archive" {
 				return filepath.SkipDir
 			}
 			if name == "migrations" && filepath.Base(filepath.Dir(path)) == ".mindspec" {
@@ -111,6 +111,9 @@ func DiscoverMarkdown(root string) (*Report, error) {
 			return fmt.Errorf("rel path for %s: %w", path, err)
 		}
 		rel = filepath.ToSlash(rel)
+		if strings.HasPrefix(strings.ToLower(rel), "internal/instruct/templates/") {
+			return nil
+		}
 		files = append(files, rel)
 
 		data, err := os.ReadFile(path)
@@ -350,6 +353,8 @@ func classifyPath(path string) (string, float64, string) {
 	switch {
 	case strings.Contains(lower, "/adr/") || strings.HasPrefix(lower, "docs/adr/") || strings.HasPrefix(lower, ".mindspec/docs/adr/"):
 		return "adr", 0.98, "path-contains-adr"
+	case strings.Contains(lower, "/templates/"):
+		return "user-docs", 0.90, "path-contains-templates"
 	case strings.Contains(lower, "/specs/") || strings.HasSuffix(lower, "/spec.md") || strings.HasSuffix(lower, "/plan.md"):
 		return "spec", 0.96, "path-contains-specs"
 	case strings.Contains(lower, "/domains/"):
@@ -360,6 +365,8 @@ func classifyPath(path string) (string, float64, string) {
 		return "context-map", 0.95, "filename-context-map"
 	case strings.HasSuffix(lower, "glossary.md"):
 		return "glossary", 0.95, "filename-glossary"
+	case lower == "agents.md", lower == "claude.md", strings.HasPrefix(lower, "docs/archive/"), strings.HasPrefix(lower, "docs/roadmap.md"):
+		return "user-docs", 0.85, "path-user-docs-operational"
 	case strings.HasSuffix(lower, "readme.md"), strings.Contains(lower, "/guides/"), strings.Contains(lower, "/user"):
 		return "user-docs", 0.80, "path-user-docs-heuristic"
 	default:
