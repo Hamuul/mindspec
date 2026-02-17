@@ -50,6 +50,7 @@ type Report struct {
 	MarkdownFiles  []string              `json:"markdown_files"`
 	Inventory      []InventoryEntry      `json:"inventory"`
 	Classification []ClassificationEntry `json:"classification"`
+	Lineage        []LineageEntry        `json:"lineage,omitempty"`
 	LLM            LLMConfig             `json:"llm"`
 	Unresolved     []string              `json:"unresolved_paths"`
 }
@@ -73,6 +74,9 @@ func DiscoverMarkdown(root string) (*Report, error) {
 				return filepath.SkipDir
 			}
 			if name == "migrations" && filepath.Base(filepath.Dir(path)) == ".mindspec" {
+				return filepath.SkipDir
+			}
+			if name == "docs" && filepath.Base(filepath.Dir(path)) == ".mindspec" {
 				return filepath.SkipDir
 			}
 			return nil
@@ -209,7 +213,10 @@ func Run(root string, opts RunOptions) (*Report, error) {
 		)
 	}
 
-	return report, fmt.Errorf("brownfield apply is not implemented yet: synthesis/archive stages pending (archive=%s)", opts.ArchiveMode)
+	if err := applyTransactional(root, report, opts); err != nil {
+		return report, err
+	}
+	return report, nil
 }
 
 func classify(entries []InventoryEntry) []ClassificationEntry {
