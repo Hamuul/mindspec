@@ -12,6 +12,91 @@ import (
 	"testing"
 )
 
+func TestResolveLLMConfig_ExplicitOff(t *testing.T) {
+	t.Setenv("MINDSPEC_LLM_PROVIDER", "off")
+	t.Setenv("MINDSPEC_LLM_MODEL", "")
+
+	cfg := ResolveLLMConfig()
+	if cfg.Provider != "off" {
+		t.Fatalf("provider = %q, want off", cfg.Provider)
+	}
+	if cfg.Model != "default" {
+		t.Fatalf("model = %q, want default", cfg.Model)
+	}
+	if cfg.Available {
+		t.Fatal("expected unavailable provider")
+	}
+}
+
+func TestResolveLLMConfig_AutoDetectClaudeCLI(t *testing.T) {
+	t.Setenv("MINDSPEC_LLM_PROVIDER", "")
+	t.Setenv("MINDSPEC_LLM_MODEL", "claude-sonnet")
+
+	oldProbe := claudeProbeFn
+	claudeProbeFn = func(model string) bool {
+		return model == "claude-sonnet"
+	}
+	defer func() { claudeProbeFn = oldProbe }()
+
+	cfg := ResolveLLMConfig()
+	if cfg.Provider != "claude-cli" {
+		t.Fatalf("provider = %q, want claude-cli", cfg.Provider)
+	}
+	if cfg.Model != "claude-sonnet" {
+		t.Fatalf("model = %q, want claude-sonnet", cfg.Model)
+	}
+	if !cfg.Available {
+		t.Fatal("expected available provider")
+	}
+}
+
+func TestResolveLLMConfig_AutoDetectUnavailable(t *testing.T) {
+	t.Setenv("MINDSPEC_LLM_PROVIDER", "")
+	t.Setenv("MINDSPEC_LLM_MODEL", "")
+
+	oldProbe := claudeProbeFn
+	claudeProbeFn = func(model string) bool { return false }
+	defer func() { claudeProbeFn = oldProbe }()
+
+	cfg := ResolveLLMConfig()
+	if cfg.Provider != "off" {
+		t.Fatalf("provider = %q, want off", cfg.Provider)
+	}
+	if cfg.Model != "default" {
+		t.Fatalf("model = %q, want default", cfg.Model)
+	}
+	if cfg.Available {
+		t.Fatal("expected unavailable provider")
+	}
+}
+
+func TestResolveLLMConfig_ExplicitProviderSkipsProbe(t *testing.T) {
+	t.Setenv("MINDSPEC_LLM_PROVIDER", "openai")
+	t.Setenv("MINDSPEC_LLM_MODEL", "gpt-test")
+
+	oldProbe := claudeProbeFn
+	called := false
+	claudeProbeFn = func(model string) bool {
+		called = true
+		return false
+	}
+	defer func() { claudeProbeFn = oldProbe }()
+
+	cfg := ResolveLLMConfig()
+	if called {
+		t.Fatal("expected explicit provider to skip claude probe")
+	}
+	if cfg.Provider != "openai" {
+		t.Fatalf("provider = %q, want openai", cfg.Provider)
+	}
+	if cfg.Model != "gpt-test" {
+		t.Fatalf("model = %q, want gpt-test", cfg.Model)
+	}
+	if !cfg.Available {
+		t.Fatal("expected explicit provider to be marked available")
+	}
+}
+
 func TestDiscoverMarkdown_DeterministicAndFiltered(t *testing.T) {
 	root := t.TempDir()
 

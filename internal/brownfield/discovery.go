@@ -1,12 +1,15 @@
 package brownfield
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -35,6 +38,8 @@ type LLMConfig struct {
 	Model     string `json:"model"`
 	Available bool   `json:"available"`
 }
+
+var claudeProbeFn = probeClaudeCLI
 
 // RunOptions controls migration run behavior.
 type RunOptions struct {
@@ -190,18 +195,60 @@ func ResolveLLMConfig() LLMConfig {
 	if model == "" {
 		model = "default"
 	}
-	if provider == "" || strings.EqualFold(provider, "off") || strings.EqualFold(provider, "none") {
+
+	switch {
+	case strings.EqualFold(provider, "off"), strings.EqualFold(provider, "none"):
 		return LLMConfig{
 			Provider:  "off",
 			Model:     model,
 			Available: false,
 		}
+	case provider == "":
+		if claudeProbeFn(model) {
+			return LLMConfig{
+				Provider:  "claude-cli",
+				Model:     model,
+				Available: true,
+			}
+		}
+		return LLMConfig{
+			Provider:  "off",
+			Model:     model,
+			Available: false,
+		}
+	default:
+		return LLMConfig{
+			Provider:  provider,
+			Model:     model,
+			Available: true,
+		}
 	}
-	return LLMConfig{
-		Provider:  provider,
-		Model:     model,
-		Available: true,
+}
+
+func probeClaudeCLI(model string) bool {
+	if _, err := exec.LookPath("claude"); err != nil {
+		return false
 	}
+
+	args := []string{
+		"-p", "Reply with exactly: ok",
+		"--max-turns", "1",
+		"--no-session-persistence",
+	}
+	if model != "" && model != "default" {
+		args = append(args, "--model", model)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "claude", args...)
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
+	if err := cmd.Run(); err != nil {
+		return false
+	}
+	return ctx.Err() == nil
 }
 
 // Run executes deterministic discovery + classification and writes run artifacts.
