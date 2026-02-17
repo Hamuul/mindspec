@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -135,6 +136,46 @@ func TestDiscoverMarkdown_DeterministicAndFiltered(t *testing.T) {
 		"docs/a.md",
 		"docs/z.MD",
 	}
+	if !reflect.DeepEqual(got.MarkdownFiles, want) {
+		t.Fatalf("markdown files mismatch\ngot:  %#v\nwant: %#v", got.MarkdownFiles, want)
+	}
+}
+
+func TestDiscoverMarkdown_RespectsGitIgnore(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+
+	root := t.TempDir()
+	cmd := exec.Command("git", "init")
+	cmd.Dir = root
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v (%s)", err, string(out))
+	}
+
+	mk := func(rel string) {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", rel, err)
+		}
+		if err := os.WriteFile(p, []byte("# test\n"), 0o644); err != nil {
+			t.Fatalf("write %s: %v", rel, err)
+		}
+	}
+
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(".venv/\nignored.md\n"), 0o644); err != nil {
+		t.Fatalf("write .gitignore: %v", err)
+	}
+	mk(".venv/docs/hidden.md")
+	mk("ignored.md")
+	mk("docs/visible.md")
+
+	got, err := DiscoverMarkdown(root)
+	if err != nil {
+		t.Fatalf("DiscoverMarkdown: %v", err)
+	}
+
+	want := []string{"docs/visible.md"}
 	if !reflect.DeepEqual(got.MarkdownFiles, want) {
 		t.Fatalf("markdown files mismatch\ngot:  %#v\nwant: %#v", got.MarkdownFiles, want)
 	}

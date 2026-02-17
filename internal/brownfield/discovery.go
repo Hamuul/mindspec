@@ -41,6 +41,12 @@ type LLMConfig struct {
 
 var claudeProbeFn = probeClaudeCLI
 
+type gitIgnoreChecker struct {
+	root    string
+	enabled bool
+	cache   map[string]bool
+}
+
 // RunOptions controls migration run behavior.
 type RunOptions struct {
 	Apply       bool
@@ -86,10 +92,23 @@ func DiscoverMarkdown(root string) (*Report, error) {
 		files     []string
 		inventory []InventoryEntry
 	)
+	ignored := newGitIgnoreChecker(root)
 
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
+		}
+		if path != root {
+			relNative, err := filepath.Rel(root, path)
+			if err != nil {
+				return fmt.Errorf("rel path for %s: %w", path, err)
+			}
+			if ignored.IsIgnored(relNative) {
+				if d.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
 		}
 
 		if d.IsDir() {
@@ -249,6 +268,52 @@ func probeClaudeCLI(model string) bool {
 		return false
 	}
 	return ctx.Err() == nil
+}
+
+func newGitIgnoreChecker(root string) *gitIgnoreChecker {
+	c := &gitIgnoreChecker{
+		root:  root,
+		cache: make(map[string]bool),
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		return c
+	}
+
+	cmd := exec.Command("git", "-C", root, "rev-parse", "--is-inside-work-tree")
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
+	if err := cmd.Run(); err != nil {
+		return c
+	}
+	c.enabled = true
+	return c
+}
+
+func (c *gitIgnoreChecker) IsIgnored(relPath string) bool {
+	if !c.enabled {
+		return false
+	}
+
+	relPath = filepath.Clean(relPath)
+	if relPath == "." || relPath == "" {
+		return false
+	}
+	if v, ok := c.cache[relPath]; ok {
+		return v
+	}
+
+	cmd := exec.Command("git", "-C", c.root, "check-ignore", "--quiet", "--", relPath)
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
+	err := cmd.Run()
+	ignored := false
+	if err == nil {
+		ignored = true
+	} else if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+		ignored = false
+	}
+	c.cache[relPath] = ignored
+	return ignored
 }
 
 // Run executes deterministic discovery + classification and writes run artifacts.
