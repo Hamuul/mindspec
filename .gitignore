@@ -36,3 +36,6 @@ bin/
 # OS
 .DS_Store
 Thumbs.db
+
+# beads git submodule
+beads/
