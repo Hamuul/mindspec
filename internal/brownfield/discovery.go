@@ -41,6 +41,26 @@ type RunOptions struct {
 	Apply       bool
 	ArchiveMode string
 	RunID       string
+	Resume      bool
+}
+
+const (
+	stageClassified = "classified"
+	stageApplying   = "applying"
+	stageApplied    = "applied"
+)
+
+type migrationState struct {
+	RunID           string `json:"run_id"`
+	Mode            string `json:"mode"`
+	ArchiveMode     string `json:"archive_mode,omitempty"`
+	LLMProvider     string `json:"llm_provider"`
+	LLMModel        string `json:"llm_model"`
+	LLMAvailable    bool   `json:"llm_available"`
+	UnresolvedCount int    `json:"unresolved_count"`
+	Stage           string `json:"stage"`
+	Resumed         bool   `json:"resumed"`
+	UpdatedAt       string `json:"updated_at"`
 }
 
 // Report captures deterministic brownfield discovery output.
@@ -173,14 +193,29 @@ func ResolveLLMConfig() LLMConfig {
 
 // Run executes deterministic discovery + classification and writes run artifacts.
 func Run(root string, opts RunOptions) (*Report, error) {
-	report, err := DiscoverMarkdown(root)
-	if err != nil {
-		return nil, err
+	if opts.Resume && opts.RunID == "" {
+		return nil, fmt.Errorf("--resume requires a run ID")
 	}
-
 	if opts.RunID == "" {
 		opts.RunID = time.Now().UTC().Format("20060102T150405Z")
 	}
+
+	report, stage, resumed, err := loadResumeArtifacts(root, opts.RunID, opts.Resume)
+	if err != nil {
+		return nil, err
+	}
+	if !resumed {
+		report, err = DiscoverMarkdown(root)
+		if err != nil {
+			return nil, err
+		}
+		report.Classification = classify(report.Inventory)
+		stage = stageClassified
+	}
+	if stage == "" {
+		stage = stageClassified
+	}
+
 	report.RunID = opts.RunID
 	if opts.Apply {
 		report.Mode = "apply"
@@ -188,14 +223,16 @@ func Run(root string, opts RunOptions) (*Report, error) {
 		report.Mode = "report-only"
 	}
 	report.LLM = ResolveLLMConfig()
-	report.Classification = classify(report.Inventory)
 	report.Unresolved = unresolvedPaths(report.Classification)
 
-	if err := writeRunArtifacts(root, report, opts); err != nil {
+	if err := writeRunArtifacts(root, report, opts, stage, resumed); err != nil {
 		return nil, err
 	}
 
 	if !opts.Apply {
+		return report, nil
+	}
+	if stage == stageApplied {
 		return report, nil
 	}
 
@@ -213,10 +250,83 @@ func Run(root string, opts RunOptions) (*Report, error) {
 		)
 	}
 
+	if err := writeRunState(root, report, opts, stageApplying, resumed); err != nil {
+		return nil, err
+	}
 	if err := applyTransactional(root, report, opts); err != nil {
 		return report, err
 	}
+	if err := writeRunState(root, report, opts, stageApplied, resumed); err != nil {
+		return nil, err
+	}
 	return report, nil
+}
+
+func loadResumeArtifacts(root, runID string, strict bool) (*Report, string, bool, error) {
+	runDir := runDir(root, runID)
+	inventoryPath := filepath.Join(runDir, "inventory.json")
+	classificationPath := filepath.Join(runDir, "classification.json")
+	statePath := filepath.Join(runDir, "state.json")
+
+	stage := ""
+	stateExists := false
+	if _, err := os.Stat(statePath); err == nil {
+		stateExists = true
+	} else if !os.IsNotExist(err) {
+		return nil, "", false, fmt.Errorf("stat resume state: %w", err)
+	}
+	if strict && !stateExists {
+		return nil, "", false, fmt.Errorf("--resume %s requested but state.json is missing", runID)
+	}
+	if stateExists {
+		var state migrationState
+		if err := readJSON(statePath, &state); err != nil {
+			return nil, "", false, fmt.Errorf("load resume state: %w", err)
+		}
+		stage = state.Stage
+	}
+
+	if _, err := os.Stat(inventoryPath); os.IsNotExist(err) {
+		if strict {
+			return nil, "", false, fmt.Errorf("--resume %s requested but inventory.json is missing", runID)
+		}
+		return nil, stage, false, nil
+	} else if err != nil {
+		return nil, "", false, fmt.Errorf("stat resume inventory: %w", err)
+	}
+	if _, err := os.Stat(classificationPath); os.IsNotExist(err) {
+		if strict {
+			return nil, "", false, fmt.Errorf("--resume %s requested but classification.json is missing", runID)
+		}
+		return nil, stage, false, nil
+	} else if err != nil {
+		return nil, "", false, fmt.Errorf("stat resume classification: %w", err)
+	}
+
+	var (
+		inventory      []InventoryEntry
+		classification []ClassificationEntry
+	)
+	if err := readJSON(inventoryPath, &inventory); err != nil {
+		return nil, "", false, fmt.Errorf("load resume inventory: %w", err)
+	}
+	if err := readJSON(classificationPath, &classification); err != nil {
+		return nil, "", false, fmt.Errorf("load resume classification: %w", err)
+	}
+
+	files := make([]string, 0, len(inventory))
+	for _, inv := range inventory {
+		files = append(files, inv.Path)
+	}
+	sort.Strings(files)
+	sort.Slice(inventory, func(i, j int) bool { return inventory[i].Path < inventory[j].Path })
+	sort.Slice(classification, func(i, j int) bool { return classification[i].Path < classification[j].Path })
+
+	return &Report{
+		MarkdownFiles:  files,
+		Inventory:      inventory,
+		Classification: classification,
+	}, stage, true, nil
 }
 
 func classify(entries []InventoryEntry) []ClassificationEntry {
@@ -267,28 +377,27 @@ func unresolvedPaths(entries []ClassificationEntry) []string {
 	return unresolved
 }
 
-func writeRunArtifacts(root string, report *Report, opts RunOptions) error {
-	runDir := filepath.Join(root, ".mindspec", "migrations", report.RunID)
-	if err := os.MkdirAll(runDir, 0o755); err != nil {
+func writeRunArtifacts(root string, report *Report, opts RunOptions, stage string, resumed bool) error {
+	if err := os.MkdirAll(runDir(root, report.RunID), 0o755); err != nil {
 		return fmt.Errorf("create migration run dir: %w", err)
 	}
 
-	if err := writeJSON(filepath.Join(runDir, "inventory.json"), report.Inventory); err != nil {
+	runPath := runDir(root, report.RunID)
+	if err := writeJSON(filepath.Join(runPath, "inventory.json"), report.Inventory); err != nil {
 		return err
 	}
-	if err := writeJSON(filepath.Join(runDir, "classification.json"), report.Classification); err != nil {
+	if err := writeJSON(filepath.Join(runPath, "classification.json"), report.Classification); err != nil {
 		return err
 	}
 
-	state := struct {
-		RunID           string `json:"run_id"`
-		Mode            string `json:"mode"`
-		ArchiveMode     string `json:"archive_mode,omitempty"`
-		LLMProvider     string `json:"llm_provider"`
-		LLMModel        string `json:"llm_model"`
-		LLMAvailable    bool   `json:"llm_available"`
-		UnresolvedCount int    `json:"unresolved_count"`
-	}{
+	return writeRunState(root, report, opts, stage, resumed)
+}
+
+func writeRunState(root string, report *Report, opts RunOptions, stage string, resumed bool) error {
+	if stage == "" {
+		stage = stageClassified
+	}
+	state := migrationState{
 		RunID:           report.RunID,
 		Mode:            report.Mode,
 		ArchiveMode:     opts.ArchiveMode,
@@ -296,11 +405,15 @@ func writeRunArtifacts(root string, report *Report, opts RunOptions) error {
 		LLMModel:        report.LLM.Model,
 		LLMAvailable:    report.LLM.Available,
 		UnresolvedCount: len(report.Unresolved),
+		Stage:           stage,
+		Resumed:         resumed,
+		UpdatedAt:       time.Now().UTC().Format(time.RFC3339),
 	}
-	if err := writeJSON(filepath.Join(runDir, "state.json"), state); err != nil {
-		return err
-	}
-	return nil
+	return writeJSON(filepath.Join(runDir(root, report.RunID), "state.json"), state)
+}
+
+func runDir(root, runID string) string {
+	return filepath.Join(root, ".mindspec", "migrations", runID)
 }
 
 func writeJSON(path string, value any) error {
@@ -313,4 +426,12 @@ func writeJSON(path string, value any) error {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	return nil
+}
+
+func readJSON(path string, value any) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, value)
 }

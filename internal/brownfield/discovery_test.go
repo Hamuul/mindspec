@@ -1,9 +1,13 @@
 package brownfield
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -174,4 +178,157 @@ func TestRun_ApplyPromotesCanonicalAndArchivesSources(t *testing.T) {
 	if !strings.Contains(string(policyBytes), "reference: \".mindspec/docs/core/ARCHITECTURE.md\"") {
 		t.Fatalf("expected canonicalized policy reference, got:\n%s", string(policyBytes))
 	}
+
+	statePath := filepath.Join(root, ".mindspec", "migrations", "run-ok", "state.json")
+	var state struct {
+		Stage string `json:"stage"`
+	}
+	if err := readJSON(statePath, &state); err != nil {
+		t.Fatalf("read state checkpoint: %v", err)
+	}
+	if state.Stage != stageApplied {
+		t.Fatalf("expected stage %q, got %q", stageApplied, state.Stage)
+	}
+}
+
+func TestRun_ResumeMissingArtifactsFails(t *testing.T) {
+	root := t.TempDir()
+
+	_, err := Run(root, RunOptions{
+		RunID:  "missing",
+		Resume: true,
+	})
+	if err == nil {
+		t.Fatal("expected resume error for missing artifacts")
+	}
+	if !strings.Contains(err.Error(), "state.json is missing") {
+		t.Fatalf("unexpected resume error: %v", err)
+	}
+}
+
+func TestRun_ResumeReusesCheckpoint(t *testing.T) {
+	t.Setenv("MINDSPEC_LLM_PROVIDER", "off")
+	t.Setenv("MINDSPEC_LLM_MODEL", "")
+
+	root := t.TempDir()
+	mk := func(rel, content string) {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", rel, err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatalf("write %s: %v", rel, err)
+		}
+	}
+
+	mk("docs/core/ARCHITECTURE.md", "# arch\n")
+	initial, err := Run(root, RunOptions{RunID: "resume-run"})
+	if err != nil {
+		t.Fatalf("initial run: %v", err)
+	}
+
+	// Add a new markdown file after checkpoint creation; resume should ignore it.
+	mk("docs/adr/ADR-0999.md", "# late adr\n")
+	resumed, err := Run(root, RunOptions{
+		Apply:       true,
+		ArchiveMode: "copy",
+		RunID:       "resume-run",
+		Resume:      true,
+	})
+	if err != nil {
+		t.Fatalf("resume apply failed: %v", err)
+	}
+	if !reflect.DeepEqual(initial.Inventory, resumed.Inventory) {
+		t.Fatalf("resume should reuse checkpoint inventory")
+	}
+	if _, statErr := os.Stat(filepath.Join(root, ".mindspec", "docs", "core", "ARCHITECTURE.md")); statErr != nil {
+		t.Fatalf("expected resumed apply output: %v", statErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(root, ".mindspec", "docs", "adr", "ADR-0999.md")); !os.IsNotExist(statErr) {
+		t.Fatalf("expected late-added file to be excluded from resumed apply, got err=%v", statErr)
+	}
+
+	statePath := filepath.Join(root, ".mindspec", "migrations", "resume-run", "state.json")
+	var state struct {
+		Stage   string `json:"stage"`
+		Resumed bool   `json:"resumed"`
+	}
+	if err := readJSON(statePath, &state); err != nil {
+		t.Fatalf("read resumed state: %v", err)
+	}
+	if state.Stage != stageApplied {
+		t.Fatalf("expected applied stage after resume, got %q", state.Stage)
+	}
+	if !state.Resumed {
+		t.Fatal("expected resumed state marker")
+	}
+}
+
+func TestRun_ApplyIdempotentCanonicalOutput(t *testing.T) {
+	t.Setenv("MINDSPEC_LLM_PROVIDER", "off")
+	t.Setenv("MINDSPEC_LLM_MODEL", "")
+
+	root := t.TempDir()
+	mk := func(rel, content string) {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", rel, err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatalf("write %s: %v", rel, err)
+		}
+	}
+
+	mk("docs/core/ARCHITECTURE.md", "# arch\n")
+	mk("docs/context-map.md", "# context\n")
+	mk("GLOSSARY.md", "# glossary\n")
+
+	if _, err := Run(root, RunOptions{Apply: true, ArchiveMode: "copy", RunID: "first"}); err != nil {
+		t.Fatalf("first apply: %v", err)
+	}
+	firstHash := treeHash(t, filepath.Join(root, ".mindspec", "docs"))
+
+	if _, err := Run(root, RunOptions{Apply: true, ArchiveMode: "copy", RunID: "second"}); err != nil {
+		t.Fatalf("second apply: %v", err)
+	}
+	secondHash := treeHash(t, filepath.Join(root, ".mindspec", "docs"))
+
+	if firstHash != secondHash {
+		t.Fatalf("canonical docs hash mismatch across unchanged apply runs\nfirst=%s\nsecond=%s", firstHash, secondHash)
+	}
+}
+
+func treeHash(t *testing.T, root string) string {
+	t.Helper()
+	var files []string
+	if err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		files = append(files, filepath.ToSlash(rel))
+		return nil
+	}); err != nil {
+		t.Fatalf("walk tree: %v", err)
+	}
+	sort.Strings(files)
+
+	h := sha256.New()
+	for _, rel := range files {
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		h.Write([]byte(rel))
+		h.Write([]byte{'\n'})
+		h.Write(data)
+		h.Write([]byte{'\n'})
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }

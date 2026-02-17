@@ -69,6 +69,20 @@ func TestResolveInitMode(t *testing.T) {
 			expectErr:  true,
 		},
 		{
+			name:       "brownfield resume report-only",
+			brownfield: true,
+			resume:     "run-1",
+			wantMode:   initModeBrownfieldReport,
+		},
+		{
+			name:        "brownfield resume apply",
+			brownfield:  true,
+			apply:       true,
+			resume:      "run-1",
+			wantMode:    initModeBrownfieldApply,
+			wantArchive: "copy",
+		},
+		{
 			name:       "reject archive without apply",
 			brownfield: true,
 			archive:    "copy",

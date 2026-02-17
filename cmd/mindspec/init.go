@@ -84,8 +84,9 @@ All file creation is additive — existing files are never overwritten.`,
 		switch mode {
 		case initModeBrownfieldReport:
 			report, err := brownfield.Run(root, brownfield.RunOptions{
-				Apply: false,
-				RunID: resumeRunID,
+				Apply:  false,
+				RunID:  resumeRunID,
+				Resume: resumeRunID != "",
 			})
 			if report != nil {
 				if jsonFlag {
@@ -110,6 +111,7 @@ All file creation is additive — existing files are never overwritten.`,
 				Apply:       true,
 				ArchiveMode: archive,
 				RunID:       resumeRunID,
+				Resume:      resumeRunID != "",
 			})
 			if report != nil {
 				if jsonFlag {
