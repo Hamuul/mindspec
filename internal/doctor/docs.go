@@ -7,23 +7,25 @@ import (
 	"strings"
 
 	"github.com/mindspec/mindspec/internal/glossary"
+	"github.com/mindspec/mindspec/internal/workspace"
 )
-
-// requiredDirs are directories that must exist under docs/ or project root.
-var requiredDirs = []struct {
-	path string // relative to project root
-	name string // display name
-}{
-	{"docs/core", "docs/core/"},
-	{"docs/domains", "docs/domains/"},
-	{"docs/specs", "docs/specs/"},
-}
 
 // expectedDomains and their expected files.
 var expectedDomains = []string{"core", "context-system", "workflow"}
 var domainFiles = []string{"overview.md", "architecture.md", "interfaces.md", "runbook.md"}
 
 func checkDocs(r *Report, root string) {
+	docsRel := docsRootRel(root)
+
+	requiredDirs := []struct {
+		path string // relative to project root
+		name string // display name
+	}{
+		{filepath.Join(docsRel, "core"), filepath.ToSlash(filepath.Join(docsRel, "core")) + "/"},
+		{filepath.Join(docsRel, "domains"), filepath.ToSlash(filepath.Join(docsRel, "domains")) + "/"},
+		{filepath.Join(docsRel, "specs"), filepath.ToSlash(filepath.Join(docsRel, "specs")) + "/"},
+	}
+
 	// Check required directories
 	for _, d := range requiredDirs {
 		p := filepath.Join(root, d.path)
@@ -42,19 +44,20 @@ func checkDocs(r *Report, root string) {
 	checkGlossary(r, root)
 
 	// context-map.md
-	cmPath := filepath.Join(root, "docs", "context-map.md")
+	cmPath := workspace.ContextMapPath(root)
+	cmName := filepath.ToSlash(filepath.Join(docsRel, "context-map.md"))
 	if fileExists(cmPath) {
-		r.Checks = append(r.Checks, Check{Name: "docs/context-map.md", Status: OK})
+		r.Checks = append(r.Checks, Check{Name: cmName, Status: OK})
 	} else {
 		r.Checks = append(r.Checks, Check{
-			Name:    "docs/context-map.md",
+			Name:    cmName,
 			Status:  Missing,
-			Message: "create docs/context-map.md",
+			Message: fmt.Sprintf("create %s", cmName),
 		})
 	}
 
 	// Domain subdirectory checks
-	checkDomains(r, root)
+	checkDomains(r, root, docsRel)
 }
 
 func checkGlossary(r *Report, root string) {
@@ -101,8 +104,8 @@ func checkGlossary(r *Report, root string) {
 	}
 }
 
-func checkDomains(r *Report, root string) {
-	domainsDir := filepath.Join(root, "docs", "domains")
+func checkDomains(r *Report, root, docsRel string) {
+	domainsDir := filepath.Join(root, docsRel, "domains")
 	if !dirExists(domainsDir) {
 		return // already reported as missing in requiredDirs
 	}
@@ -111,7 +114,7 @@ func checkDomains(r *Report, root string) {
 		domainDir := filepath.Join(domainsDir, domain)
 		if !dirExists(domainDir) {
 			r.Checks = append(r.Checks, Check{
-				Name:    fmt.Sprintf("docs/domains/%s/", domain),
+				Name:    filepath.ToSlash(filepath.Join(docsRel, "domains", domain)) + "/",
 				Status:  Warn,
 				Message: "domain directory not found",
 			})
@@ -120,7 +123,7 @@ func checkDomains(r *Report, root string) {
 
 		for _, f := range domainFiles {
 			fp := filepath.Join(domainDir, f)
-			name := fmt.Sprintf("docs/domains/%s/%s", domain, f)
+			name := filepath.ToSlash(filepath.Join(docsRel, "domains", domain, f))
 			if fileExists(fp) {
 				r.Checks = append(r.Checks, Check{Name: name, Status: OK})
 			} else {
@@ -142,4 +145,12 @@ func dirExists(path string) bool {
 func fileExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
+}
+
+func docsRootRel(root string) string {
+	rel, err := filepath.Rel(root, workspace.DocsDir(root))
+	if err != nil {
+		return "docs"
+	}
+	return filepath.ToSlash(rel)
 }

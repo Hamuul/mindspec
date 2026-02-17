@@ -63,7 +63,7 @@ func titleCase(name string) string {
 	return strings.Join(parts, "-")
 }
 
-// appendContextMap adds a new bounded context entry to docs/context-map.md.
+// appendContextMap adds a new bounded context entry to context-map.md.
 func appendContextMap(root, name, title string) error {
 	cmPath := workspace.ContextMapPath(root)
 	data, err := os.ReadFile(cmPath)
@@ -71,8 +71,9 @@ func appendContextMap(root, name, title string) error {
 		return fmt.Errorf("reading context map: %w", err)
 	}
 
-	entry := fmt.Sprintf("\n### %s\n\n**Owns**: _(fill in)_\n\n**Domain docs**: [`docs/domains/%s/`](domains/%s/overview.md)\n",
-		title, name, name)
+	docsRoot := docsRootLabel(root)
+	entry := fmt.Sprintf("\n### %s\n\n**Owns**: _(fill in)_\n\n**Domain docs**: [`%s/domains/%s/`](domains/%s/overview.md)\n",
+		title, docsRoot, name, name)
 
 	content := string(data)
 
@@ -195,4 +196,12 @@ _(Tips for debugging issues in this domain.)_
 
 _(Step-by-step guides for common operational tasks.)_
 `, title)
+}
+
+func docsRootLabel(root string) string {
+	rel, err := filepath.Rel(root, workspace.DocsDir(root))
+	if err != nil {
+		return "docs"
+	}
+	return filepath.ToSlash(rel)
 }

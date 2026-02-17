@@ -15,7 +15,7 @@ You are not currently working on any spec or bead.
 - `{{.}}`
 {{- end}}
 {{- else}}
-No specs found in `docs/specs/`.
+No specs found in `.mindspec/docs/specs/`.
 {{- end}}
 
 ## Next Action

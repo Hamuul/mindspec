@@ -25,18 +25,15 @@ func TestRun_EmptyDir(t *testing.T) {
 	requiredFiles := []string{
 		"GLOSSARY.md",
 		"CLAUDE.md",
-		"docs/context-map.md",
+		".mindspec/docs/context-map.md",
 		".mindspec/policies.yml",
 		".mindspec/state.json",
-		"docs/templates/spec.md",
-		"docs/templates/plan.md",
-		"docs/templates/adr.md",
-		"docs/domains/core/overview.md",
-		"docs/domains/core/architecture.md",
-		"docs/domains/core/interfaces.md",
-		"docs/domains/core/runbook.md",
-		"docs/domains/context-system/overview.md",
-		"docs/domains/workflow/overview.md",
+		".mindspec/docs/domains/core/overview.md",
+		".mindspec/docs/domains/core/architecture.md",
+		".mindspec/docs/domains/core/interfaces.md",
+		".mindspec/docs/domains/core/runbook.md",
+		".mindspec/docs/domains/context-system/overview.md",
+		".mindspec/docs/domains/workflow/overview.md",
 	}
 	for _, f := range requiredFiles {
 		p := filepath.Join(root, f)
@@ -47,10 +44,10 @@ func TestRun_EmptyDir(t *testing.T) {
 
 	// Verify key dirs exist
 	requiredDirs := []string{
-		"docs/core",
-		"docs/domains",
-		"docs/specs",
-		"docs/adr",
+		".mindspec/docs/core",
+		".mindspec/docs/domains",
+		".mindspec/docs/specs",
+		".mindspec/docs/adr",
 		".mindspec",
 	}
 	for _, d := range requiredDirs {
@@ -121,7 +118,7 @@ func TestRun_PartialExists(t *testing.T) {
 	root := t.TempDir()
 
 	// Pre-create some files
-	os.MkdirAll(filepath.Join(root, "docs/core"), 0755)
+	os.MkdirAll(filepath.Join(root, ".mindspec/docs/core"), 0755)
 	os.WriteFile(filepath.Join(root, "GLOSSARY.md"), []byte("# Custom Glossary\n"), 0644)
 
 	result, err := Run(root, false)
@@ -134,8 +131,8 @@ func TestRun_PartialExists(t *testing.T) {
 	for _, s := range result.Skipped {
 		skipped[s] = true
 	}
-	if !skipped["docs/core/"] {
-		t.Error("expected docs/core/ to be skipped")
+	if !skipped[".mindspec/docs/core/"] {
+		t.Error("expected .mindspec/docs/core/ to be skipped")
 	}
 	if !skipped["GLOSSARY.md"] {
 		t.Error("expected GLOSSARY.md to be skipped")
@@ -188,7 +185,7 @@ func TestRun_DomainTemplateSubstitution(t *testing.T) {
 	}
 
 	// Verify domain name was substituted in scaffolded files
-	data, err := os.ReadFile(filepath.Join(root, "docs/domains/context-system/overview.md"))
+	data, err := os.ReadFile(filepath.Join(root, ".mindspec/docs/domains/context-system/overview.md"))
 	if err != nil {
 		t.Fatalf("reading domain overview: %v", err)
 	}
@@ -199,10 +196,9 @@ func TestRun_DomainTemplateSubstitution(t *testing.T) {
 		t.Error("domain overview should not contain unreplaced template placeholder")
 	}
 
-	// Verify template files keep the placeholder
-	tmpl, _ := os.ReadFile(filepath.Join(root, "docs/templates/domain/overview.md"))
-	if !contains(string(tmpl), "{{.DomainName}}") {
-		t.Error("template file should keep {{.DomainName}} placeholder")
+	// Templates are internal to the binary and should not be materialized in workspace.
+	if _, err := os.Stat(filepath.Join(root, "docs/templates")); !os.IsNotExist(err) {
+		t.Error("docs/templates/ should not be created by bootstrap")
 	}
 }
 

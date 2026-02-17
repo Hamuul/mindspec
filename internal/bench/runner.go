@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,14 +16,14 @@ import (
 
 // RunConfig holds the configuration for a full benchmark run.
 type RunConfig struct {
-	SpecID    string
-	Prompt    string
-	Timeout   time.Duration
-	MaxTurns  int
-	MaxRetries int // Auto-approve retry attempts per session (0 = single attempt)
-	Model     string
-	WorkDir   string
-	RepoRoot  string
+	SpecID      string
+	Prompt      string
+	Timeout     time.Duration
+	MaxTurns    int
+	MaxRetries  int // Auto-approve retry attempts per session (0 = single attempt)
+	Model       string
+	WorkDir     string
+	RepoRoot    string
 	BenchCommit string
 
 	SkipCleanup     bool
@@ -146,12 +147,13 @@ func Run(cfg *RunConfig) error {
 	for _, def := range sessions {
 		if def.Label == "c" {
 			specRelPath := findSpecRelPath(wtC, cfg.SpecID)
+			planRelPath := strings.TrimSuffix(specRelPath, "/spec.md") + "/plan.md"
 			def.Prompt = fmt.Sprintf(`The specification at %s is ready for review.
 Follow the MindSpec workflow:
 1. Review the spec, then use /spec-approve to approve it
-2. Create a plan at docs/specs/%s/plan.md, then use /plan-approve
+2. Create a plan at %s, then use /plan-approve
 3. Implement all code and tests described in the plan
-4. Commit your changes when complete`, specRelPath, cfg.SpecID)
+4. Commit your changes when complete`, specRelPath, planRelPath)
 		} else {
 			def.Prompt = cfg.Prompt
 		}

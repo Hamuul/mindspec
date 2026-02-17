@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/mindspec/mindspec/internal/state"
+	"github.com/mindspec/mindspec/internal/workspace"
 )
 
 // ResolvedWork holds the result of mode resolution for a claimed bead.
@@ -103,7 +104,7 @@ func resolveFeatureMode(root, specID string) string {
 		return state.ModeSpec
 	}
 
-	specPath := filepath.Join(root, "docs", "specs", specID, "spec.md")
+	specPath := filepath.Join(workspace.SpecDir(root, specID), "spec.md")
 	data, err := os.ReadFile(specPath)
 	if err != nil {
 		return state.ModeSpec

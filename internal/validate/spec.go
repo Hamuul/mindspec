@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/mindspec/mindspec/internal/workspace"
 )
 
 // requiredSpecSections lists sections that must exist and have content.
@@ -22,7 +24,7 @@ var requiredSpecSections = []string{
 func ValidateSpec(root, specID string) *Result {
 	r := &Result{SubCommand: "spec", TargetID: specID}
 
-	specPath := filepath.Join(root, "docs", "specs", specID, "spec.md")
+	specPath := filepath.Join(workspace.SpecDir(root, specID), "spec.md")
 	data, err := os.ReadFile(specPath)
 	if err != nil {
 		r.AddError("spec-file", fmt.Sprintf("cannot read spec: %v", err))

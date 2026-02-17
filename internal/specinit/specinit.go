@@ -11,6 +11,7 @@ import (
 	"github.com/mindspec/mindspec/internal/bead"
 	"github.com/mindspec/mindspec/internal/recording"
 	"github.com/mindspec/mindspec/internal/state"
+	"github.com/mindspec/mindspec/internal/templates"
 	"github.com/mindspec/mindspec/internal/workspace"
 )
 
@@ -34,15 +35,8 @@ func Run(root, specID, title string) error {
 		title = titleFromSlug(specID)
 	}
 
-	// Read template
-	templatePath := filepath.Join(root, "docs", "templates", "spec.md")
-	tmpl, err := os.ReadFile(templatePath)
-	if err != nil {
-		return fmt.Errorf("reading spec template: %w", err)
-	}
-
 	// Fill placeholders
-	content := strings.Replace(string(tmpl), "<ID>", specID, 1)
+	content := strings.Replace(templates.Spec(), "<ID>", specID, 1)
 	content = strings.Replace(content, "<Title>", title, 1)
 
 	// Create directory and write spec

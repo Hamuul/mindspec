@@ -11,6 +11,7 @@ import (
 	"github.com/mindspec/mindspec/internal/recording"
 	"github.com/mindspec/mindspec/internal/state"
 	"github.com/mindspec/mindspec/internal/validate"
+	"github.com/mindspec/mindspec/internal/workspace"
 
 	"gopkg.in/yaml.v3"
 )
@@ -36,7 +37,7 @@ func ApprovePlan(root, specID, approvedBy string) (*PlanResult, error) {
 	}
 
 	// Step 2: Update plan frontmatter
-	planPath := filepath.Join(root, "docs", "specs", specID, "plan.md")
+	planPath := filepath.Join(workspace.SpecDir(root, specID), "plan.md")
 	if err := updatePlanApproval(planPath, approvedBy); err != nil {
 		return nil, fmt.Errorf("updating plan approval: %w", err)
 	}

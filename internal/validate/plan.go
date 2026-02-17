@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/mindspec/mindspec/internal/adr"
+	"github.com/mindspec/mindspec/internal/workspace"
 	"gopkg.in/yaml.v3"
 )
 
@@ -32,7 +33,7 @@ type ADRCitation struct {
 func ValidatePlan(root, specID string) *Result {
 	r := &Result{SubCommand: "plan", TargetID: specID}
 
-	planPath := filepath.Join(root, "docs", "specs", specID, "plan.md")
+	planPath := filepath.Join(workspace.SpecDir(root, specID), "plan.md")
 	data, err := os.ReadFile(planPath)
 	if err != nil {
 		r.AddError("plan-file", fmt.Sprintf("cannot read plan: %v", err))
@@ -220,7 +221,7 @@ func parseBeadSections(content string) []beadSection {
 // checkADRCitations validates that each cited ADR exists and has appropriate status.
 func checkADRCitations(r *Result, root string, citations []ADRCitation) {
 	for _, cite := range citations {
-		path := filepath.Join(root, "docs", "adr", cite.ID+".md")
+		path := filepath.Join(workspace.ADRDir(root), cite.ID+".md")
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			r.AddError("adr-cite-missing", fmt.Sprintf("cited ADR %s does not exist", cite.ID))
 			continue

@@ -185,7 +185,6 @@ comparative benchmark report.
 	},
 }
 
-
 func splitLabels(s string) []string {
 	if s == "" {
 		return nil
@@ -222,7 +221,7 @@ func init() {
 	benchRunCmd.Flags().String("work-dir", "", "Base dir for worktrees (default: /tmp/mindspec-bench-<spec-id>)")
 	benchRunCmd.Flags().Bool("skip-cleanup", false, "Preserve worktrees after completion")
 	benchRunCmd.Flags().Bool("skip-qualitative", false, "Skip qualitative analysis (quantitative only)")
-	benchRunCmd.Flags().Bool("skip-commit", false, "Don't commit results to docs/specs/")
+	benchRunCmd.Flags().Bool("skip-commit", false, "Don't commit results to specs/<id>/benchmark under the active docs root")
 	benchRunCmd.Flags().Bool("parallel", false, "Run all sessions concurrently")
 	benchRunCmd.Flags().Int("max-retries", 3, "Max auto-approve retry attempts per session")
 

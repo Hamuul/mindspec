@@ -10,6 +10,7 @@ import (
 	"text/template"
 
 	"github.com/mindspec/mindspec/internal/state"
+	"github.com/mindspec/mindspec/internal/workspace"
 )
 
 //go:embed templates/*.md
@@ -169,7 +170,7 @@ func gatesForMode(mode string) []string {
 
 // isPlanApproved checks whether the plan frontmatter has status: Approved.
 func isPlanApproved(root, specID string) bool {
-	planPath := filepath.Join(root, "docs", "specs", specID, "plan.md")
+	planPath := filepath.Join(workspace.SpecDir(root, specID), "plan.md")
 	data, err := os.ReadFile(planPath)
 	if err != nil {
 		return false
@@ -195,7 +196,7 @@ func isPlanApproved(root, specID string) bool {
 
 // readSpecGoal extracts the Goal section from a spec file.
 func readSpecGoal(root, specID string) string {
-	specPath := filepath.Join(root, "docs", "specs", specID, "spec.md")
+	specPath := filepath.Join(workspace.SpecDir(root, specID), "spec.md")
 	data, err := os.ReadFile(specPath)
 	if err != nil {
 		return ""
@@ -223,9 +224,9 @@ func readSpecGoal(root, specID string) string {
 	return string(goal)
 }
 
-// listSpecs returns the names of spec directories under docs/specs/.
+// listSpecs returns the names of spec directories under the active docs root.
 func listSpecs(root string) []string {
-	specsDir := filepath.Join(root, "docs", "specs")
+	specsDir := filepath.Join(workspace.DocsDir(root), "specs")
 	entries, err := os.ReadDir(specsDir)
 	if err != nil {
 		return nil

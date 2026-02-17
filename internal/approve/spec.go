@@ -12,6 +12,7 @@ import (
 	"github.com/mindspec/mindspec/internal/recording"
 	"github.com/mindspec/mindspec/internal/state"
 	"github.com/mindspec/mindspec/internal/validate"
+	"github.com/mindspec/mindspec/internal/workspace"
 )
 
 // runBDFn is a package-level variable for testability.
@@ -35,7 +36,7 @@ func ApproveSpec(root, specID, approvedBy string) (*SpecResult, error) {
 	}
 
 	// Step 2: Update spec frontmatter (Approval section)
-	specPath := filepath.Join(root, "docs", "specs", specID, "spec.md")
+	specPath := filepath.Join(workspace.SpecDir(root, specID), "spec.md")
 	if err := updateSpecApproval(specPath, approvedBy); err != nil {
 		return nil, fmt.Errorf("updating spec approval: %w", err)
 	}

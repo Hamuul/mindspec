@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/mindspec/mindspec/internal/contextpack"
 	"github.com/mindspec/mindspec/internal/trace"
+	"github.com/mindspec/mindspec/internal/workspace"
 	"github.com/spf13/cobra"
 )
 
@@ -70,7 +72,12 @@ and provenance for the specified spec. Content varies by --mode.`,
 			return fmt.Errorf("writing context pack: %w", err)
 		}
 
-		fmt.Printf("Context pack generated: docs/specs/%s/context-pack.md (mode=%s)\n", specID, mode)
+		outPath := filepath.Join(workspace.SpecDir(root, specID), "context-pack.md")
+		relPath, err := filepath.Rel(root, outPath)
+		if err != nil {
+			relPath = outPath
+		}
+		fmt.Printf("Context pack generated: %s (mode=%s)\n", filepath.ToSlash(relPath), mode)
 		return nil
 	},
 }

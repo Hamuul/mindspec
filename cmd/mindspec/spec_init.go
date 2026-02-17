@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/mindspec/mindspec/internal/specinit"
+	"github.com/mindspec/mindspec/internal/workspace"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +29,12 @@ sets state to spec mode, and emits spec mode guidance.`,
 			return err
 		}
 
-		fmt.Printf("Spec initialized: docs/specs/%s/spec.md\n\n", specID)
+		specPath := filepath.Join(workspace.SpecDir(root, specID), "spec.md")
+		relPath, err := filepath.Rel(root, specPath)
+		if err != nil {
+			relPath = specPath
+		}
+		fmt.Printf("Spec initialized: %s\n\n", filepath.ToSlash(relPath))
 
 		if err := emitInstruct(root); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: could not emit guidance: %v\n", err)

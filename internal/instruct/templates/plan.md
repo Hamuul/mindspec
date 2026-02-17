@@ -13,13 +13,13 @@ Turn the approved spec into bounded, executable work chunks (implementation bead
 
 1. Read accepted ADRs for impacted domains
 2. Read domain docs (`overview.md`, `architecture.md`, `interfaces.md`)
-3. Check Context Map (`docs/context-map.md`) for neighboring context contracts
+3. Check Context Map (`.mindspec/docs/context-map.md`) for neighboring context contracts
 4. Verify existing constraints and invariants
 5. **ADR Fitness Evaluation**: After reviewing ADRs, actively evaluate whether each relevant ADR still represents the best architectural choice for the work being planned. Do not blindly conform — if a better design would diverge from an accepted ADR, propose the divergence with justification. Prefer adherence when ADRs are sound; propose superseding when they are not. Document your evaluation in the `## ADR Fitness` section of the plan.
 
 ## Permitted Actions
 
-- Create/edit `docs/specs/{{.ActiveSpec}}/plan.md`
+- Create/edit `.mindspec/docs/specs/{{.ActiveSpec}}/plan.md`
 - Define implementation beads as work chunks in the plan (the spec-lifecycle formula creates the molecule at spec-init; implementation beads are tracked via the molecule's step mapping)
 - Propose new ADRs if divergence detected (`mindspec adr create --supersedes <old-id>`)
 - Update documentation to clarify scope
@@ -52,7 +52,7 @@ ADR Fitness evaluation (`## ADR Fitness` section in plan.md)
 Plan is approved. Run `mindspec next` to claim the first bead and enter Implementation Mode. Do NOT manually set state to implement — `mindspec next` handles bead selection and state transition together.
 {{- else}}
 
-Complete the plan at `docs/specs/{{.ActiveSpec}}/plan.md`, then run `mindspec approve plan {{.ActiveSpec}}`.
+Complete the plan at `.mindspec/docs/specs/{{.ActiveSpec}}/plan.md`, then run `mindspec approve plan {{.ActiveSpec}}`.
 {{- end}}
 
 ## Session Close

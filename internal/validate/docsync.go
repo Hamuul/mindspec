@@ -118,10 +118,10 @@ func checkInternalPackages(r *Result, source, docs []string) {
 		return
 	}
 
-	// Check if any docs/domains/ files were changed
+	// Check if any domain docs files were changed
 	hasDomainDocs := false
 	for _, f := range docs {
-		if strings.HasPrefix(f, "docs/domains/") {
+		if strings.HasPrefix(f, "docs/domains/") || strings.HasPrefix(f, ".mindspec/docs/domains/") {
 			hasDomainDocs = true
 			break
 		}
@@ -132,7 +132,7 @@ func checkInternalPackages(r *Result, source, docs []string) {
 		for pkg := range pkgs {
 			names = append(names, pkg)
 		}
-		r.AddWarning("internal-docs", fmt.Sprintf("internal packages changed (%s) but no docs/domains/ files updated", strings.Join(names, ", ")))
+		r.AddWarning("internal-docs", fmt.Sprintf("internal packages changed (%s) but no domain docs files updated", strings.Join(names, ", ")))
 	}
 }
 

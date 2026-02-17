@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/mindspec/mindspec/internal/workspace"
 )
 
 // Warning represents a drift warning from cross-validation.
@@ -44,7 +46,7 @@ func validateSpecMode(root string, s *State) []Warning {
 		return warnings
 	}
 
-	specPath := filepath.Join(root, "docs", "specs", s.ActiveSpec, "spec.md")
+	specPath := filepath.Join(workspace.SpecDir(root, s.ActiveSpec), "spec.md")
 	if _, err := os.Stat(specPath); os.IsNotExist(err) {
 		warnings = append(warnings, Warning{
 			Field:   "activeSpec",
@@ -75,7 +77,7 @@ func validatePlanMode(root string, s *State) []Warning {
 		return warnings
 	}
 
-	specPath := filepath.Join(root, "docs", "specs", s.ActiveSpec, "spec.md")
+	specPath := filepath.Join(workspace.SpecDir(root, s.ActiveSpec), "spec.md")
 	if status := readSpecApprovalStatus(specPath); status != "APPROVED" {
 		warnings = append(warnings, Warning{
 			Field:   "mode",
@@ -83,7 +85,7 @@ func validatePlanMode(root string, s *State) []Warning {
 		})
 	}
 
-	planPath := filepath.Join(root, "docs", "specs", s.ActiveSpec, "plan.md")
+	planPath := filepath.Join(workspace.SpecDir(root, s.ActiveSpec), "plan.md")
 	if _, err := os.Stat(planPath); os.IsNotExist(err) {
 		warnings = append(warnings, Warning{
 			Field:   "activeSpec",
@@ -113,7 +115,7 @@ func validateImplementMode(root string, s *State) []Warning {
 	}
 
 	// Check plan is approved via frontmatter
-	planPath := filepath.Join(root, "docs", "specs", s.ActiveSpec, "plan.md")
+	planPath := filepath.Join(workspace.SpecDir(root, s.ActiveSpec), "plan.md")
 	if planStatus := readPlanFrontmatterStatus(planPath); planStatus != "Approved" {
 		warnings = append(warnings, Warning{
 			Field:   "mode",

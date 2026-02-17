@@ -14,12 +14,14 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/mindspec/mindspec/internal/workspace"
 )
 
 // SessionDef describes one benchmark session configuration.
 type SessionDef struct {
-	Label       string // e.g., "a", "b", "c"
-	Description string // e.g., "no-docs", "baseline", "mindspec"
+	Label       string                    // e.g., "a", "b", "c"
+	Description string                    // e.g., "no-docs", "baseline", "mindspec"
 	Neutralize  func(wtPath string) error // nil for session C (full MindSpec)
 	EnableTrace bool
 	Prompt      string // per-session prompt override (if non-empty, overrides cfg.Prompt)
@@ -300,7 +302,7 @@ func autoApprove(label, wtPath, specID string) {
 
 	case "plan":
 		// Approve the plan: update frontmatter, advance to implement mode
-		planPath := filepath.Join(wtPath, "docs", "specs", specID, "plan.md")
+		planPath := filepath.Join(workspace.SpecDir(wtPath, specID), "plan.md")
 		if _, err := os.Stat(planPath); err == nil {
 			updateFrontmatterApproval(planPath)
 		}
@@ -330,7 +332,9 @@ func buildRetryPrompt(label, wtPath, specID string, attempt int) string {
 
 	switch state["mode"] {
 	case "plan":
-		return fmt.Sprintf("The spec is approved. Create a plan at docs/specs/%s/plan.md, then use /plan-approve to approve it. After approval, implement all code and tests. Commit your changes when complete.", specID)
+		specRel := findSpecRelPath(wtPath, specID)
+		planRel := strings.TrimSuffix(specRel, "/spec.md") + "/plan.md"
+		return fmt.Sprintf("The spec is approved. Create a plan at %s, then use /plan-approve to approve it. After approval, implement all code and tests. Commit your changes when complete.", planRel)
 	case "implement":
 		return "The plan is approved. Implement all code and tests described in the plan. Commit your changes when complete."
 	default:
@@ -422,19 +426,19 @@ func writeState(wtPath, mode, specID, beadID string) {
 // findSpecFile locates the spec.md for a given spec ID in the worktree.
 func findSpecFile(wtPath, specID string) string {
 	// Try the standard location first
-	p := filepath.Join(wtPath, "docs", "specs", specID, "spec.md")
+	p := filepath.Join(workspace.SpecDir(wtPath, specID), "spec.md")
 	if _, err := os.Stat(p); err == nil {
 		return p
 	}
 	// Try without the full slug (e.g., "022" instead of "022-agentmind-viz-mvp")
-	entries, err := os.ReadDir(filepath.Join(wtPath, "docs", "specs"))
+	entries, err := os.ReadDir(filepath.Join(workspace.DocsDir(wtPath), "specs"))
 	if err != nil {
 		return ""
 	}
 	prefix := strings.SplitN(specID, "-", 2)[0]
 	for _, e := range entries {
 		if e.IsDir() && strings.HasPrefix(e.Name(), prefix) {
-			p := filepath.Join(wtPath, "docs", "specs", e.Name(), "spec.md")
+			p := filepath.Join(workspace.DocsDir(wtPath), "specs", e.Name(), "spec.md")
 			if _, err := os.Stat(p); err == nil {
 				return p
 			}
@@ -447,11 +451,15 @@ func findSpecFile(wtPath, specID string) string {
 func findSpecRelPath(wtPath, specID string) string {
 	abs := findSpecFile(wtPath, specID)
 	if abs == "" {
-		return fmt.Sprintf("docs/specs/%s/spec.md", specID)
+		rel, err := filepath.Rel(wtPath, filepath.Join(workspace.SpecDir(wtPath, specID), "spec.md"))
+		if err != nil {
+			return fmt.Sprintf(".mindspec/docs/specs/%s/spec.md", specID)
+		}
+		return filepath.ToSlash(rel)
 	}
 	rel, err := filepath.Rel(wtPath, abs)
 	if err != nil {
-		return fmt.Sprintf("docs/specs/%s/spec.md", specID)
+		return fmt.Sprintf(".mindspec/docs/specs/%s/spec.md", specID)
 	}
-	return rel
+	return filepath.ToSlash(rel)
 }

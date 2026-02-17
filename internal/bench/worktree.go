@@ -47,6 +47,17 @@ func NeutralizeBaseline(wtPath string) error {
 	// Remove CLAUDE.md
 	os.Remove(filepath.Join(wtPath, "CLAUDE.md"))
 
+	// Preserve canonical docs as legacy docs for baseline sessions.
+	canonicalDocs := filepath.Join(wtPath, ".mindspec", "docs")
+	legacyDocs := filepath.Join(wtPath, "docs")
+	if info, err := os.Stat(canonicalDocs); err == nil && info.IsDir() {
+		if _, err := os.Stat(legacyDocs); os.IsNotExist(err) {
+			if err := os.Rename(canonicalDocs, legacyDocs); err != nil {
+				return fmt.Errorf("preserving canonical docs for baseline: %w", err)
+			}
+		}
+	}
+
 	// Remove .mindspec/
 	os.RemoveAll(filepath.Join(wtPath, ".mindspec"))
 
@@ -74,6 +85,7 @@ func NeutralizeNoDocs(wtPath string) error {
 	if err := NeutralizeBaseline(wtPath); err != nil {
 		return err
 	}
+	os.RemoveAll(filepath.Join(wtPath, ".mindspec", "docs"))
 	os.RemoveAll(filepath.Join(wtPath, "docs"))
 	return nil
 }

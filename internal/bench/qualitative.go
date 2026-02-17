@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/mindspec/mindspec/internal/workspace"
 )
 
 // QualitativeResult holds the outputs of qualitative analysis.
@@ -44,8 +46,8 @@ func RunQualitative(cfg *RunConfig, quantReport string, plans, diffs map[string]
 func CollectPlans(cfg *RunConfig, specID string) map[string]string {
 	plans := make(map[string]string)
 
-	// Session C (mindspec): plan at docs/specs/<ID>/plan.md
-	planC := filepath.Join(cfg.WorkDir, "wt-c", "docs", "specs", specID, "plan.md")
+	// Session C (mindspec): plan under the active docs root.
+	planC := filepath.Join(workspace.SpecDir(filepath.Join(cfg.WorkDir, "wt-c"), specID), "plan.md")
 	if data, err := os.ReadFile(planC); err == nil {
 		plans["c"] = string(data)
 	}
@@ -85,7 +87,11 @@ func GenerateDiffs(cfg *RunConfig, benchCommit string) map[string]string {
 	for _, label := range []string{"a", "b", "c"} {
 		wtPath := filepath.Join(cfg.WorkDir, "wt-"+label)
 		cmd := exec.Command("git", "-C", wtPath, "diff", benchCommit, "HEAD",
-			"--", ":(exclude).beads", ":(exclude).mindspec", ":(exclude)docs/specs")
+			"--",
+			":(exclude).beads",
+			":(exclude).mindspec",
+			":(exclude)docs/specs",
+			":(exclude).mindspec/docs/specs")
 		out, err := cmd.Output()
 		if err != nil {
 			diffs[label] = "(diff generation failed)"

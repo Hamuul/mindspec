@@ -7,11 +7,13 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/mindspec/mindspec/internal/workspace"
 )
 
 // BenchmarkDir returns the benchmark artifact directory for a spec.
 func BenchmarkDir(repoRoot, specID string) string {
-	return filepath.Join(repoRoot, "docs", "specs", specID, "benchmark")
+	return filepath.Join(workspace.SpecDir(repoRoot, specID), "benchmark")
 }
 
 // WriteResults persists all benchmark artifacts to the spec's benchmark directory.
@@ -155,7 +157,6 @@ func assembleReportMD(cfg *RunConfig, results []*SessionResult, quantReport stri
 
 	return b.String()
 }
-
 
 func copyFile(src, dst string) {
 	in, err := os.Open(src)

@@ -11,11 +11,11 @@ Discuss user-facing value and define what "done" means. Spec Mode is intentional
 
 ## Permitted Actions
 
-- Create/edit `docs/specs/{{.ActiveSpec}}/spec.md`
-- Create/edit domain docs (`docs/domains/`)
+- Create/edit `.mindspec/docs/specs/{{.ActiveSpec}}/spec.md`
+- Create/edit domain docs (`.mindspec/docs/domains/`)
 - Add glossary entries (`GLOSSARY.md`)
-- Edit architecture docs (`docs/core/`)
-- Draft ADRs (`docs/adr/`)
+- Edit architecture docs (`.mindspec/docs/core/`)
+- Draft ADRs (`.mindspec/docs/adr/`)
 
 ## Forbidden Actions
 
@@ -38,7 +38,7 @@ A spec containing:
 
 ## Next Action
 
-Complete the spec at `docs/specs/{{.ActiveSpec}}/spec.md`, then run `mindspec approve spec {{.ActiveSpec}}`.
+Complete the spec at `.mindspec/docs/specs/{{.ActiveSpec}}/spec.md`, then run `mindspec approve spec {{.ActiveSpec}}`.
 
 ## Session Close
 

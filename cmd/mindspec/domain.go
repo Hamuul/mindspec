@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/mindspec/mindspec/internal/domain"
+	"github.com/mindspec/mindspec/internal/workspace"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +29,12 @@ var domainAddCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Domain scaffolded: docs/domains/%s/\n", name)
+		domainPath := workspace.DomainDir(root, name)
+		relPath, err := filepath.Rel(root, domainPath)
+		if err != nil {
+			relPath = domainPath
+		}
+		fmt.Printf("Domain scaffolded: %s/\n", filepath.ToSlash(relPath))
 		fmt.Printf("Consider creating an ADR for the new '%s' domain.\n", name)
 		return nil
 	},

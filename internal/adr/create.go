@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mindspec/mindspec/internal/templates"
 	"github.com/mindspec/mindspec/internal/workspace"
 )
 
@@ -43,13 +44,7 @@ func Create(root, title string, opts CreateOpts) (string, error) {
 		return "", fmt.Errorf("generating next ID: %w", err)
 	}
 
-	tmplPath := filepath.Join(root, "docs", "templates", "adr.md")
-	tmplData, err := os.ReadFile(tmplPath)
-	if err != nil {
-		return "", fmt.Errorf("reading template: %w", err)
-	}
-
-	content := string(tmplData)
+	content := templates.ADR()
 	content = strings.ReplaceAll(content, "NNNN", id)
 	content = strings.ReplaceAll(content, "<Title>", title)
 	content = strings.ReplaceAll(content, "<YYYY-MM-DD>", time.Now().Format("2006-01-02"))

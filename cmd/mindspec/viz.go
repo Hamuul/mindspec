@@ -75,7 +75,7 @@ var agentmindReplayCmd = &cobra.Command{
 			if _, err := os.Stat(filePath); err != nil {
 				// Also try resolving via workspace
 				specDir := workspace.SpecDir(root, specID)
-				filePath = specDir + "/recording/events.ndjson"
+				filePath = filepath.Join(specDir, "recording", "events.ndjson")
 				if _, err := os.Stat(filePath); err != nil {
 					return fmt.Errorf("no recording found for spec %s", specID)
 				}
@@ -186,7 +186,7 @@ func init() {
 
 	agentmindReplayCmd.Flags().Float64("speed", 1, "Replay speed multiplier (1, 5, 10, or 0 for max)")
 	agentmindReplayCmd.Flags().Int("ui-port", 8420, "Port for web UI")
-	agentmindReplayCmd.Flags().String("spec", "", "Spec ID to replay (resolves to docs/specs/<id>/recording/events.ndjson)")
+	agentmindReplayCmd.Flags().String("spec", "", "Spec ID to replay (resolves via active docs root to specs/<id>/recording/events.ndjson)")
 	agentmindReplayCmd.Flags().String("phase", "", "Filter replay to a specific phase (e.g., plan, implement)")
 
 	agentmindSetupCodexCmd.Flags().String("config", "", "Path to Codex config.toml (default: ~/.codex/config.toml)")
