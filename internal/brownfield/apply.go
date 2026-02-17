@@ -42,6 +42,9 @@ func applyTransactional(root string, report *Report, opts RunOptions, plan *Migr
 	if err := os.MkdirAll(stagingDocs, 0o755); err != nil {
 		return fmt.Errorf("create staging docs dir: %w", err)
 	}
+	if err := copyDirContents(filepath.Join(root, ".mindspec", "docs"), stagingDocs); err != nil {
+		return fmt.Errorf("seed staging from existing canonical docs: %w", err)
+	}
 
 	lineage := make([]LineageEntry, 0, len(plan.Operations))
 	canonicalApplied := 0
@@ -508,6 +511,39 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	return out.Close()
+}
+
+func copyDirContents(srcRoot, dstRoot string) error {
+	info, err := os.Stat(srcRoot)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("source is not a directory: %s", filepath.ToSlash(srcRoot))
+	}
+
+	return filepath.WalkDir(srcRoot, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+
+		rel, err := filepath.Rel(srcRoot, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		dst := filepath.Join(dstRoot, rel)
+
+		if d.IsDir() {
+			return os.MkdirAll(dst, 0o755)
+		}
+		return copyFile(path, dst)
+	})
 }
 
 func moveFile(src, dst string) error {

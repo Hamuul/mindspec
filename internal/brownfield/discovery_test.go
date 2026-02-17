@@ -548,6 +548,44 @@ func TestRun_ApplyPromotesUserDocsCategory(t *testing.T) {
 	}
 }
 
+func TestRun_ApplyPreservesExistingCanonicalDocs(t *testing.T) {
+	t.Setenv("MINDSPEC_LLM_PROVIDER", "off")
+	t.Setenv("MINDSPEC_LLM_MODEL", "")
+
+	root := t.TempDir()
+	mk := func(rel, content string) {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", rel, err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatalf("write %s: %v", rel, err)
+		}
+	}
+
+	mk(".mindspec/docs/core/ARCHITECTURE.md", "# canonical core\n")
+	mk("README.md", "# project readme\n")
+
+	if _, err := Run(root, RunOptions{RunID: "run-preserve"}); err != nil {
+		t.Fatalf("plan run: %v", err)
+	}
+	if _, err := Run(root, RunOptions{Apply: true, ArchiveMode: "copy", RunID: "run-preserve"}); err != nil {
+		t.Fatalf("apply run failed: %v", err)
+	}
+
+	corePath := filepath.Join(root, ".mindspec", "docs", "core", "ARCHITECTURE.md")
+	coreBytes, err := os.ReadFile(corePath)
+	if err != nil {
+		t.Fatalf("read preserved canonical core doc: %v", err)
+	}
+	if string(coreBytes) != "# canonical core\n" {
+		t.Fatalf("canonical core doc changed unexpectedly: %q", string(coreBytes))
+	}
+	if _, err := os.Stat(filepath.Join(root, ".mindspec", "docs", "user", "README.md")); err != nil {
+		t.Fatalf("expected canonical user README: %v", err)
+	}
+}
+
 func TestRun_ApplyMoveRemovesLegacyDocsTree(t *testing.T) {
 	t.Setenv("MINDSPEC_LLM_PROVIDER", "off")
 	t.Setenv("MINDSPEC_LLM_MODEL", "")
