@@ -136,6 +136,9 @@ func applyTransactional(root string, report *Report, opts RunOptions, plan *Migr
 	}); err != nil {
 		return err
 	}
+	if err := os.RemoveAll(filepath.Join(runDir, "preexisting-docs")); err != nil {
+		return fmt.Errorf("cleanup preexisting canonical docs backup: %w", err)
+	}
 
 	return nil
 }

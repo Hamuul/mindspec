@@ -584,6 +584,9 @@ func TestRun_ApplyPreservesExistingCanonicalDocs(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, ".mindspec", "docs", "user", "README.md")); err != nil {
 		t.Fatalf("expected canonical user README: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(root, ".mindspec", "migrations", "run-preserve", "preexisting-docs")); !os.IsNotExist(err) {
+		t.Fatalf("expected preexisting-docs backup cleanup, got err=%v", err)
+	}
 }
 
 func TestRun_ApplyMoveRemovesLegacyDocsTree(t *testing.T) {
