@@ -49,12 +49,16 @@ type gitIgnoreChecker struct {
 	cache   map[string]bool
 }
 
+// ProgressFunc emits human-readable progress messages while a migration run executes.
+type ProgressFunc func(message string)
+
 // RunOptions controls migration run behavior.
 type RunOptions struct {
 	Apply       bool
 	ArchiveMode string
 	RunID       string
 	Resume      bool
+	Progress    ProgressFunc
 }
 
 const (
@@ -86,6 +90,7 @@ type Report struct {
 	Lineage        []LineageEntry        `json:"lineage,omitempty"`
 	LLM            LLMConfig             `json:"llm"`
 	Unresolved     []string              `json:"unresolved_paths"`
+	progress       ProgressFunc          `json:"-"`
 }
 
 // DiscoverMarkdown scans root for markdown files and returns deterministic output.
@@ -332,6 +337,7 @@ func Run(root string, opts RunOptions) (*Report, error) {
 	if opts.RunID == "" {
 		opts.RunID = time.Now().UTC().Format("20060102T150405Z")
 	}
+	emitProgress(opts, "Preparing migration run %s.", opts.RunID)
 
 	report, stage, resumed, err := loadResumeArtifacts(root, opts.RunID, opts.Resume || opts.Apply)
 	if err != nil {
@@ -341,6 +347,7 @@ func Run(root string, opts RunOptions) (*Report, error) {
 		return nil, err
 	}
 	if !resumed {
+		emitProgress(opts, "Scanning repository for markdown sources (respects .gitignore).")
 		if opts.Apply {
 			return nil, fmt.Errorf("migrate apply blocked: missing migration artifacts for run-id %s (run 'mindspec migrate plan --run-id %s' first)", opts.RunID, opts.RunID)
 		}
@@ -348,12 +355,18 @@ func Run(root string, opts RunOptions) (*Report, error) {
 		if err != nil {
 			return nil, err
 		}
+		emitProgress(opts, "Discovery complete: %d markdown source files.", len(report.MarkdownFiles))
+		emitProgress(opts, "Applying deterministic classification rules.")
 		report.Classification = classify(report.Inventory)
+		emitProgress(opts, "Deterministic classification complete: %d entries.", len(report.Classification))
 		stage = stageClassified
+	} else {
+		emitProgress(opts, "Reusing checkpoint artifacts for run-id %s.", opts.RunID)
 	}
 	if stage == "" {
 		stage = stageClassified
 	}
+	report.progress = opts.Progress
 
 	report.RunID = opts.RunID
 	if opts.Apply {
@@ -361,27 +374,43 @@ func Run(root string, opts RunOptions) (*Report, error) {
 	} else {
 		report.Mode = "plan"
 	}
+	emitReportProgress(report, "Checking LLM availability.")
 	report.LLM = ResolveLLMConfig()
+	if report.LLM.Available {
+		emitReportProgress(report, "LLM available (%s/%s).", report.LLM.Provider, report.LLM.Model)
+	} else {
+		emitReportProgress(report, "No LLM provider configured; deterministic-only decisions will be used.")
+	}
 	report.Unresolved = unresolvedPaths(report.Classification)
+	emitReportProgress(report, "Low-confidence documents requiring LLM assistance: %d.", len(report.Unresolved))
 	if !opts.Apply && len(report.Unresolved) > 0 && report.LLM.Available {
+		emitReportProgress(report, "Requesting LLM assistance for %d document(s).", len(report.Unresolved))
 		updated, classifyErr := llmClassifyFn(root, report)
 		if classifyErr != nil {
 			return report, fmt.Errorf("migrate plan LLM classification failed: %w", classifyErr)
 		}
 		report.Classification = updated
 		report.Unresolved = unresolvedPaths(report.Classification)
+		emitReportProgress(report, "LLM assistance complete. Remaining unresolved documents: %d.", len(report.Unresolved))
+	} else if !opts.Apply && len(report.Unresolved) > 0 {
+		emitReportProgress(report, "LLM unavailable; unresolved documents remain in the plan for manual review.")
 	}
 	if opts.Apply && stage == stageApplied {
+		emitReportProgress(report, "Run already applied; no changes required.")
 		return report, nil
 	}
 
+	emitReportProgress(report, "Writing migration artifacts to %s.", filepath.ToSlash(filepath.Join(".mindspec", "migrations", report.RunID)))
 	if err := writeRunArtifacts(root, report, opts, stage, resumed); err != nil {
 		return nil, err
 	}
+	emitReportProgress(report, "Migration artifacts written.")
 
 	if !opts.Apply {
+		emitReportProgress(report, "Plan phase complete.")
 		return report, nil
 	}
+	emitReportProgress(report, "Validating approved plan and source hashes before apply.")
 	plan, err := verifyApplyPlanAndSourceDrift(root, report)
 	if err != nil {
 		return report, err
@@ -404,13 +433,29 @@ func Run(root string, opts RunOptions) (*Report, error) {
 	if err := writeRunState(root, report, opts, stageApplying, resumed); err != nil {
 		return nil, err
 	}
+	emitReportProgress(report, "Applying approved migration plan transactionally.")
 	if err := applyTransactional(root, report, opts, plan); err != nil {
 		return report, err
 	}
 	if err := writeRunState(root, report, opts, stageApplied, resumed); err != nil {
 		return nil, err
 	}
+	emitReportProgress(report, "Apply phase complete.")
 	return report, nil
+}
+
+func emitProgress(opts RunOptions, format string, args ...any) {
+	if opts.Progress == nil {
+		return
+	}
+	opts.Progress(fmt.Sprintf(format, args...))
+}
+
+func emitReportProgress(report *Report, format string, args ...any) {
+	if report == nil || report.progress == nil {
+		return
+	}
+	report.progress(fmt.Sprintf(format, args...))
 }
 
 func loadResumeArtifacts(root, runID string, strict bool) (*Report, string, bool, error) {

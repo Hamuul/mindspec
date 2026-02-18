@@ -50,12 +50,16 @@ func classifyWithLLM(root string, report *Report) ([]ClassificationEntry, error)
 
 	out := make([]ClassificationEntry, len(report.Classification))
 	copy(out, report.Classification)
-
+	pending := make([]int, 0, len(out))
 	for i := range out {
-		if !out[i].RequiresLLM {
-			continue
+		if out[i].RequiresLLM {
+			pending = append(pending, i)
 		}
+	}
+	emitReportProgress(report, "LLM classification started for %d document(s).", len(pending))
 
+	for idx, i := range pending {
+		emitReportProgress(report, "LLM review %d/%d: %s", idx+1, len(pending), out[i].Path)
 		result, err := classifyOneWithClaude(root, out[i].Path, report.LLM.Model)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", out[i].Path, err)
@@ -66,7 +70,9 @@ func classifyWithLLM(root string, report *Report) ([]ClassificationEntry, error)
 		out[i].Rule = "llm:" + llmPromptVersion
 		out[i].Rationale = strings.TrimSpace(result.Rationale)
 		out[i].RequiresLLM = out[i].Confidence < 0.70
+		emitReportProgress(report, "LLM classified %s as %s (confidence=%.2f).", out[i].Path, out[i].Category, out[i].Confidence)
 	}
+	emitReportProgress(report, "LLM classification completed.")
 
 	return out, nil
 }

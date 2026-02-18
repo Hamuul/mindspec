@@ -224,6 +224,91 @@ func TestRun_ReportArtifactsAreDeterministic(t *testing.T) {
 	}
 }
 
+func TestRun_PlanEmitsProgressUpdates(t *testing.T) {
+	t.Setenv("MINDSPEC_LLM_PROVIDER", "off")
+	t.Setenv("MINDSPEC_LLM_MODEL", "")
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "docs", "core"), 0o755); err != nil {
+		t.Fatalf("mkdir docs/core: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "docs", "core", "ARCHITECTURE.md"), []byte("# arch\n"), 0o644); err != nil {
+		t.Fatalf("write doc: %v", err)
+	}
+
+	var progress []string
+	_, err := Run(root, RunOptions{
+		RunID: "run-progress",
+		Progress: func(message string) {
+			progress = append(progress, message)
+		},
+	})
+	if err != nil {
+		t.Fatalf("plan run failed: %v", err)
+	}
+
+	for _, mustContain := range []string{
+		"Preparing migration run",
+		"Scanning repository",
+		"Discovery complete",
+		"Applying deterministic classification",
+		"Writing migration artifacts",
+		"Plan phase complete",
+	} {
+		if !containsProgress(progress, mustContain) {
+			t.Fatalf("expected progress containing %q, got: %#v", mustContain, progress)
+		}
+	}
+}
+
+func TestRun_PlanProgressShowsLLMAssistance(t *testing.T) {
+	t.Setenv("MINDSPEC_LLM_PROVIDER", "claude-cli")
+	t.Setenv("MINDSPEC_LLM_MODEL", "claude-sonnet")
+
+	oldClassify := llmClassifyFn
+	llmClassifyFn = func(root string, report *Report) ([]ClassificationEntry, error) {
+		out := make([]ClassificationEntry, len(report.Classification))
+		copy(out, report.Classification)
+		for i := range out {
+			if !out[i].RequiresLLM {
+				continue
+			}
+			out[i].Category = "user-docs"
+			out[i].Confidence = 0.91
+			out[i].Rule = "llm:test"
+			out[i].Rationale = "classified in test"
+			out[i].RequiresLLM = false
+		}
+		return out, nil
+	}
+	defer func() { llmClassifyFn = oldClassify }()
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "misc"), 0o755); err != nil {
+		t.Fatalf("mkdir misc: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "misc", "notes.md"), []byte("# notes\n"), 0o644); err != nil {
+		t.Fatalf("write notes: %v", err)
+	}
+
+	var progress []string
+	_, err := Run(root, RunOptions{
+		RunID: "run-progress-llm",
+		Progress: func(message string) {
+			progress = append(progress, message)
+		},
+	})
+	if err != nil {
+		t.Fatalf("plan run failed: %v", err)
+	}
+	if !containsProgress(progress, "Requesting LLM assistance") {
+		t.Fatalf("expected LLM assistance request in progress: %#v", progress)
+	}
+	if !containsProgress(progress, "LLM assistance complete") {
+		t.Fatalf("expected LLM assistance completion in progress: %#v", progress)
+	}
+}
+
 func TestRun_PlanUsesLLMClassificationWhenAvailable(t *testing.T) {
 	t.Setenv("MINDSPEC_LLM_PROVIDER", "claude-cli")
 	t.Setenv("MINDSPEC_LLM_MODEL", "claude-sonnet")
@@ -865,4 +950,13 @@ func treeHash(t *testing.T, root string) string {
 		h.Write([]byte{'\n'})
 	}
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+func containsProgress(messages []string, needle string) bool {
+	for _, m := range messages {
+		if strings.Contains(m, needle) {
+			return true
+		}
+	}
+	return false
 }

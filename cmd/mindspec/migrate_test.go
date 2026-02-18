@@ -2,7 +2,9 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -133,5 +135,52 @@ func TestReadMigrationArtifactJSON_Missing(t *testing.T) {
 	_, err := readMigrationArtifactJSON(root, "run-404", "plan.json")
 	if err == nil {
 		t.Fatal("expected missing artifact error")
+	}
+}
+
+func TestRequireCleanGitTree_DirtyFails(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+
+	root := t.TempDir()
+	cmd := exec.Command("git", "init")
+	cmd.Dir = root
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v (%s)", err, strings.TrimSpace(string(out)))
+	}
+	if err := os.WriteFile(filepath.Join(root, "dirty.txt"), []byte("dirty\n"), 0o644); err != nil {
+		t.Fatalf("write dirty file: %v", err)
+	}
+
+	err := requireCleanGitTree(root)
+	if err == nil {
+		t.Fatal("expected dirty tree error")
+	}
+	if !strings.Contains(err.Error(), "working tree is dirty") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRequireCleanGitTree_CleanPasses(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+
+	root := t.TempDir()
+	cmd := exec.Command("git", "init")
+	cmd.Dir = root
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v (%s)", err, strings.TrimSpace(string(out)))
+	}
+	if err := requireCleanGitTree(root); err != nil {
+		t.Fatalf("expected clean tree success, got: %v", err)
+	}
+}
+
+func TestRequireCleanGitTree_NonRepoPasses(t *testing.T) {
+	root := t.TempDir()
+	if err := requireCleanGitTree(root); err != nil {
+		t.Fatalf("expected non-repo to pass, got: %v", err)
 	}
 }

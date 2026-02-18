@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -48,15 +50,23 @@ var migratePlanCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		runID, _ := cmd.Flags().GetString("run-id")
 		jsonFlag, _ := cmd.Flags().GetBool("json")
+		progressOut := cmd.ErrOrStderr()
 
 		root, err := os.Getwd()
 		if err != nil {
 			return fmt.Errorf("getting working directory: %w", err)
 		}
+		if err := requireCleanGitTree(root); err != nil {
+			return err
+		}
+		writeMigratePlanOverview(progressOut)
+		progress := newMigratePlanProgressWriter(progressOut)
+		progress("Git working tree is clean.")
 
 		report, err := brownfield.Run(root, brownfield.RunOptions{
-			Apply: false,
-			RunID: strings.TrimSpace(runID),
+			Apply:    false,
+			RunID:    strings.TrimSpace(runID),
+			Progress: progress,
 		})
 		if report != nil {
 			if jsonFlag {
@@ -73,7 +83,17 @@ var migratePlanCmd = &cobra.Command{
 					filepath.ToSlash(filepath.Join(".mindspec", "migrations", report.RunID, "plan.md")),
 				)
 				fmt.Printf("Apply with: mindspec migrate apply --run-id %s\n", report.RunID)
+				fmt.Printf("If the plan looks good, commit the generated artifacts before applying.\n")
 			}
+			progress(fmt.Sprintf(
+				"Review %s and %s.",
+				filepath.ToSlash(filepath.Join(".mindspec", "migrations", report.RunID, "plan.json")),
+				filepath.ToSlash(filepath.Join(".mindspec", "migrations", report.RunID, "plan.md")),
+			))
+			progress(fmt.Sprintf(
+				"If the plan looks good, commit these artifacts, then run: mindspec migrate apply --run-id %s",
+				report.RunID,
+			))
 		}
 		return err
 	},
@@ -127,6 +147,58 @@ func readMigrationArtifactJSON(root, runID, name string) (string, error) {
 		return "", fmt.Errorf("read migration artifact %s: %w", filepath.ToSlash(path), err)
 	}
 	return strings.TrimSpace(string(data)), nil
+}
+
+func writeMigratePlanOverview(w io.Writer) {
+	fmt.Fprintln(w, "migrate plan will:")
+	fmt.Fprintln(w, "  1. Scan markdown docs in the repo (respects .gitignore).")
+	fmt.Fprintln(w, "  2. Classify docs deterministically.")
+	fmt.Fprintln(w, "  3. Ask the LLM only for low-confidence docs, when available.")
+	fmt.Fprintln(w, "  4. Write plan artifacts under .mindspec/migrations/<run-id>/.")
+	fmt.Fprintln(w, "  5. Make no canonical docs or archive mutations.")
+}
+
+func newMigratePlanProgressWriter(w io.Writer) brownfield.ProgressFunc {
+	return func(message string) {
+		fmt.Fprintf(w, "migrate plan: %s\n", message)
+	}
+}
+
+func requireCleanGitTree(root string) error {
+	if _, err := exec.LookPath("git"); err != nil {
+		return nil
+	}
+
+	inRepo, err := isGitRepository(root)
+	if err != nil || !inRepo {
+		return err
+	}
+
+	out, err := exec.Command("git", "-C", root, "status", "--porcelain").CombinedOutput()
+	if err != nil {
+		detail := strings.TrimSpace(string(out))
+		if detail != "" {
+			return fmt.Errorf("checking git working tree: %s", detail)
+		}
+		return fmt.Errorf("checking git working tree: %w", err)
+	}
+	status := strings.TrimSpace(string(out))
+	if status != "" {
+		return fmt.Errorf("working tree is dirty — commit or discard changes before running 'mindspec migrate plan':\n%s", status)
+	}
+	return nil
+}
+
+func isGitRepository(root string) (bool, error) {
+	out, err := exec.Command("git", "-C", root, "rev-parse", "--is-inside-work-tree").CombinedOutput()
+	if err != nil {
+		detail := strings.TrimSpace(string(out))
+		if strings.Contains(detail, "not a git repository") || strings.Contains(detail, "not a git repo") {
+			return false, nil
+		}
+		return false, fmt.Errorf("checking git repository: %w", err)
+	}
+	return strings.TrimSpace(string(out)) == "true", nil
 }
 
 func init() {
