@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	llmPromptVersion       = "v1"
+	llmPromptVersion       = "v2"
 	llmClassificationLimit = 16000
 )
 
@@ -136,12 +136,50 @@ func classifyOneWithClaude(root, relPath, model string) (llmClassification, erro
 func buildLLMClassificationPrompt(path, content string) string {
 	content = truncateString(content, llmClassificationLimit)
 	return fmt.Sprintf(
-		`Classify this markdown document for MindSpec migration.
+		`You are classifying a markdown document for MindSpec migration.
 
 Prompt version: %s
-Allowed categories: adr, spec, domain, core, context-map, glossary, user-docs, unknown.
-Return strict JSON only (no prose, no markdown, no code fences):
-{"category":"<allowed-category>","confidence":<0_to_1>,"rationale":"<brief rationale>"}
+
+Goal:
+- Assign exactly one category from:
+  adr, spec, domain, core, context-map, glossary, user-docs, unknown
+- Provide calibrated confidence (0.0-1.0)
+- Provide concise evidence-based rationale
+
+Category rubric:
+- adr: architecture decision records (often ADR-NNNN, decision/status/supersedes content)
+- spec: feature/project specs, plans, acceptance criteria, context packs, implementation plans
+- domain: docs scoped to a bounded domain (overview, architecture, interfaces, runbook)
+- core: project-wide architecture/process/conventions/docs that are not domain-specific
+- context-map: bounded-context map and cross-context contracts/relationships
+- glossary: term-definition/index docs mapping concepts to references
+- user-docs: READMEs, guides, operational notes, onboarding/help content
+- unknown: ambiguous, mixed-purpose, or insufficient evidence
+
+Canonical mapping context:
+- adr -> .mindspec/docs/adr/
+- spec -> .mindspec/docs/specs/
+- domain -> .mindspec/docs/domains/
+- core -> .mindspec/docs/core/
+- context-map -> .mindspec/docs/context-map.md
+- glossary -> .mindspec/docs/glossary.md
+- user-docs -> .mindspec/docs/user/
+
+Confidence calibration:
+- >=0.90: explicit markers strongly match a single category
+- 0.70-0.89: strong but not definitive evidence
+- <0.70: uncertain or mixed; prefer category "unknown"
+
+Decision rules:
+- Use both path and content; content outweighs path when they conflict.
+- If content appears truncated or incomplete, lower confidence.
+- If two categories seem plausible and neither clearly wins, choose "unknown".
+
+Output contract:
+- Return strict JSON only (no prose, no markdown, no code fences).
+- JSON schema:
+  {"category":"<allowed-category>","confidence":<0_to_1>,"rationale":"<brief evidence>"}
+- rationale must cite concrete cues (for example: headings, keywords, structural markers).
 
 Path: %s
 Content:
