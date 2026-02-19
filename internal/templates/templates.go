@@ -89,7 +89,10 @@ func Domain(filename string) string {
 	}
 }
 
-const specTemplate = `# Spec <ID>: <Title>
+const specTemplate = `---
+molecule_id: ""
+---
+# Spec <ID>: <Title>
 
 ## Goal
 

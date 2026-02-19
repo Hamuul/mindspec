@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mindspec/mindspec/internal/specmeta"
 	"github.com/mindspec/mindspec/internal/workspace"
 )
 
@@ -58,6 +59,9 @@ func ValidateSpec(root, specID string) *Result {
 
 	// Check open questions resolved
 	checkOpenQuestions(r, sections)
+
+	// Check molecule binding (ADR-0015) — warning only, not blocking
+	checkMoleculeBinding(r, root, specID)
 
 	return r
 }
@@ -171,6 +175,17 @@ func checkAcceptanceCriteria(r *Result, sections map[string]string) {
 		if IsVagueCriterion(line) {
 			r.AddWarning("criteria-vague", fmt.Sprintf("possibly vague criterion: %s", strings.TrimSpace(line)))
 		}
+	}
+}
+
+// checkMoleculeBinding warns if the spec lacks a molecule_id in its frontmatter.
+func checkMoleculeBinding(r *Result, root, specID string) {
+	m, err := specmeta.ReadForSpec(root, specID)
+	if err != nil {
+		return // can't read → skip this check
+	}
+	if m.MoleculeID == "" {
+		r.AddWarning("molecule-binding", "spec has no molecule_id in frontmatter; run backfill or re-init")
 	}
 }
 

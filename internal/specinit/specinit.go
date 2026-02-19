@@ -10,6 +10,7 @@ import (
 
 	"github.com/mindspec/mindspec/internal/bead"
 	"github.com/mindspec/mindspec/internal/recording"
+	"github.com/mindspec/mindspec/internal/specmeta"
 	"github.com/mindspec/mindspec/internal/state"
 	"github.com/mindspec/mindspec/internal/templates"
 	"github.com/mindspec/mindspec/internal/workspace"
@@ -72,6 +73,14 @@ func Run(root, specID, title string) error {
 				if _, err := bead.RunBDCombined("update", stepID, "--status=in_progress"); err != nil {
 					fmt.Fprintf(os.Stderr, "warning: could not start spec step: %v\n", err)
 				}
+			}
+			// Write molecule binding into spec frontmatter (ADR-0015)
+			meta := &specmeta.Meta{
+				MoleculeID:  molID,
+				StepMapping: stepMap,
+			}
+			if err := specmeta.Write(specDir, meta); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: could not write molecule binding to spec frontmatter: %v\n", err)
 			}
 		}
 	}

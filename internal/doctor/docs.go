@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/mindspec/mindspec/internal/glossary"
+	"github.com/mindspec/mindspec/internal/specmeta"
 	"github.com/mindspec/mindspec/internal/workspace"
 )
 
@@ -58,6 +59,9 @@ func checkDocs(r *Report, root string) {
 
 	// Domain subdirectory checks
 	checkDomains(r, root, docsRel)
+
+	// Spec molecule binding checks (ADR-0015)
+	checkSpecBindings(r, root)
 
 	// Migration metadata checks (only when migration artifacts are present).
 	checkMigrationMetadata(r, root)
@@ -165,4 +169,42 @@ func relSlash(root, path string) string {
 		return filepath.ToSlash(path)
 	}
 	return filepath.ToSlash(rel)
+}
+
+// checkSpecBindings warns on spec directories that lack a molecule_id binding
+// in their frontmatter (ADR-0015).
+func checkSpecBindings(r *Report, root string) {
+	specsDir := filepath.Join(workspace.DocsDir(root), "specs")
+	entries, err := os.ReadDir(specsDir)
+	if err != nil {
+		return // specs dir missing is already reported
+	}
+
+	var unbound []string
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		specDir := filepath.Join(specsDir, e.Name())
+		if !fileExists(filepath.Join(specDir, "spec.md")) {
+			continue
+		}
+		m, err := specmeta.Read(specDir)
+		if err != nil {
+			continue
+		}
+		if m.MoleculeID == "" {
+			unbound = append(unbound, e.Name())
+		}
+	}
+
+	if len(unbound) == 0 {
+		return
+	}
+
+	r.Checks = append(r.Checks, Check{
+		Name:    "Spec molecule bindings",
+		Status:  Warn,
+		Message: fmt.Sprintf("%d specs missing molecule_id: %s", len(unbound), strings.Join(unbound, ", ")),
+	})
 }
