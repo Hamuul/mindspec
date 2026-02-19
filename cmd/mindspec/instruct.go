@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/mindspec/mindspec/internal/instruct"
+	"github.com/mindspec/mindspec/internal/resolve"
 	"github.com/mindspec/mindspec/internal/state"
 	"github.com/mindspec/mindspec/internal/trace"
 	"github.com/mindspec/mindspec/internal/workspace"
@@ -14,9 +15,14 @@ import (
 var instructCmd = &cobra.Command{
 	Use:   "instruct",
 	Short: "Emit agent instructions for the current mode and active work",
-	Long:  `Reads .mindspec/state.json and emits mode-appropriate operating guidance for agent consumption.`,
+	Long: `Derives mode from the target spec's molecule state (ADR-0015) and emits
+mode-appropriate operating guidance for agent consumption.
+
+If --spec is omitted and exactly one active spec exists, it is auto-selected.
+If multiple active specs exist, the command fails with a list of candidates.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		format, _ := cmd.Flags().GetString("format")
+		specFlag, _ := cmd.Flags().GetString("spec")
 
 		cwd, err := os.Getwd()
 		if err != nil {
@@ -28,12 +34,43 @@ var instructCmd = &cobra.Command{
 			return err
 		}
 
-		s, err := state.Read(root)
-		if err != nil {
-			if err == state.ErrNoState {
-				return handleNoState(root, format)
+		// Resolve target spec (ADR-0015 targeting rules)
+		specID, resolveErr := resolve.ResolveTarget(root, specFlag)
+
+		// Build state from resolver or fall back to state.json
+		var s *state.State
+		if resolveErr != nil {
+			// If ambiguous, surface the error directly
+			if _, ok := resolveErr.(*resolve.ErrAmbiguousTarget); ok {
+				return resolveErr
 			}
-			return err
+			// Other errors: fall back to state.json
+			s, err = state.Read(root)
+			if err != nil {
+				if err == state.ErrNoState {
+					return handleNoState(root, format)
+				}
+				return err
+			}
+		} else {
+			// Derive mode from molecule
+			mode, modeErr := resolve.ResolveMode(root, specID)
+			if modeErr != nil {
+				// Fallback: read mode from state.json but use resolved specID
+				s, _ = state.Read(root)
+				if s == nil {
+					s = &state.State{Mode: state.ModeIdle}
+				}
+				s.ActiveSpec = specID
+			} else {
+				// Read existing state for bead info, overlay derived values
+				s, _ = state.Read(root)
+				if s == nil {
+					s = &state.State{}
+				}
+				s.Mode = mode
+				s.ActiveSpec = specID
+			}
 		}
 
 		ctx := instruct.BuildContext(root, s)
@@ -99,4 +136,5 @@ func handleNoState(root, format string) error {
 
 func init() {
 	instructCmd.Flags().String("format", "", "Output format: markdown (default) or json")
+	instructCmd.Flags().String("spec", "", "Target spec ID (auto-detected if exactly one active spec)")
 }

@@ -1,0 +1,83 @@
+package resolve
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestResolveTarget_ExplicitFlag(t *testing.T) {
+	// Explicit --spec always wins, regardless of active specs
+	got, err := ResolveTarget("/nonexistent", "042-my-spec")
+	if err != nil {
+		t.Fatalf("ResolveTarget() error: %v", err)
+	}
+	if got != "042-my-spec" {
+		t.Errorf("ResolveTarget() = %q, want %q", got, "042-my-spec")
+	}
+}
+
+func TestErrAmbiguousTarget_Message(t *testing.T) {
+	err := &ErrAmbiguousTarget{
+		Active: []SpecStatus{
+			{SpecID: "001-alpha", Mode: "spec"},
+			{SpecID: "002-beta", Mode: "plan"},
+		},
+	}
+	msg := err.Error()
+	if msg == "" {
+		t.Error("expected non-empty error message")
+	}
+	for _, id := range []string{"001-alpha", "002-beta"} {
+		if !strings.Contains(msg, id) {
+			t.Errorf("error message should contain %q: %s", id, msg)
+		}
+	}
+	if !strings.Contains(msg, "--spec") {
+		t.Errorf("error message should mention --spec flag: %s", msg)
+	}
+}
+
+func TestResolveTarget_NoSpecsNoState(t *testing.T) {
+	// With nonexistent root, both resolver and state cursor fail
+	_, err := ResolveTarget("/nonexistent-root-"+t.Name(), "")
+	if err == nil {
+		t.Fatal("expected error when no specs and no state available")
+	}
+}
+
+func TestResolveTarget_FallbackToCursor(t *testing.T) {
+	// Create a temp root with state.json but no specs directory
+	root := t.TempDir()
+	mindspecDir := filepath.Join(root, ".mindspec")
+	os.MkdirAll(mindspecDir, 0755)
+
+	stateJSON := `{"mode":"plan","activeSpec":"099-existing","activeBead":"","lastUpdated":"2026-01-01T00:00:00Z"}`
+	os.WriteFile(filepath.Join(mindspecDir, "state.json"), []byte(stateJSON), 0644)
+
+	got, err := ResolveTarget(root, "")
+	if err != nil {
+		t.Fatalf("ResolveTarget() error: %v", err)
+	}
+	if got != "099-existing" {
+		t.Errorf("ResolveTarget() = %q, want %q (fallback to cursor)", got, "099-existing")
+	}
+}
+
+func TestErrAmbiguousTarget_IsDetectable(t *testing.T) {
+	err := &ErrAmbiguousTarget{Active: []SpecStatus{{SpecID: "a"}}}
+	var ambErr *ErrAmbiguousTarget
+	if !isAmbiguousError(err, &ambErr) {
+		t.Error("expected ErrAmbiguousTarget to be detectable via type assertion")
+	}
+}
+
+// isAmbiguousError is a helper for type assertion tests.
+func isAmbiguousError(err error, target **ErrAmbiguousTarget) bool {
+	e, ok := err.(*ErrAmbiguousTarget)
+	if ok {
+		*target = e
+	}
+	return ok
+}

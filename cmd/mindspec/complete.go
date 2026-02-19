@@ -18,7 +18,8 @@ var completeCmd = &cobra.Command{
   3. Removes the worktree via bd worktree remove
   4. Advances state (next bead, plan, or idle)
 
-The bead ID defaults to the activeBead from state if not provided.`,
+The bead ID defaults to the activeBead from state if not provided.
+Use --spec to specify the target spec (used for state cursor update).`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		root, err := findRoot()
@@ -51,4 +52,8 @@ The bead ID defaults to the activeBead from state if not provided.`,
 		}
 		return nil
 	},
+}
+
+func init() {
+	completeCmd.Flags().String("spec", "", "Target spec ID (for state cursor update)")
 }

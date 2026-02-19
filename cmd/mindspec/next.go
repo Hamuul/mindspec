@@ -3,9 +3,11 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/mindspec/mindspec/internal/next"
 	"github.com/mindspec/mindspec/internal/recording"
+	"github.com/mindspec/mindspec/internal/resolve"
 	"github.com/mindspec/mindspec/internal/state"
 	"github.com/mindspec/mindspec/internal/workspace"
 	"github.com/spf13/cobra"
@@ -16,9 +18,13 @@ var nextCmd = &cobra.Command{
 	Short: "Discover, claim, and start the next piece of work",
 	Long: `Queries Beads for ready work, claims it, updates MindSpec state,
 and emits mode-appropriate guidance — going from "what should I do?"
-to "here's your bead, here's the mode, here are your rules" in one step.`,
+to "here's your bead, here's the mode, here are your rules" in one step.
+
+Use --spec to filter ready work to a specific spec. If multiple active specs
+exist and no --spec is given, the command fails with a list of candidates.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		pick, _ := cmd.Flags().GetInt("pick")
+		specFlag, _ := cmd.Flags().GetString("spec")
 
 		cwd, err := os.Getwd()
 		if err != nil {
@@ -40,15 +46,42 @@ to "here's your bead, here's the mode, here are your rules" in one step.`,
 			return fmt.Errorf("dirty working tree")
 		}
 
+		// Step 1.5: Resolve target spec if ambiguous
+		if specFlag == "" {
+			targetSpec, err := resolve.ResolveTarget(root, "")
+			if err != nil {
+				if _, ok := err.(*resolve.ErrAmbiguousTarget); ok {
+					return fmt.Errorf("multiple active specs found; use --spec to target one:\n%s", err)
+				}
+				// Non-ambiguous errors are OK — next will query all ready work
+			} else {
+				specFlag = targetSpec
+			}
+		}
+
 		// Step 2: Query ready work
 		items, err := next.QueryReady()
 		if err != nil {
 			return fmt.Errorf("querying ready work: %w", err)
 		}
 
+		// Step 2.5: Filter by target spec if specified
+		if specFlag != "" {
+			var filtered []next.BeadInfo
+			for _, item := range items {
+				if containsSpecID(item.Title, specFlag) {
+					filtered = append(filtered, item)
+				}
+			}
+			items = filtered
+		}
+
 		// Step 3: Handle no-work case
 		if len(items) == 0 {
 			fmt.Println("No ready work found.")
+			if specFlag != "" {
+				fmt.Printf("(filtered to spec: %s)\n", specFlag)
+			}
 			fmt.Println()
 			fmt.Println("Next steps:")
 			fmt.Println("  - Create a new spec: mindspec spec-init")
@@ -92,7 +125,7 @@ to "here's your bead, here's the mode, here are your rules" in one step.`,
 
 		// Note: parent status propagation handled natively by beads molecules
 
-		// Step 7: Update state
+		// Step 7: Update state (cursor)
 		if err := state.SetMode(root, resolved.Mode, resolved.SpecID, selected.ID); err != nil {
 			return fmt.Errorf("updating state: %w", err)
 		}
@@ -119,6 +152,12 @@ to "here's your bead, here's the mode, here are your rules" in one step.`,
 	},
 }
 
+// containsSpecID checks if a bead title references the given spec ID.
+func containsSpecID(title, specID string) bool {
+	return strings.Contains(title, specID)
+}
+
 func init() {
 	nextCmd.Flags().Int("pick", 0, "Pick a specific item by number (1-based) when multiple are ready")
+	nextCmd.Flags().String("spec", "", "Target spec ID to filter ready work (auto-detected if exactly one active spec)")
 }
