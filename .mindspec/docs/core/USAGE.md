@@ -284,13 +284,16 @@ Work is not complete until changes are committed.
 | `mindspec migrate plan` | Generate migration plan artifacts for an existing repository |
 | `mindspec migrate apply --run-id <id>` | Apply a reviewed migration plan |
 | `mindspec instruct` | See current mode guidance (auto-runs on session start) |
+| `mindspec instruct --spec <id>` | Target a specific spec when multiple are active |
 | `mindspec state show` | Check focused spec cursor and derived mode |
+| `mindspec state show --spec <id>` | Show derived mode for a specific spec |
 | `mindspec validate spec <id>` | Pre-check spec quality before approval |
 | `mindspec validate plan <id>` | Pre-check plan quality before approval |
-| `mindspec doctor` | Project health check |
+| `mindspec doctor` | Project health check (includes molecule binding warnings) |
 | `/spec-init` | Start a new specification |
 | `/spec-approve` | Approve spec → plan transition |
 | `/plan-approve` | Approve plan → implement transition |
 | `/impl-approve` | Approve implementation → idle |
 | `mindspec next` | Claim the next ready bead |
+| `mindspec next --spec <id>` | Claim ready work for a specific spec |
 | `mindspec complete` | Close current bead and advance |
