@@ -18,6 +18,7 @@ func TestValidatePlan_WellFormed(t *testing.T) {
 	}
 
 	// The plan is well-formed structurally — should not have structural errors
+	// Note: 005-next is an approved plan, so new Spec 039 checks are skipped
 	for _, issue := range r.Issues {
 		if issue.Severity == SevError && issue.Name != "bead-id-missing" {
 			t.Errorf("unexpected structural error: [%s] %s: %s", issue.Severity, issue.Name, issue.Message)
@@ -42,7 +43,7 @@ func TestValidatePlan_MissingRequiredFields(t *testing.T) {
 	specDir := filepath.Join(tmp, "docs", "specs", "999-test")
 	os.MkdirAll(specDir, 0755)
 
-	plan := "---\nstatus: Draft\n---\n\n# Plan\n\n## Bead 999-A: Test\n\n**Steps**:\n1. Step one\n2. Step two\n3. Step three\n\n**Verification**:\n- [ ] Check something\n\n**Depends on**: nothing\n"
+	plan := "---\nstatus: Draft\n---\n\n# Plan\n\n## ADR Fitness\n\nNo relevant ADRs.\n\n## Testing Strategy\n\nUnit tests.\n\n## Provenance\n\nN/A.\n\n## Bead 999-A: Test\n\n**Steps**:\n1. Step one\n2. Step two\n3. Step three\n\n**Verification**:\n- [ ] `go test ./...` passes\n\n**Depends on**: nothing\n"
 	os.WriteFile(filepath.Join(specDir, "plan.md"), []byte(plan), 0644)
 
 	r := ValidatePlan(tmp, "999-test")
@@ -97,7 +98,7 @@ func TestValidatePlan_BeadMissingSteps(t *testing.T) {
 	specDir := filepath.Join(tmp, "docs", "specs", "999-test")
 	os.MkdirAll(specDir, 0755)
 
-	plan := "---\nstatus: Draft\nspec_id: \"999-test\"\nversion: \"1.0\"\n---\n\n# Plan\n\n## Bead 999-A: Test\n\n**Scope**: Do something\n\n**Steps**:\n1. Only one step\n\n**Verification**:\n- [ ] Check it\n\n**Depends on**: nothing\n"
+	plan := "---\nstatus: Draft\nspec_id: \"999-test\"\nversion: \"1.0\"\n---\n\n# Plan\n\n## ADR Fitness\n\nNone.\n\n## Testing Strategy\n\nUnit tests.\n\n## Provenance\n\nN/A.\n\n## Bead 999-A: Test\n\n**Scope**: Do something\n\n**Steps**:\n1. Only one step\n\n**Verification**:\n- [ ] `go test` passes\n\n**Depends on**: nothing\n"
 	os.WriteFile(filepath.Join(specDir, "plan.md"), []byte(plan), 0644)
 
 	r := ValidatePlan(tmp, "999-test")
@@ -121,7 +122,7 @@ func TestValidatePlan_BeadMissingVerification(t *testing.T) {
 	specDir := filepath.Join(tmp, "docs", "specs", "999-test")
 	os.MkdirAll(specDir, 0755)
 
-	plan := "---\nstatus: Draft\nspec_id: \"999-test\"\nversion: \"1.0\"\n---\n\n# Plan\n\n## Bead 999-A: Test\n\n**Scope**: Do something\n\n**Steps**:\n1. Step one\n2. Step two\n3. Step three\n\n**Depends on**: nothing\n"
+	plan := "---\nstatus: Draft\nspec_id: \"999-test\"\nversion: \"1.0\"\n---\n\n# Plan\n\n## ADR Fitness\n\nNone.\n\n## Testing Strategy\n\nUnit tests.\n\n## Provenance\n\nN/A.\n\n## Bead 999-A: Test\n\n**Scope**: Do something\n\n**Steps**:\n1. Step one\n2. Step two\n3. Step three\n\n**Depends on**: nothing\n"
 	os.WriteFile(filepath.Join(specDir, "plan.md"), []byte(plan), 0644)
 
 	r := ValidatePlan(tmp, "999-test")
@@ -235,6 +236,9 @@ status: Draft
 	if sections[0].verifyCount != 2 {
 		t.Errorf("bead A: expected 2 verification items, got %d", sections[0].verifyCount)
 	}
+	if len(sections[0].verifyLines) != 2 {
+		t.Errorf("bead A: expected 2 verification lines, got %d", len(sections[0].verifyLines))
+	}
 	if !sections[0].hasDependsOn {
 		t.Error("bead A: expected depends-on to be present")
 	}
@@ -249,7 +253,7 @@ status: Draft
 
 // --- ADR citation validation tests ---
 
-func makePlanWithCitations(t *testing.T, root string, citations string, hasADRFitness bool) {
+func makePlanWithSections(t *testing.T, root string, citations string, hasADRFitness bool, hasTestingStrategy bool, hasProvenance bool, status string, verifyLine string) {
 	t.Helper()
 	specDir := filepath.Join(root, "docs", "specs", "999-test")
 	os.MkdirAll(specDir, 0o755)
@@ -259,8 +263,33 @@ func makePlanWithCitations(t *testing.T, root string, citations string, hasADRFi
 		fitnessSection = "\n## ADR Fitness\n\nAll cited ADRs remain appropriate.\n"
 	}
 
-	plan := "---\nstatus: Draft\nspec_id: \"999-test\"\nversion: \"1.0\"\nadr_citations:\n" + citations + "---\n\n# Plan\n" + fitnessSection + "\n## Bead 999-A: Test\n\n**Steps**:\n1. Step one\n2. Step two\n3. Step three\n\n**Verification**:\n- [ ] Check it\n\n**Depends on**: nothing\n"
+	testingStrategySection := ""
+	if hasTestingStrategy {
+		testingStrategySection = "\n## Testing Strategy\n\nUnit tests with go test.\n"
+	}
+
+	provenanceSection := ""
+	if hasProvenance {
+		provenanceSection = "\n## Provenance\n\n| AC | Bead |\n|---|---|\n| AC1 | 999-A |\n"
+	}
+
+	if verifyLine == "" {
+		verifyLine = "- [ ] `go test ./internal/validate/...` passes"
+	}
+
+	if status == "" {
+		status = "Draft"
+	}
+
+	plan := "---\nstatus: " + status + "\nspec_id: \"999-test\"\nversion: \"1.0\"\nadr_citations:\n" + citations + "---\n\n# Plan\n" + fitnessSection + testingStrategySection + provenanceSection + "\n## Bead 999-A: Test\n\n**Steps**:\n1. Step one\n2. Step two\n3. Step three\n\n**Verification**:\n" + verifyLine + "\n\n**Depends on**: nothing\n"
 	os.WriteFile(filepath.Join(specDir, "plan.md"), []byte(plan), 0o644)
+}
+
+// Legacy helper preserved for existing tests
+func makePlanWithCitations(t *testing.T, root string, citations string, hasADRFitness bool) {
+	t.Helper()
+	// Include all required sections so legacy tests focus on their specific check
+	makePlanWithSections(t, root, citations, hasADRFitness, true, true, "", "")
 }
 
 func writeTestADR(t *testing.T, root, id, status string) {
@@ -325,21 +354,26 @@ func TestValidatePlan_ADRCiteProposed(t *testing.T) {
 	}
 }
 
-func TestValidatePlan_ADRFitnessMissing(t *testing.T) {
+// --- Spec 039: ADR Fitness promoted to error ---
+
+func TestValidatePlan_ADRFitnessMissing_IsError(t *testing.T) {
 	tmp := t.TempDir()
 	writeTestADR(t, tmp, "ADR-0001", "Accepted")
-	makePlanWithCitations(t, tmp, "  - id: ADR-0001\n    sections: [\"CLI\"]\n", false)
+	makePlanWithSections(t, tmp, "  - id: ADR-0001\n    sections: [\"CLI\"]\n", false, true, true, "", "")
 
 	r := ValidatePlan(tmp, "999-test")
 
 	found := false
 	for _, issue := range r.Issues {
 		if issue.Name == "adr-fitness-missing" {
+			if issue.Severity != SevError {
+				t.Errorf("expected adr-fitness-missing to be ERROR, got %s", issue.Severity)
+			}
 			found = true
 		}
 	}
 	if !found {
-		t.Error("expected adr-fitness-missing warning when ## ADR Fitness section is absent")
+		t.Error("expected adr-fitness-missing error when ## ADR Fitness section is absent")
 	}
 }
 
@@ -352,7 +386,235 @@ func TestValidatePlan_ADRFitnessPresent(t *testing.T) {
 
 	for _, issue := range r.Issues {
 		if issue.Name == "adr-fitness-missing" {
-			t.Error("unexpected adr-fitness-missing warning when ## ADR Fitness section is present")
+			t.Error("unexpected adr-fitness-missing when ## ADR Fitness section is present")
+		}
+	}
+}
+
+// --- Spec 039: Conditional ADR citations ---
+
+func TestValidatePlan_EmptyCitations_WithFitness_IsWarning(t *testing.T) {
+	tmp := t.TempDir()
+	makePlanWithSections(t, tmp, "", true, true, true, "", "")
+
+	r := ValidatePlan(tmp, "999-test")
+
+	found := false
+	for _, issue := range r.Issues {
+		if issue.Name == "adr-citations" {
+			if issue.Severity != SevWarning {
+				t.Errorf("expected adr-citations to be WARNING when ADR Fitness is present, got %s", issue.Severity)
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected adr-citations warning when citations empty but ADR Fitness present")
+	}
+}
+
+func TestValidatePlan_EmptyCitations_WithoutFitness_IsError(t *testing.T) {
+	tmp := t.TempDir()
+	makePlanWithSections(t, tmp, "", false, true, true, "", "")
+
+	r := ValidatePlan(tmp, "999-test")
+
+	found := false
+	for _, issue := range r.Issues {
+		if issue.Name == "adr-citations" {
+			if issue.Severity != SevError {
+				t.Errorf("expected adr-citations to be ERROR when both empty, got %s", issue.Severity)
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected adr-citations error when both citations and ADR Fitness are missing")
+	}
+}
+
+// --- Spec 039: Testing Strategy section ---
+
+func TestValidatePlan_TestingStrategyMissing_IsError(t *testing.T) {
+	tmp := t.TempDir()
+	makePlanWithSections(t, tmp, "", true, false, true, "", "")
+
+	r := ValidatePlan(tmp, "999-test")
+
+	found := false
+	for _, issue := range r.Issues {
+		if issue.Name == "testing-strategy-missing" {
+			if issue.Severity != SevError {
+				t.Errorf("expected testing-strategy-missing to be ERROR, got %s", issue.Severity)
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected testing-strategy-missing error")
+	}
+}
+
+func TestValidatePlan_TestingStrategyPresent(t *testing.T) {
+	tmp := t.TempDir()
+	makePlanWithSections(t, tmp, "", true, true, true, "", "")
+
+	r := ValidatePlan(tmp, "999-test")
+
+	for _, issue := range r.Issues {
+		if issue.Name == "testing-strategy-missing" {
+			t.Error("unexpected testing-strategy-missing when section is present")
+		}
+	}
+}
+
+// --- Spec 039: Provenance section ---
+
+func TestValidatePlan_ProvenanceMissing_IsWarning(t *testing.T) {
+	tmp := t.TempDir()
+	makePlanWithSections(t, tmp, "", true, true, false, "", "")
+
+	r := ValidatePlan(tmp, "999-test")
+
+	found := false
+	for _, issue := range r.Issues {
+		if issue.Name == "provenance-missing" {
+			if issue.Severity != SevWarning {
+				t.Errorf("expected provenance-missing to be WARNING, got %s", issue.Severity)
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected provenance-missing warning")
+	}
+}
+
+func TestValidatePlan_ProvenancePresent(t *testing.T) {
+	tmp := t.TempDir()
+	makePlanWithSections(t, tmp, "", true, true, true, "", "")
+
+	r := ValidatePlan(tmp, "999-test")
+
+	for _, issue := range r.Issues {
+		if issue.Name == "provenance-missing" {
+			t.Error("unexpected provenance-missing when section is present")
+		}
+	}
+}
+
+// --- Spec 039: Bead verification testability ---
+
+func TestValidatePlan_VerificationTestable_GoTest(t *testing.T) {
+	tmp := t.TempDir()
+	makePlanWithSections(t, tmp, "", true, true, true, "", "- [ ] `go test ./internal/validate/...` passes")
+
+	r := ValidatePlan(tmp, "999-test")
+
+	for _, issue := range r.Issues {
+		if issue.Name == "bead-verification-testability" {
+			t.Error("unexpected testability error when verification references go test")
+		}
+	}
+}
+
+func TestValidatePlan_VerificationTestable_TestFile(t *testing.T) {
+	tmp := t.TempDir()
+	makePlanWithSections(t, tmp, "", true, true, true, "", "- [ ] New tests in `plan_test.go` pass")
+
+	r := ValidatePlan(tmp, "999-test")
+
+	// _test.go is the pattern, plan_test.go doesn't contain it literally
+	// but let's check — "plan_test.go" does NOT contain "_test.go" substring... actually it does: plan_test.go
+	for _, issue := range r.Issues {
+		if issue.Name == "bead-verification-testability" {
+			t.Error("unexpected testability error when verification references _test.go file")
+		}
+	}
+}
+
+func TestValidatePlan_VerificationTestable_MakeTest(t *testing.T) {
+	tmp := t.TempDir()
+	makePlanWithSections(t, tmp, "", true, true, true, "", "- [ ] `make test` passes with no regressions")
+
+	r := ValidatePlan(tmp, "999-test")
+
+	for _, issue := range r.Issues {
+		if issue.Name == "bead-verification-testability" {
+			t.Error("unexpected testability error when verification references make test")
+		}
+	}
+}
+
+func TestValidatePlan_VerificationTestable_MindspecValidate(t *testing.T) {
+	tmp := t.TempDir()
+	makePlanWithSections(t, tmp, "", true, true, true, "", "- [ ] `mindspec validate plan 039` passes")
+
+	r := ValidatePlan(tmp, "999-test")
+
+	for _, issue := range r.Issues {
+		if issue.Name == "bead-verification-testability" {
+			t.Error("unexpected testability error when verification references mindspec validate")
+		}
+	}
+}
+
+func TestValidatePlan_VerificationNotTestable(t *testing.T) {
+	tmp := t.TempDir()
+	makePlanWithSections(t, tmp, "", true, true, true, "", "- [ ] Confirm it works correctly")
+
+	r := ValidatePlan(tmp, "999-test")
+
+	found := false
+	for _, issue := range r.Issues {
+		if issue.Name == "bead-verification-testability" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected bead-verification-testability error for vague verification")
+	}
+}
+
+func TestValidatePlan_VerificationMixed_OneTestable(t *testing.T) {
+	tmp := t.TempDir()
+	specDir := filepath.Join(tmp, "docs", "specs", "999-test")
+	os.MkdirAll(specDir, 0o755)
+
+	plan := "---\nstatus: Draft\nspec_id: \"999-test\"\nversion: \"1.0\"\n---\n\n# Plan\n\n## ADR Fitness\n\nNone.\n\n## Testing Strategy\n\nUnit tests.\n\n## Provenance\n\nN/A.\n\n## Bead 999-A: Test\n\n**Steps**:\n1. Step one\n2. Step two\n3. Step three\n\n**Verification**:\n- [ ] Confirm it looks right\n- [ ] `go test ./...` passes\n\n**Depends on**: nothing\n"
+	os.WriteFile(filepath.Join(specDir, "plan.md"), []byte(plan), 0o644)
+
+	r := ValidatePlan(tmp, "999-test")
+
+	for _, issue := range r.Issues {
+		if issue.Name == "bead-verification-testability" {
+			t.Error("unexpected testability error when at least one verification item is testable")
+		}
+	}
+}
+
+// --- Spec 039: Backwards compatibility ---
+
+func TestValidatePlan_ApprovedPlan_SkipsNewChecks(t *testing.T) {
+	tmp := t.TempDir()
+	// Approved plan with no ADR Fitness, no Testing Strategy, no Provenance, vague verification
+	makePlanWithSections(t, tmp, "", false, false, false, "Approved", "- [ ] Confirm it works")
+
+	r := ValidatePlan(tmp, "999-test")
+
+	newChecks := []string{
+		"adr-fitness-missing",
+		"adr-citations",
+		"testing-strategy-missing",
+		"provenance-missing",
+		"bead-verification-testability",
+	}
+
+	for _, issue := range r.Issues {
+		for _, check := range newChecks {
+			if issue.Name == check {
+				t.Errorf("approved plan should skip new check %s, but got: [%s] %s", check, issue.Severity, issue.Message)
+			}
 		}
 	}
 }

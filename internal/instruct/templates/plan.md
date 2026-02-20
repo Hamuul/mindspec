@@ -35,11 +35,14 @@ Turn the approved spec into bounded, executable work chunks (implementation bead
 Implementation beads, each with:
 - Small scope (one slice of value)
 - 3-7 step micro-plan
-- Explicit verification steps
+- Explicit verification steps that reference **concrete test artifacts** (test file paths like `_test.go`, test commands like `make test`, `go test`, `pytest`, or `mindspec validate`)
 - Dependencies between beads
 - ADR citations
 
-ADR Fitness evaluation (`## ADR Fitness` section in plan.md)
+Required plan sections:
+- `## ADR Fitness` — evaluate whether each relevant ADR remains the best choice; if no ADRs are relevant, explain why (this section is **required** even when no ADRs apply)
+- `## Testing Strategy` — declare the overall test approach (unit, integration, e2e) and shared test infrastructure
+- `## Provenance` — map each spec acceptance criterion to the bead verification steps that satisfy it (output provenance)
 
 ## Human Gates
 

@@ -7,7 +7,9 @@ The **context-system** domain owns deterministic context delivery:
 - **Glossary** — parsing `GLOSSARY.md`, keyword-to-doc-section mapping, term matching
 - **Context Packs** — assembling mode-specific, budgeted, deduped, provenance-preserving bundles
 - **DDD-informed assembly** — routing content selection based on impacted domains and Context Map
-- **Provenance** — tracking what was included in a context pack and why
+- **Provenance** — tracking the full chain from context inputs to spec requirement satisfaction:
+  - *Input provenance*: what was included in a context pack and why (implemented in context packs)
+  - *Output provenance*: which spec acceptance criteria each plan bead's verification addresses (validated during plan approval)
 
 ## Boundaries
 

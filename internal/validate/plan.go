@@ -52,15 +52,38 @@ func ValidatePlan(root, specID string) *Result {
 	// Check required frontmatter fields
 	checkFrontmatterFields(r, fm)
 
-	// Check ADR citations
+	// Backwards compatibility: skip new quality gates for already-approved plans
+	isApproved := strings.EqualFold(fm.Status, "Approved")
+
+	hasADRFitness := hasSection(content, "## ADR Fitness")
+
+	// Check ADR citations + fitness (Spec 039)
 	if len(fm.ADRCitations) == 0 {
-		r.AddWarning("adr-citations", "no ADR citations in frontmatter")
+		if isApproved {
+			// skip for approved plans
+		} else if hasADRFitness {
+			r.AddWarning("adr-citations", "no ADR citations in frontmatter (ADR Fitness section explains why)")
+		} else {
+			r.AddError("adr-citations", "no ADR citations in frontmatter and no ## ADR Fitness section — plan shows no evidence of architectural evaluation")
+		}
 	} else {
 		checkADRCitations(r, root, fm.ADRCitations)
 	}
 
-	// Check ADR Fitness section
-	checkADRFitnessSection(r, content)
+	// Check ADR Fitness section (Spec 039: promoted to error)
+	if !hasADRFitness && !isApproved {
+		r.AddError("adr-fitness-missing", "plan must include an ## ADR Fitness section documenting evaluation of relevant ADRs")
+	}
+
+	// Check Testing Strategy section (Spec 039: new check)
+	if !hasSection(content, "## Testing Strategy") && !isApproved {
+		r.AddError("testing-strategy-missing", "plan must include a ## Testing Strategy section declaring the test approach")
+	}
+
+	// Check Provenance section (Spec 039: new check, warning only)
+	if !hasSection(content, "## Provenance") && !isApproved {
+		r.AddWarning("provenance-missing", "plan should include a ## Provenance section mapping spec acceptance criteria to bead verification")
+	}
 
 	// Check bead IDs exist in Beads
 	checkBeadIDs(r, fm.BeadIDs)
@@ -73,7 +96,7 @@ func ValidatePlan(root, specID string) *Result {
 	}
 
 	for _, bs := range beadSections {
-		checkBeadSection(r, bs)
+		checkBeadSection(r, bs, isApproved)
 	}
 
 	return r
@@ -138,7 +161,21 @@ type beadSection struct {
 	stepsCount   int
 	hasVerify    bool
 	verifyCount  int
+	verifyLines  []string // raw text of verification items
 	hasDependsOn bool
+}
+
+// testArtifactPatterns are substrings that indicate a concrete test artifact reference.
+var testArtifactPatterns = []string{
+	"_test.go",
+	".test.ts",
+	".test.js",
+	".spec.ts",
+	"make test",
+	"go test",
+	"pytest",
+	"npm test",
+	"mindspec validate",
 }
 
 // parseBeadSections finds and parses ## Bead ... sections.
@@ -208,6 +245,7 @@ func parseBeadSections(content string) []beadSection {
 		}
 		if inVerify && (strings.HasPrefix(trimmed, "- [ ]") || strings.HasPrefix(trimmed, "- [x]")) {
 			current.verifyCount++
+			current.verifyLines = append(current.verifyLines, trimmed)
 		}
 	}
 
@@ -246,19 +284,18 @@ func checkADRCitations(r *Result, root string, citations []ADRCitation) {
 	}
 }
 
-// checkADRFitnessSection checks that the plan includes an ## ADR Fitness section.
-func checkADRFitnessSection(r *Result, content string) {
-	lines := strings.Split(content, "\n")
-	for _, line := range lines {
-		if strings.TrimSpace(line) == "## ADR Fitness" {
-			return
+// hasSection checks whether a given ## heading exists in the content.
+func hasSection(content, heading string) bool {
+	for _, line := range strings.Split(content, "\n") {
+		if strings.TrimSpace(line) == heading {
+			return true
 		}
 	}
-	r.AddWarning("adr-fitness-missing", "plan should include an ## ADR Fitness section documenting evaluation of relevant ADRs")
+	return false
 }
 
 // checkBeadSection validates a single bead section.
-func checkBeadSection(r *Result, bs beadSection) {
+func checkBeadSection(r *Result, bs beadSection, isApproved bool) {
 	if bs.stepsCount < 3 {
 		r.AddError("bead-steps", fmt.Sprintf("%s: expected 3-7 steps, found %d", bs.heading, bs.stepsCount))
 	} else if bs.stepsCount > 7 {
@@ -269,7 +306,26 @@ func checkBeadSection(r *Result, bs beadSection) {
 		r.AddError("bead-verification", fmt.Sprintf("%s: missing verification steps", bs.heading))
 	}
 
+	// Spec 039: check verification testability
+	if bs.hasVerify && bs.verifyCount > 0 && !isApproved {
+		checkVerificationTestability(r, bs)
+	}
+
 	if !bs.hasDependsOn {
 		r.AddWarning("bead-depends", fmt.Sprintf("%s: no 'Depends on' declaration", bs.heading))
 	}
+}
+
+// checkVerificationTestability ensures at least one verification item references a test artifact.
+func checkVerificationTestability(r *Result, bs beadSection) {
+	for _, line := range bs.verifyLines {
+		lower := strings.ToLower(line)
+		for _, pattern := range testArtifactPatterns {
+			if strings.Contains(lower, strings.ToLower(pattern)) {
+				return
+			}
+		}
+	}
+	r.AddError("bead-verification-testability",
+		fmt.Sprintf("%s: verification steps must reference at least one test artifact (e.g., _test.go, make test, go test, pytest)", bs.heading))
 }

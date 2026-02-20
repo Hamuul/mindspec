@@ -17,7 +17,9 @@ Maps key concepts to their primary documentation sections for deterministic cont
 | **Implementation Bead** | [.mindspec/docs/core/ARCHITECTURE.md#beads](.mindspec/docs/core/ARCHITECTURE.md#beads) |
 | **Implementation Mode** | [.mindspec/docs/core/MODES.md#implementation-mode](.mindspec/docs/core/MODES.md#implementation-mode) |
 | **Mode Transition** | [.mindspec/docs/core/MODES.md#mode-enforcement](.mindspec/docs/core/MODES.md#mode-enforcement) |
+| **Output Provenance** | [.mindspec/docs/domains/context-system/architecture.md#provenance-model](.mindspec/docs/domains/context-system/architecture.md#provenance-model) |
 | **Plan Mode** | [.mindspec/docs/core/MODES.md#plan-mode](.mindspec/docs/core/MODES.md#plan-mode) |
+| **Provenance** | [.mindspec/docs/domains/context-system/architecture.md#provenance-model](.mindspec/docs/domains/context-system/architecture.md#provenance-model) |
 | **Responsibility Boundaries** | [.mindspec/docs/core/ARCHITECTURE.md#responsibility-boundaries](.mindspec/docs/core/ARCHITECTURE.md#responsibility-boundaries) |
 | **Spec Bead** | [.mindspec/docs/core/ARCHITECTURE.md#beads](.mindspec/docs/core/ARCHITECTURE.md#beads) |
 | **Spec Mode** | [.mindspec/docs/core/MODES.md#spec-mode](.mindspec/docs/core/MODES.md#spec-mode) |
