@@ -3,7 +3,6 @@ package recording
 import (
 	"fmt"
 	"os"
-	"syscall"
 	"time"
 
 	"github.com/mindspec/mindspec/internal/agentmind"
@@ -44,7 +43,7 @@ func StopCollector(root, specID string) error {
 	if m.CollectorPID > 0 {
 		proc, err := os.FindProcess(m.CollectorPID)
 		if err == nil {
-			_ = proc.Signal(syscall.SIGTERM)
+			signalTerminate(proc)
 			// Give it a moment to shut down gracefully
 			time.Sleep(500 * time.Millisecond)
 		}

@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"syscall"
+
 	"time"
 )
 
@@ -51,7 +51,7 @@ func AutoStart(root string, otlpPort, uiPort int, outputPath string) (int, error
 	}
 
 	cmd := exec.Command(binPath, args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	detachProcess(cmd)
 	cmd.Stdin = nil
 	cmd.Stdout = nil
 	cmd.Stderr = nil

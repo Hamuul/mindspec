@@ -1,9 +1,6 @@
 package recording
 
-import (
-	"fmt"
-	"syscall"
-)
+import "fmt"
 
 // HealthStatus represents the state of a recording's collector.
 type HealthStatus int
@@ -46,8 +43,4 @@ func RestartIfDead(root, specID string) error {
 	return StartCollector(root, specID)
 }
 
-// isProcessAlive checks if a process with the given PID exists.
-func isProcessAlive(pid int) bool {
-	err := syscall.Kill(pid, 0)
-	return err == nil
-}
+// isProcessAlive is defined in proc_unix.go / proc_windows.go.
