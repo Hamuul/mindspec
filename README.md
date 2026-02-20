@@ -44,6 +44,39 @@ Documentation stays current because the system won't let you skip it — beads c
 
 ---
 
+## Quickstart
+
+```bash
+# 1. Install (download from GitHub Releases)
+# https://github.com/mrmaxsteel/mindspec/releases
+# or build from source: make build && cp ./bin/mindspec /usr/local/bin/
+
+# 2. Bootstrap your project
+cd your-project
+mindspec init
+```
+
+That's it. `mindspec init` scaffolds the `.mindspec/` directory, `GLOSSARY.md`, `CLAUDE.md`, and everything else the agent needs. From here, your coding agent (Claude Code, Codex, etc.) picks up the workflow automatically — the SessionStart hook runs `mindspec instruct` and the agent knows what to do.
+
+Tell the agent what you want to build. It will walk you through the lifecycle:
+
+1. **Explore** — "I have an idea about X" (agent evaluates feasibility, you decide go/no-go)
+2. **Spec** — Agent drafts the spec, you approve with `/spec-approve`
+3. **Plan** — Agent decomposes into work chunks, you approve with `/plan-approve`
+4. **Implement** — Agent codes in isolated worktrees, scoped to the plan
+5. **Review** — Agent verifies acceptance criteria, you approve with `/impl-approve`
+
+### Guides
+
+| Goal | Guide |
+|:-----|:------|
+| **Full workflow with Claude Code** | [Claude Code guide](.mindspec/docs/guides/claude-code.md) |
+| **Full workflow with Codex** | [Codex guide](.mindspec/docs/guides/codex.md) |
+| **Visualize & benchmark agent activity** | [AgentMind guide](.mindspec/docs/guides/agentmind.md) |
+| **Complete reference** | [USAGE.md](.mindspec/docs/core/USAGE.md) |
+
+---
+
 ## AgentMind — AI Agent Observability UI
 
 AgentMind gives you real-time visibility into what your agent is doing, what it's spending, and how efficiently it's working.
@@ -78,39 +111,6 @@ export OTEL_EXPORTER_OTLP_PROTOCOL=http/json
 Any OTLP-compatible agent works — point the standard `OTEL_EXPORTER_OTLP_ENDPOINT` to `http://localhost:4318`.
 
 **Full guide:** [.mindspec/docs/guides/agentmind.md](.mindspec/docs/guides/agentmind.md)
-
----
-
-### Quickstart
-
-```bash
-# 1. Install (download from GitHub Releases)
-# https://github.com/mrmaxsteel/mindspec/releases
-# or build from source: make build && cp ./bin/mindspec /usr/local/bin/
-
-# 2. Bootstrap your project
-cd your-project
-mindspec init
-```
-
-That's it. `mindspec init` scaffolds the `.mindspec/` directory, `GLOSSARY.md`, `CLAUDE.md`, and everything else the agent needs. From here, your coding agent (Claude Code, Codex, etc.) picks up the workflow automatically — the SessionStart hook runs `mindspec instruct` and the agent knows what to do.
-
-Tell the agent what you want to build. It will walk you through the lifecycle:
-
-1. **Explore** — "I have an idea about X" (agent evaluates feasibility, you decide go/no-go)
-2. **Spec** — Agent drafts the spec, you approve with `/spec-approve`
-3. **Plan** — Agent decomposes into work chunks, you approve with `/plan-approve`
-4. **Implement** — Agent codes in isolated worktrees, scoped to the plan
-5. **Review** — Agent verifies acceptance criteria, you approve with `/impl-approve`
-
-### Guides
-
-| Goal | Guide |
-|:-----|:------|
-| **Full workflow with Claude Code** | [Claude Code guide](.mindspec/docs/guides/claude-code.md) |
-| **Full workflow with Codex** | [Codex guide](.mindspec/docs/guides/codex.md) |
-| **Visualize & benchmark agent activity** | [AgentMind guide](.mindspec/docs/guides/agentmind.md) |
-| **Complete reference** | [USAGE.md](.mindspec/docs/core/USAGE.md) |
 
 ---
 
