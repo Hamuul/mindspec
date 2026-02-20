@@ -4,11 +4,15 @@ This guide walks through the complete lifecycle of developing a feature with Min
 
 ## Overview
 
-MindSpec enforces a three-phase gated lifecycle: **Spec → Plan → Implement → Review**. Every phase transition requires explicit human approval. The agent cannot skip ahead.
+MindSpec enforces a gated lifecycle: **Explore (optional) → Spec → Plan → Implement → Review**. Every phase transition requires explicit human approval. The agent cannot skip ahead.
 
 ```
-Idle ──→ Spec Mode ──human gate──→ Plan Mode ──human gate──→ Implementation Mode ──→ Review Mode ──human gate──→ Idle
+             ┌─ dismiss ─→ Idle
+Idle ──→ [Explore Mode]
+             └─ promote ─→ Spec Mode ──human gate──→ Plan Mode ──human gate──→ Implementation Mode ──→ Review Mode ──human gate──→ Idle
 ```
+
+Users can also enter Spec Mode directly from Idle via `/spec-init` — Explore Mode is optional.
 
 All agent operating guidance is emitted dynamically by `mindspec instruct` (run automatically on session start). Static files like CLAUDE.md and AGENTS.md are minimal bootstraps — the CLI is the source of truth for what the agent should do in each mode.
 
@@ -18,18 +22,44 @@ All agent operating guidance is emitted dynamically by `mindspec instruct` (run 
 
 If the project has not been set up yet, run `mindspec init` to scaffold the full directory structure, starter files (GLOSSARY.md, CLAUDE.md, context-map, policies, state), and domain templates. All creation is additive — existing files are never overwritten. After init, `mindspec doctor` should report zero errors.
 
-If the repository already contains docs and needs onboarding, use:
-1. `mindspec migrate plan` (analyze and generate reviewable migration plan artifacts)
-2. `mindspec migrate apply --run-id <id>` (apply that reviewed plan)
-
 ## Phase 0.5: Idle
 
 **State**: No active spec molecules, or all molecules fully closed. (`state.json` may show `mode: idle` as a convenience cursor.)
 
 On session start, the SessionStart hook runs `mindspec instruct`, which emits idle-mode guidance. The agent is directed to greet the user, list available specs, and suggest next steps:
+- `mindspec explore "idea"` to evaluate whether an idea is worth pursuing
 - `/spec-init` to draft a new specification
 - Resuming an existing spec
 - `mindspec doctor` to check project health
+
+---
+
+## Phase 0.75: Explore Mode (Optional)
+
+**State**: `mode: explore` in `state.json`. No molecule exists yet.
+
+Explore Mode is a lightweight, conversational pre-spec phase for evaluating ideas before committing to the full spec workflow. It's useful when you're not sure if something is worth building, or when a non-engineer wants to propose an idea.
+
+### Human says
+"I have an idea about X" or runs `mindspec explore "description"`
+
+### Agent does
+1. Sets state to `mode: explore`
+2. Clarifies the problem statement
+3. Checks prior art (existing ADRs, specs, glossary entries)
+4. Assesses feasibility and rough costs
+5. Enumerates alternatives (including "do nothing")
+6. Makes a recommendation: pursue or dismiss
+
+### Exit paths
+
+| Decision | Command | Result |
+|:---------|:--------|:-------|
+| Worth it | `mindspec explore promote <spec-id>` | Runs `spec-init`, enters Spec Mode |
+| Not worth it | `mindspec explore dismiss` | Returns to idle |
+| Not worth it (record why) | `mindspec explore dismiss --adr` | Scaffolds ADR, returns to idle |
+
+No molecule is poured during Explore Mode. The conversation itself is the exploration — only durable outputs (ADR or spec) persist.
 
 ---
 
@@ -264,6 +294,7 @@ Work is not complete until changes are committed.
 
 | Step | Human | Agent | CLI Command |
 |------|-------|-------|-------------|
+| Explore idea | "I have an idea about X" | Evaluates feasibility | `mindspec explore "idea"` |
 | Start feature | "Build X" | Creates spec, pours molecule | `mindspec spec-init` |
 | Write spec | Reviews, guides | Writes markdown | — |
 | Approve spec | `/spec-approve` | Runs approval | `mindspec approve spec <id>` |
@@ -283,8 +314,9 @@ Work is not complete until changes are committed.
 | Command | When to Use |
 |---------|-------------|
 | `mindspec init` | Bootstrap a new MindSpec project |
-| `mindspec migrate plan` | Generate migration plan artifacts for an existing repository |
-| `mindspec migrate apply --run-id <id>` | Apply a reviewed migration plan |
+| `mindspec explore "idea"` | Evaluate an idea before committing to a spec |
+| `mindspec explore promote <id>` | Promote exploration to a spec (enters Spec Mode) |
+| `mindspec explore dismiss [--adr]` | Exit exploration (optionally record decision as ADR) |
 | `mindspec instruct` | See current mode guidance (auto-runs on session start) |
 | `mindspec instruct --spec <id>` | Target a specific spec when multiple are active |
 | `mindspec state show` | Check focused spec cursor and derived mode |

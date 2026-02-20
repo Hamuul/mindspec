@@ -13,6 +13,16 @@ make build    # Build binary to ./bin/mindspec
 make test     # Run all tests
 ```
 
+## Explore Mode
+
+Before committing to a full spec, evaluate whether an idea is worth pursuing:
+
+```bash
+mindspec explore "short description"   # Enter Explore Mode
+mindspec explore promote <spec-id>     # Promote to spec (enters Spec Mode)
+mindspec explore dismiss [--adr]       # Exit (optionally record decision as ADR)
+```
+
 ## Custom Commands
 
 | Command | Purpose |

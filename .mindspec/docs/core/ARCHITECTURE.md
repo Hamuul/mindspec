@@ -10,7 +10,7 @@ MindSpec is a **spec-driven development and context management framework** (Clau
 ┌─────────────────────────────────────────────────────┐
 │ MindSpec Operating Model                            │
 │                                                     │
-│  Modes: Spec → Plan → Implement                     │
+│  Modes: Explore (optional) → Spec → Plan → Implement │
 │  Approvals: human gates, ADR compliance, doc-sync   │
 │  Context: deterministic, budgeted Context Packs     │
 │                                                     │
@@ -45,8 +45,9 @@ Beads is a **passive, execution-oriented tracking substrate** (see [ADR-0002](..
 
 ### 1. Modes {#modes}
 
-MindSpec operates in three explicit modes. Mode controls allowed outputs, required context, and gates.
+MindSpec operates in four explicit modes. Mode controls allowed outputs, required context, and gates.
 
+- **Explore Mode** (optional): evaluate whether an idea is worth pursuing before committing to the spec workflow
 - **Spec Mode**: capture user value, define acceptance criteria, declare impacted domains
 - **Plan Mode**: decompose spec into bounded implementation beads, review ADRs and domain docs
 - **Implementation Mode**: execute one bead in an isolated worktree with proof and doc-sync

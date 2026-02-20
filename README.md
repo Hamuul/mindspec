@@ -23,8 +23,12 @@ MindSpec treats these as system design problems, not prompting problems. It prov
 Every phase transition requires explicit human approval:
 
 ```
-Idle ──→ Spec Mode ──human gate──→ Plan Mode ──human gate──→ Implementation ──→ Review ──human gate──→ Idle
+             ┌─ dismiss ─→ Idle
+Idle ──→ [Explore Mode]
+             └─ promote ─→ Spec Mode ──gate──→ Plan Mode ──gate──→ Implementation ──→ Review ──gate──→ Idle
 ```
+
+**Explore Mode** (optional) — Evaluate whether an idea is worth pursuing. The agent clarifies the problem, checks prior art, assesses feasibility, and recommends whether to proceed or dismiss. No specs or code — just structured conversation.
 
 **Spec Mode** — Define what "done" looks like. Problem statement, acceptance criteria, impacted domains, ADR touchpoints. No code allowed.
 
@@ -77,7 +81,34 @@ Any OTLP-compatible agent works — point the standard `OTEL_EXPORTER_OTLP_ENDPO
 
 ---
 
-### Getting Started
+### Quickstart
+
+```bash
+# 1. Install (download from GitHub Releases)
+# https://github.com/mrmaxsteel/mindspec/releases
+# or build from source: make build && cp ./bin/mindspec /usr/local/bin/
+
+# 2. Bootstrap a project
+cd your-project
+mindspec init          # scaffolds .mindspec/, GLOSSARY.md, CLAUDE.md, etc.
+
+# 3. Explore an idea (optional)
+mindspec explore "Add caching to API responses"
+# Agent helps you evaluate feasibility, then:
+mindspec explore promote 042-api-caching   # → enters Spec Mode
+# or: mindspec explore dismiss --adr       # → captures "no" as an ADR
+
+# 4. Or jump straight to a spec
+mindspec spec-init 042-api-caching
+
+# 5. Work through the lifecycle
+# Write spec → /spec-approve → Write plan → /plan-approve → Implement → /impl-approve
+
+# 6. Check project health anytime
+mindspec doctor
+```
+
+### Guides
 
 | Goal | Guide |
 |:-----|:------|
@@ -136,6 +167,9 @@ Bounded contexts reduce ambiguity. Specs declare impacted domains. Context packs
 
 | Command | Description |
 |:--------|:------------|
+| `mindspec explore [description]` | Enter Explore Mode to evaluate an idea |
+| `mindspec explore promote <id>` | Promote exploration to a spec |
+| `mindspec explore dismiss [--adr]` | Exit exploration (optionally record as ADR) |
 | `mindspec instruct` | Emit mode-appropriate agent guidance |
 | `mindspec state show` | Show current mode and active work |
 | `mindspec next` | Claim next ready bead, create worktree |
@@ -158,8 +192,6 @@ Bounded contexts reduce ambiguity. Specs declare impacted domains. Context packs
 | Command | Description |
 |:--------|:------------|
 | `mindspec init` | Bootstrap project structure |
-| `mindspec migrate plan` | Analyze existing docs and generate migration plan artifacts |
-| `mindspec migrate apply --run-id <id>` | Apply a reviewed migration plan |
 | `mindspec spec-init <id>` | Create new specification |
 | `mindspec doctor` | Project health checks |
 

@@ -261,7 +261,7 @@ Lifecycle state is **derived per-spec from the spec-lifecycle molecule's step st
 Schema:
 ```json
 {
-  "mode": "idle|spec|plan|implement|review",
+  "mode": "idle|explore|spec|plan|implement|review",
   "activeSpec": "004-instruct",
   "activeBead": "beads-xxx",
   "activeMolecule": "beads-mol-xxx",

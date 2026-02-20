@@ -1,12 +1,58 @@
 # MindSpec Operational Modes
 
-MindSpec enforces a **gated, three-phase lifecycle** where specification precedes planning, and planning precedes implementation. Each mode controls allowed outputs, required context, and transition gates.
+MindSpec enforces a **gated lifecycle** where specification precedes planning, and planning precedes implementation. Each mode controls allowed outputs, required context, and transition gates. An optional **Explore Mode** precedes Spec Mode for evaluating ideas before committing to the full workflow.
 
 ```
-Intent → [Spec Mode] → approval → [Plan Mode] → approval → [Implementation Mode] → validation → Done
-              ↑                        ↑                            ↑
-              └── rejected ────────────┘──── divergence ────────────┘
+             ┌─ dismiss ─→ Idle
+Idle ──→ [Explore Mode]
+             └─ promote ─→ [Spec Mode] → approval → [Plan Mode] → approval → [Implementation Mode] → validation → Done
+                                ↑                        ↑                            ↑
+                                └── rejected ────────────┘──── divergence ────────────┘
 ```
+
+Users can also enter Spec Mode directly from Idle via `mindspec spec-init` — Explore Mode is optional.
+
+---
+
+## Explore Mode {#explore-mode}
+
+### Objective
+
+Evaluate whether an idea is worth pursuing before committing to the spec-driven workflow. This is a lightweight, conversational phase — no specs, plans, or code.
+
+### Process
+
+The agent works through these steps conversationally:
+
+1. **Clarify the problem** — What pain point or opportunity is the user describing?
+2. **Check prior art** — Search existing ADRs, specs, and glossary for related decisions
+3. **Assess feasibility** — Is this technically achievable? What are the rough costs and risks?
+4. **Enumerate alternatives** — What other approaches could solve the same problem? Include "do nothing"
+5. **Recommend** — Based on the above, is this worth pursuing?
+
+### Permitted Actions
+
+- Read any project files (specs, ADRs, domain docs, code)
+- Run `mindspec` read-only commands (`adr list`, `glossary list`, `doctor`, etc.)
+- Discuss trade-offs and alternatives with the user
+
+### Forbidden Actions
+
+- Creating or modifying code
+- Creating specs or ADRs directly (use the exit paths below)
+- Making architectural decisions without user agreement
+
+### Exit Paths
+
+| Exit | Command | Result |
+|:-----|:--------|:-------|
+| Worth pursuing | `mindspec explore promote <spec-id>` | Creates a spec via `spec-init`, enters Spec Mode |
+| Not worth pursuing | `mindspec explore dismiss` | Returns to idle |
+| Not worth pursuing (with record) | `mindspec explore dismiss --adr` | Scaffolds an ADR capturing the decision, returns to idle |
+
+### No Molecule
+
+Explore Mode is a pre-spec phase. No molecule is poured until the idea is promoted. State is tracked via `state.json` with `mode: explore`.
 
 ---
 
