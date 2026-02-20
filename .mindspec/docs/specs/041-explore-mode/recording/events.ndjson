@@ -1,0 +1,4 @@
+{"ts":"2026-02-20T11:01:15.243432Z","event":"lifecycle.start","data":{"phase":"spec","spec_id":"041-explore-mode"}}
+{"ts":"2026-02-20T11:27:32.132416Z","event":"lifecycle.phase","data":{"from":"spec","spec_id":"041-explore-mode","to":"plan"}}
+{"ts":"2026-02-20T11:32:32.140539Z","event":"lifecycle.phase","data":{"from":"plan","spec_id":"041-explore-mode","to":"plan-approved"}}
+{"ts":"2026-02-20T11:39:14.799046Z","event":"lifecycle.end","data":{"spec_id":"041-explore-mode"}}

@@ -1,0 +1,24 @@
+{
+  "spec_id": "041-explore-mode",
+  "started_at": "2026-02-20T11:01:15Z",
+  "collector_pid": 0,
+  "collector_port": 4318,
+  "status": "complete",
+  "phases": [
+    {
+      "phase": "spec",
+      "started_at": "2026-02-20T11:01:15Z",
+      "ended_at": "2026-02-20T11:27:32Z"
+    },
+    {
+      "phase": "plan",
+      "started_at": "2026-02-20T11:27:32Z",
+      "ended_at": "2026-02-20T11:32:32Z"
+    },
+    {
+      "phase": "plan-approved",
+      "started_at": "2026-02-20T11:32:32Z",
+      "ended_at": "2026-02-20T11:39:14Z"
+    }
+  ]
+}

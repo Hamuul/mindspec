@@ -110,6 +110,7 @@ func TestSetModeValidation(t *testing.T) {
 		wantErr bool
 	}{
 		{"valid idle", ModeIdle, "", "", false},
+		{"valid explore", ModeExplore, "", "", false},
 		{"valid spec", ModeSpec, "004-instruct", "", false},
 		{"valid plan", ModePlan, "004-instruct", "", false},
 		{"valid implement", ModeImplement, "004-instruct", "beads-001", false},

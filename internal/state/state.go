@@ -14,6 +14,7 @@ import (
 // Valid mode values.
 const (
 	ModeIdle      = "idle"
+	ModeExplore   = "explore"
 	ModeSpec      = "spec"
 	ModePlan      = "plan"
 	ModeImplement = "implement"
@@ -21,7 +22,7 @@ const (
 )
 
 // ValidModes lists all valid mode values.
-var ValidModes = []string{ModeIdle, ModeSpec, ModePlan, ModeImplement, ModeReview}
+var ValidModes = []string{ModeIdle, ModeExplore, ModeSpec, ModePlan, ModeImplement, ModeReview}
 
 // State represents the MindSpec workflow state persisted at .mindspec/state.json.
 type State struct {

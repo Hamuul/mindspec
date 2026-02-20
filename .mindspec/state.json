@@ -1,6 +1,16 @@
 {
-  "mode": "idle",
-  "activeSpec": "",
+  "mode": "spec",
+  "activeSpec": "042-copilot-cli-support",
   "activeBead": "",
-  "lastUpdated": "2026-02-20T10:50:17Z"
+  "activeMolecule": "mindspec-mol-75a",
+  "stepMapping": {
+    "implement": "mindspec-mol-zq3",
+    "plan": "mindspec-mol-7ty",
+    "plan-approve": "mindspec-mol-667",
+    "review": "mindspec-mol-48h",
+    "spec": "mindspec-mol-2ta",
+    "spec-approve": "mindspec-mol-vqe",
+    "spec-lifecycle": "mindspec-mol-75a"
+  },
+  "lastUpdated": "2026-02-20T11:41:37Z"
 }
