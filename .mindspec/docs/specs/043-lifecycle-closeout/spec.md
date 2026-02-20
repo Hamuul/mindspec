@@ -21,10 +21,12 @@ Ensure that `mindspec approve impl` is the single authoritative ceremony for com
 
 ## Background
 
-In practice, the 041-explore-mode spec was fully implemented and committed, but all pipeline beads (write-spec, approve-spec, write-plan, approve-plan, implement, review, and the epic) remained open. The root cause is twofold:
+In practice, the 041-explore-mode spec was fully implemented and committed, but all pipeline beads (write-spec, approve-spec, write-plan, approve-plan, implement, review, and the epic) remained open. The root cause is fourfold:
 
 1. **`approve impl` only closes the review step** — it doesn't reconcile the rest of the molecule. If earlier steps were skipped or the workflow was compressed into a single session, those beads linger forever.
 2. **No validation link between approval frontmatter and bead gates** — a spec or plan can show approved status in YAML frontmatter while the corresponding gate bead is still open. Nothing catches this drift.
+3. **Approval handoff guidance is incomplete** — `approve plan` tells users to run `mindspec next` immediately, but `next` requires a clean working tree. If plan/spec approval artifacts are not committed first, progression fails even after approval.
+4. **Molecule availability is treated as optional** — approval commands currently warn (`no molecule found`) and proceed, which allows lifecycle commands to mutate docs/state without a valid molecule binding.
 
 The result: `bd ready` reports no available work (everything is blocked by stale open beads), and the project appears stuck when it isn't.
 
@@ -47,17 +49,29 @@ The result: `bd ready` reports no available work (everything is blocked by stale
 3. **Spec approval frontmatter canonicalization**: `mindspec approve spec <id>` must write/update YAML frontmatter fields in `spec.md` as the source of truth (`status: Approved`, `approved_at`, `approved_by`). Legacy specs that only have the markdown `## Approval` section must be handled gracefully (migrated or warned with actionable remediation).
 4. **Frontmatter↔gate consistency validation**: `mindspec validate spec <id>` must warn if `spec.md` frontmatter says `status: Approved` while the `spec-approve` gate bead is open. `mindspec validate plan <id>` must do the same for `plan.md` (`status: Approved` vs `plan-approve` gate).
 5. **Doc/template updates**: USAGE.md Phase 9 and MODES.md Implementation Mode Exit Gate must document molecule-wide close-out and the `complete` (per-bead) vs `approve impl` (lifecycle) distinction; the spec template must document approval status in YAML frontmatter.
+6. **Post-approval commit handoff**: `mindspec approve spec <id>` and `mindspec approve plan <id>` must emit explicit next steps that include committing approval-generated changes before attempting the next lifecycle command. For plan approval, guidance must explicitly state that `mindspec next` will fail on a dirty tree.
+7. **State metadata retention across transitions**: lifecycle transitions must preserve molecule metadata (`activeMolecule`, `stepMapping`) for the active spec so approval commands can resolve/close molecule steps reliably after previous transitions.
+8. **Molecule creation/enforcement contract**: lifecycle commands must not proceed without a valid molecule.
+   - `mindspec spec-init <id>` must successfully pour and bind a molecule (`molecule_id` + `step_mapping`) or fail.
+   - `mindspec approve spec|plan|impl <id>` and `mindspec next --spec <id>` must require a resolvable molecule binding. If missing, they may perform deterministic recovery/backfill once; if recovery fails, they must return an actionable error and avoid partial mutation (no success path with `no molecule found` warning).
 
 ## Scope
 
 ### In Scope
 - `internal/approve/impl.go` — add molecule reconciliation logic
 - `internal/approve/spec.go` — write spec approval status to YAML frontmatter
+- `internal/approve/plan.go` — maintain molecule metadata when transitioning state
 - `internal/validate/spec.go` — add frontmatter↔gate consistency check
 - `internal/validate/plan.go` — add frontmatter↔gate consistency check
+- `internal/state/state.go` — preserve molecule metadata across `SetMode` transitions
+- `internal/specinit/specinit.go` — enforce molecule creation success (or fail) at spec init
+- `internal/specmeta/` and/or workflow helpers — recover/backfill molecule binding when absent
+- `cmd/mindspec/approve.go` — emit commit-first post-approval guidance
+- `cmd/mindspec/next.go` + `internal/next/` — enforce molecule presence before claiming work
 - `.mindspec/docs/user/templates/spec.md` — add canonical approval frontmatter fields
 - `.mindspec/docs/core/USAGE.md` — clarify Phase 9 close-out contract
 - `.mindspec/docs/core/MODES.md` — clarify `complete` vs `approve impl` distinction
+- `internal/instruct/templates/plan.md` — align Next Action text with commit-before-next requirement
 - Tests for the new behavior
 
 ### Out of Scope
@@ -79,6 +93,12 @@ The result: `bd ready` reports no available work (everything is blocked by stale
 - [ ] `mindspec validate spec <id>` emits a warning when `spec.md` frontmatter says `status: Approved` but the `spec-approve` gate bead is still open
 - [ ] `mindspec validate plan <id>` emits a warning when `plan.md` frontmatter says `status: Approved` but the `plan-approve` gate bead is still open
 - [ ] Legacy specs without spec approval frontmatter are handled gracefully (migration path or actionable warning)
+- [ ] `mindspec approve spec <id>` output includes commit-before-continue guidance for approval-generated file changes
+- [ ] `mindspec approve plan <id>` output includes commit-before-`mindspec next` guidance and explicitly warns that `next` requires a clean tree
+- [ ] After spec/plan approval transitions, `.mindspec/state.json` retains `activeMolecule` and `stepMapping` for the active spec
+- [ ] `mindspec spec-init <id>` fails if molecule pour/binding cannot be completed (no warning-only success path)
+- [ ] `mindspec approve spec|plan|impl <id>` and `mindspec next --spec <id>` never succeed with `no molecule found`; they either recover binding deterministically or fail with actionable remediation
+- [ ] If molecule recovery fails, approval commands do not report success or leave partially-mutated lifecycle state
 - [ ] USAGE.md Phase 9 documents that `approve impl` reconciles the full molecule
 - [ ] MODES.md documents the distinction between `complete` (per-bead) and `approve impl` (lifecycle close-out)
 - [ ] `.mindspec/docs/user/templates/spec.md` documents canonical approval fields in YAML frontmatter
@@ -91,6 +111,11 @@ The result: `bd ready` reports no available work (everything is blocked by stale
 - Create a spec with `status: Approved` in YAML frontmatter but an open `spec-approve` gate. Run `mindspec validate spec <id>`. Verify it emits a consistency warning.
 - Create a plan with `status: Approved` in YAML frontmatter but an open `plan-approve` gate. Run `mindspec validate plan <id>`. Verify it emits a consistency warning.
 - Create a legacy spec using only markdown `## Approval` status (no approval frontmatter). Run approval/validation and verify migration or actionable warning behavior.
+- Run `mindspec approve spec <id>` and verify output includes commit-first guidance before continuing planning work.
+- Run `mindspec approve plan <id>` and verify output includes commit-first guidance before `mindspec next`.
+- After running `approve spec` then `approve plan`, inspect `.mindspec/state.json` and verify `activeMolecule` + `stepMapping` are still present for the active spec.
+- Simulate missing molecule binding for an existing spec, then run `mindspec approve plan <id>` and `mindspec next --spec <id>`: verify deterministic recovery path restores binding and proceeds without `no molecule found`.
+- Simulate recovery failure (missing formula / inaccessible Beads) and verify `spec-init` and approval commands fail with actionable remediation and no false-success output.
 
 ## Open Questions
 

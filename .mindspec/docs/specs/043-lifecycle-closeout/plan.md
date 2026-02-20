@@ -16,7 +16,7 @@ adr_citations:
       sections:
         - Decision
         - Spec-to-molecule binding
-approved_at: "2026-02-20T13:16:55Z"
+approved_at: "2026-02-20T13:54:51Z"
 approved_by: user
 last_updated: 2026-02-20T00:00:00Z
 spec_id: 043-lifecycle-closeout
@@ -49,12 +49,24 @@ work_chunks:
     - depends_on:
         - 2
         - 3
+        - 5
       id: 4
       scope: .mindspec/docs/core/USAGE.md, .mindspec/docs/core/MODES.md, .mindspec/docs/user/templates/spec.md
       title: Docs and template contract alignment
       verify:
         - go test ./internal/instruct -run Template
         - mindspec validate plan 043-lifecycle-closeout
+    - depends_on:
+        - 1
+      id: 5
+      scope: internal/specinit/specinit.go, internal/specmeta/, internal/state/state.go, internal/approve/spec.go, internal/approve/plan.go, cmd/mindspec/approve.go, cmd/mindspec/next.go, internal/next/, internal/instruct/templates/plan.md
+      title: Molecule enforcement, state metadata continuity, and approval handoff messaging
+      verify:
+        - go test ./internal/specinit -run Run
+        - go test ./internal/state -run SetMode
+        - go test ./internal/approve -run Plan
+        - go test ./internal/next -run QueryReady
+        - go test ./cmd/mindspec -run Approve
 ---
 
 # Plan: Spec 043 — Lifecycle Close-Out Reconciliation
@@ -79,6 +91,9 @@ Verdict: Conform. Closing parent + all mapped lifecycle steps on `approve impl` 
 
 - Unit tests in `internal/approve/*_test.go` for spec approval frontmatter writing, full-molecule close-out behavior, idempotent reruns, and warning-on-partial-failure behavior.
 - Unit tests in `internal/validate/*_test.go` for spec/plan frontmatter to gate consistency warnings.
+- Unit tests in `internal/state/*_test.go` for metadata retention across `SetMode` transitions.
+- CLI tests for `approve spec`/`approve plan` output so next-step guidance includes commit-before-continue instructions.
+- Unit/integration tests for molecule enforcement and recovery in `spec-init`, `approve`, and `next` command paths.
 - Regression coverage for legacy specs that still use markdown-only approval records.
 - CLI-level smoke checks using `mindspec validate spec <id>` and `mindspec validate plan <id>` for warning surface behavior.
 - Full suite confirmation via `make test`.
@@ -94,6 +109,12 @@ Verdict: Conform. Closing parent + all mapped lifecycle steps on `approve impl` 
 | `validate spec` warns on `status: Approved` with open spec gate | Bead 043-C; `go test ./internal/validate -run Spec` |
 | `validate plan` warns on `status: Approved` with open plan gate | Bead 043-C; `go test ./internal/validate -run Plan` |
 | Legacy spec handling is graceful (migration or actionable warning) | Bead 043-A and 043-C; `go test ./internal/approve -run ApproveSpec`, `go test ./internal/validate -run Spec` |
+| `approve spec` output tells users to commit approval artifacts before continuing | Bead 043-E; `go test ./cmd/mindspec -run Approve` |
+| `approve plan` output tells users to commit before `mindspec next` | Bead 043-E; `go test ./cmd/mindspec -run Approve` |
+| `activeMolecule` and `stepMapping` survive spec/plan approval state transitions | Bead 043-E; `go test ./internal/state -run SetMode`, `go test ./internal/approve -run Plan` |
+| `spec-init` fails when molecule creation/binding cannot be completed | Bead 043-E; `go test ./internal/specinit -run Run` |
+| `approve` and `next` do not succeed without a valid molecule binding | Bead 043-E; `go test ./internal/approve -run Plan`, `go test ./internal/next -run QueryReady` |
+| Failed molecule recovery returns actionable error without false success | Bead 043-E; `go test ./internal/approve -run Plan`, `go test ./cmd/mindspec -run Approve` |
 | USAGE docs define molecule-wide close-out contract | Bead 043-D; `mindspec validate plan 043-lifecycle-closeout` |
 | MODES docs distinguish `complete` vs `approve impl` | Bead 043-D; `mindspec validate plan 043-lifecycle-closeout` |
 | Spec template documents canonical approval frontmatter | Bead 043-A and 043-D; `go test ./internal/instruct -run Template` |
@@ -177,11 +198,36 @@ Align user docs and templates with the new close-out and canonical frontmatter c
 
 **Depends on**: Bead 043-B, Bead 043-C
 
+## Bead 043-E: Molecule enforcement, metadata continuity, and approval handoff
+
+Eliminate the "approved but cannot continue" trap by enforcing molecule presence, preserving molecule metadata across transitions, and making post-approval handoff explicit.
+
+**Scope**: `internal/specinit/specinit.go`, `internal/specmeta/`, `internal/state/state.go`, `internal/approve/spec.go`, `internal/approve/plan.go`, `cmd/mindspec/approve.go`, `cmd/mindspec/next.go`, `internal/next/`, `internal/instruct/templates/plan.md`.
+
+**Steps**:
+1. Update `spec-init` to enforce molecule creation/binding success as a hard requirement (no warning-only success path when molecule pour fails).
+2. Add a shared molecule-binding resolver for approval/next paths that validates `molecule_id` + `step_mapping` and performs deterministic recovery/backfill when missing.
+3. Ensure `approve spec|plan|impl` fail with actionable remediation if molecule recovery cannot complete, and avoid false success reporting.
+4. Ensure `mindspec next --spec <id>` requires a valid molecule binding (or recovers it) before querying/claiming work.
+5. Update state transition logic so `activeMolecule` and `stepMapping` are preserved when changing mode for the same active spec.
+6. Update `approve spec`/`approve plan` output and plan-mode next-action text to include commit-before-continue guidance.
+7. Add tests for molecule enforcement/recovery, metadata retention, and commit-first guidance output.
+
+**Verification**:
+- [ ] `go test ./internal/specinit -run Run` passes
+- [ ] `go test ./internal/approve -run Plan` passes with missing-binding recovery + failure-path coverage
+- [ ] `go test ./internal/next -run QueryReady` passes with molecule-enforcement coverage
+- [ ] `go test ./internal/state -run SetMode` passes
+- [ ] `go test ./cmd/mindspec -run Approve` passes
+
+**Depends on**: Bead 043-A
+
 ## Dependency Graph
 
 ```text
 043-A (canonical spec frontmatter)
   ├── 043-B (impl molecule reconciliation)
   └── 043-C (validator consistency checks)
+  └── 043-E (molecule enforcement + handoff + metadata continuity)
         └── 043-D (docs + template alignment)
 ```
