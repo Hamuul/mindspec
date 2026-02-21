@@ -1,16 +1,6 @@
 {
-  "mode": "implement",
-  "activeSpec": "045-migrate-prompt-emission",
-  "activeBead": "mindspec-mol-5hz",
-  "activeMolecule": "mindspec-mol-uvg",
-  "stepMapping": {
-    "implement": "mindspec-mol-5hz",
-    "plan": "mindspec-mol-szs",
-    "plan-approve": "mindspec-mol-2w2",
-    "review": "mindspec-mol-0ug",
-    "spec": "mindspec-mol-2tb",
-    "spec-approve": "mindspec-mol-srj",
-    "spec-lifecycle": "mindspec-mol-uvg"
-  },
-  "lastUpdated": "2026-02-21T09:18:08Z"
+  "mode": "idle",
+  "activeSpec": "",
+  "activeBead": "",
+  "lastUpdated": "2026-02-21T21:02:22Z"
 }
