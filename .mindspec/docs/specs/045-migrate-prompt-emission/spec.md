@@ -15,6 +15,7 @@ step_mapping:
 
 
 
+
 # Spec 045-migrate-prompt-emission: Replace migrate with prompt emission
 
 ## Goal

@@ -17,8 +17,7 @@ immediately usable.
 
 All file creation is additive — existing files are never overwritten.
 
-Use 'mindspec migrate plan' and 'mindspec migrate apply' to onboard
-an existing brownfield repository.`,
+Use 'mindspec migrate' to onboard an existing brownfield repository.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 

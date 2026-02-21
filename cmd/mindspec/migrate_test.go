@@ -1,186 +1,171 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-func TestResolveArchiveMode(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name      string
-		in        string
-		want      string
-		expectErr bool
-	}{
-		{name: "default empty", in: "", want: "copy"},
-		{name: "copy", in: "copy", want: "copy"},
-		{name: "move", in: "move", want: "move"},
-		{name: "trim whitespace", in: "  copy  ", want: "copy"},
-		{name: "invalid", in: "zip", expectErr: true},
-	}
-
-	for _, tc := range tests {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			got, err := resolveArchiveMode(tc.in)
-			if tc.expectErr {
-				if err == nil {
-					t.Fatal("expected error")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if got != tc.want {
-				t.Fatalf("archive mode mismatch: got %q want %q", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestValidateMigrateApplyFlags(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name        string
-		runID       string
-		archive     string
-		wantRunID   string
-		wantArchive string
-		expectErr   bool
-	}{
-		{
-			name:      "run-id required",
-			archive:   "copy",
-			expectErr: true,
-		},
-		{
-			name:        "default archive",
-			runID:       "run-1",
-			wantRunID:   "run-1",
-			wantArchive: "copy",
-		},
-		{
-			name:        "archive move",
-			runID:       "run-2",
-			archive:     "move",
-			wantRunID:   "run-2",
-			wantArchive: "move",
-		},
-		{
-			name:      "invalid archive",
-			runID:     "run-3",
-			archive:   "tar",
-			expectErr: true,
-		},
-	}
-
-	for _, tc := range tests {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			gotRunID, gotArchive, err := validateMigrateApplyFlags(tc.runID, tc.archive)
-			if tc.expectErr {
-				if err == nil {
-					t.Fatal("expected error")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if gotRunID != tc.wantRunID {
-				t.Fatalf("run-id mismatch: got %q want %q", gotRunID, tc.wantRunID)
-			}
-			if gotArchive != tc.wantArchive {
-				t.Fatalf("archive mismatch: got %q want %q", gotArchive, tc.wantArchive)
-			}
-		})
-	}
-}
-
-func TestReadMigrationArtifactJSON(t *testing.T) {
+func TestScanSourceMarkdown(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
-	runID := "run-1"
-	path := filepath.Join(root, ".mindspec", "migrations", runID, "plan.json")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatalf("mkdir artifact dir: %v", err)
-	}
-	if err := os.WriteFile(path, []byte("{\"run_id\":\"run-1\"}\n"), 0o644); err != nil {
-		t.Fatalf("write artifact: %v", err)
+
+	// Create source files that should be found
+	for _, rel := range []string{
+		"docs/guide.md",
+		"docs/adr/ADR-0001.md",
+		"README.md",
+		"CONTRIBUTING.md",
+	} {
+		abs := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(abs, []byte("# "+rel+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	got, err := readMigrationArtifactJSON(root, runID, "plan.json")
+	// Create files that should be skipped
+	for _, rel := range []string{
+		".mindspec/docs/core/USAGE.md",
+		".mindspec/migrations/run-1/plan.md",
+		".git/config.md",
+		".beads/issues.md",
+	} {
+		abs := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(abs, []byte("skip\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	files, err := scanSourceMarkdown(root)
 	if err != nil {
-		t.Fatalf("readMigrationArtifactJSON: %v", err)
+		t.Fatalf("scanSourceMarkdown: %v", err)
 	}
-	if got != "{\"run_id\":\"run-1\"}" {
-		t.Fatalf("artifact mismatch: got %q", got)
+
+	expected := map[string]bool{
+		"CONTRIBUTING.md":     false,
+		"README.md":          false,
+		"docs/adr/ADR-0001.md": false,
+		"docs/guide.md":      false,
+	}
+	for _, f := range files {
+		if _, ok := expected[f]; ok {
+			expected[f] = true
+		} else {
+			t.Errorf("unexpected file: %s", f)
+		}
+	}
+	for f, found := range expected {
+		if !found {
+			t.Errorf("missing expected file: %s", f)
+		}
 	}
 }
 
-func TestReadMigrationArtifactJSON_Missing(t *testing.T) {
+func TestScanCanonicalDocs(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
-	_, err := readMigrationArtifactJSON(root, "run-404", "plan.json")
-	if err == nil {
-		t.Fatal("expected missing artifact error")
+	docsDir := filepath.Join(root, ".mindspec", "docs")
+	for _, rel := range []string{
+		"core/USAGE.md",
+		"glossary.md",
+	} {
+		abs := filepath.Join(docsDir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(abs, []byte("canonical\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	files, err := scanCanonicalDocs(root)
+	if err != nil {
+		t.Fatalf("scanCanonicalDocs: %v", err)
+	}
+
+	if len(files) != 2 {
+		t.Fatalf("expected 2 canonical files, got %d: %v", len(files), files)
 	}
 }
 
-func TestRequireCleanGitTree_DirtyFails(t *testing.T) {
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not available")
-	}
+func TestScanCanonicalDocs_NoDocs(t *testing.T) {
+	t.Parallel()
 
 	root := t.TempDir()
-	cmd := exec.Command("git", "init")
-	cmd.Dir = root
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git init: %v (%s)", err, strings.TrimSpace(string(out)))
+	files, err := scanCanonicalDocs(root)
+	if err != nil {
+		t.Fatalf("scanCanonicalDocs: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "dirty.txt"), []byte("dirty\n"), 0o644); err != nil {
-		t.Fatalf("write dirty file: %v", err)
-	}
-
-	err := requireCleanGitTree(root)
-	if err == nil {
-		t.Fatal("expected dirty tree error")
-	}
-	if !strings.Contains(err.Error(), "working tree is dirty") {
-		t.Fatalf("unexpected error: %v", err)
+	if len(files) != 0 {
+		t.Fatalf("expected 0 files, got %d", len(files))
 	}
 }
 
-func TestRequireCleanGitTree_CleanPasses(t *testing.T) {
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not available")
+func TestBuildMigratePrompt_ContainsRequiredSections(t *testing.T) {
+	t.Parallel()
+
+	prompt := buildMigratePrompt(
+		[]string{"docs/guide.md", "README.md"},
+		[]string{".mindspec/docs/core/USAGE.md"},
+	)
+
+	required := []string{
+		"Canonical Structure",
+		"Category Rubric",
+		"adr",
+		"spec",
+		"domain",
+		"core",
+		"context-map",
+		"glossary",
+		"user-docs",
+		"agent",
+		"Source Files to Classify",
+		"docs/guide.md",
+		"README.md",
+		"Existing Canonical Docs",
+		".mindspec/docs/core/USAGE.md",
+		"Instructions",
+		"mindspec doctor",
 	}
 
-	root := t.TempDir()
-	cmd := exec.Command("git", "init")
-	cmd.Dir = root
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git init: %v (%s)", err, strings.TrimSpace(string(out)))
-	}
-	if err := requireCleanGitTree(root); err != nil {
-		t.Fatalf("expected clean tree success, got: %v", err)
+	for _, r := range required {
+		if !strings.Contains(prompt, r) {
+			t.Errorf("prompt missing required content: %q", r)
+		}
 	}
 }
 
-func TestRequireCleanGitTree_NonRepoPasses(t *testing.T) {
-	root := t.TempDir()
-	if err := requireCleanGitTree(root); err != nil {
-		t.Fatalf("expected non-repo to pass, got: %v", err)
+func TestMigrateJSON_ValidOutput(t *testing.T) {
+	t.Parallel()
+
+	inv := MigrateInventory{
+		SourceFiles:    []string{"docs/guide.md"},
+		CanonicalFiles: []string{".mindspec/docs/core/USAGE.md"},
+	}
+	data, err := json.MarshalIndent(inv, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var parsed MigrateInventory
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(parsed.SourceFiles) != 1 || parsed.SourceFiles[0] != "docs/guide.md" {
+		t.Errorf("unexpected source_files: %v", parsed.SourceFiles)
+	}
+	if len(parsed.CanonicalFiles) != 1 || parsed.CanonicalFiles[0] != ".mindspec/docs/core/USAGE.md" {
+		t.Errorf("unexpected canonical_files: %v", parsed.CanonicalFiles)
 	}
 }
