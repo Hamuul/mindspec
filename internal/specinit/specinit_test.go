@@ -196,6 +196,57 @@ func TestTitleFromSlug(t *testing.T) {
 	}
 }
 
+func TestRunCreatesFormulaIfMissing(t *testing.T) {
+	root := setupTestRoot(t)
+	mockMoleculeSuccess(t)
+
+	// Ensure .beads dir exists but formula does not
+	os.MkdirAll(filepath.Join(root, ".beads"), 0755)
+
+	formulaPath := filepath.Join(root, ".beads", "formulas", "spec-lifecycle.formula.toml")
+	if _, err := os.Stat(formulaPath); err == nil {
+		t.Fatal("formula should not exist before test")
+	}
+
+	err := Run(root, "014-formula-test", "")
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+
+	data, err := os.ReadFile(formulaPath)
+	if err != nil {
+		t.Fatalf("formula not created: %v", err)
+	}
+	if !strings.Contains(string(data), `formula = "spec-lifecycle"`) {
+		t.Error("formula file does not contain expected content")
+	}
+}
+
+func TestRunSkipsFormulaIfExists(t *testing.T) {
+	root := setupTestRoot(t)
+	mockMoleculeSuccess(t)
+
+	// Pre-create formula with custom content
+	formulaDir := filepath.Join(root, ".beads", "formulas")
+	os.MkdirAll(formulaDir, 0755)
+	customContent := "# custom formula\n"
+	os.WriteFile(filepath.Join(formulaDir, "spec-lifecycle.formula.toml"), []byte(customContent), 0644)
+
+	err := Run(root, "015-formula-exists", "")
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+
+	// Verify it was NOT overwritten
+	data, err := os.ReadFile(filepath.Join(formulaDir, "spec-lifecycle.formula.toml"))
+	if err != nil {
+		t.Fatalf("reading formula: %v", err)
+	}
+	if string(data) != customContent {
+		t.Error("existing formula was overwritten")
+	}
+}
+
 func TestRunFailsWhenMoleculeUnavailable(t *testing.T) {
 	root := setupTestRoot(t)
 

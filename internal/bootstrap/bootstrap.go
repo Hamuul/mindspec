@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/mindspec/mindspec/internal/templates"
 )
 
 const mindspecMarker = "<!-- mindspec:managed -->"
@@ -162,6 +164,9 @@ func manifest() []manifestItem {
 		{path: "AGENTS.md", content: starterAgentsMD, appendBlock: appendAgentsBlock},
 		{path: "CLAUDE.md", content: starterClaudeMD, appendBlock: appendClaudeBlock},
 		{path: ".mindspec/state.json", contentFunc: starterState},
+
+		// Beads formula (required by spec-init)
+		{path: ".beads/formulas/spec-lifecycle.formula.toml", contentFunc: templates.SpecLifecycleFormula},
 	}
 
 	return items

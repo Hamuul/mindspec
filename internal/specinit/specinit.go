@@ -65,6 +65,12 @@ func Run(root, specID, title string) error {
 		return fmt.Errorf("creating lifecycle molecule requires beads to be available: %w", err)
 	}
 
+	// Ensure the spec-lifecycle formula exists (self-healing for projects
+	// bootstrapped before the formula was included in mindspec init).
+	if err := ensureFormula(root); err != nil {
+		return fmt.Errorf("ensuring spec-lifecycle formula: %w", err)
+	}
+
 	molID, stepMap, err := pourFormulaFn(specID)
 	if err != nil {
 		return fmt.Errorf("pouring spec-lifecycle molecule: %w", err)
@@ -142,6 +148,20 @@ func pourFormula(specID string) (string, map[string]string, error) {
 	}
 
 	return result.NewEpicID, stepMap, nil
+}
+
+// ensureFormula writes the spec-lifecycle formula to .beads/formulas/ if it
+// does not already exist. This handles projects bootstrapped before the formula
+// was included in `mindspec init`.
+func ensureFormula(root string) error {
+	formulaPath := filepath.Join(root, ".beads", "formulas", "spec-lifecycle.formula.toml")
+	if _, err := os.Stat(formulaPath); err == nil {
+		return nil // already exists
+	}
+	if err := os.MkdirAll(filepath.Dir(formulaPath), 0755); err != nil {
+		return fmt.Errorf("creating formulas directory: %w", err)
+	}
+	return os.WriteFile(formulaPath, []byte(templates.SpecLifecycleFormula()), 0644)
 }
 
 // titleFromSlug derives a title from a spec ID slug.
