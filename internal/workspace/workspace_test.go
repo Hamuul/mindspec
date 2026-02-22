@@ -192,4 +192,3 @@ func TestCanonicalAndLegacyDocsDir(t *testing.T) {
 		t.Errorf("LegacyDocsDir: got %q", got)
 	}
 }
-
