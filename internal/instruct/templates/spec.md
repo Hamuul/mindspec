@@ -34,11 +34,11 @@ A spec containing:
 
 ## Human Gates
 
-- **Spec approval**: Run `mindspec approve spec <id>` when the spec is ready for planning
+- **Spec approval**: You MUST run `mindspec approve spec {{.ActiveSpec}}` before starting any plan work. This gate resolves the spec-approve step in the lifecycle molecule. Skipping it causes mode resolution to remain stuck in spec mode.
 
 ## Next Action
 
-Complete the spec at `.mindspec/docs/specs/{{.ActiveSpec}}/spec.md`, then run `mindspec approve spec {{.ActiveSpec}}`.
+Complete the spec at `.mindspec/docs/specs/{{.ActiveSpec}}/spec.md`, then run `mindspec approve spec {{.ActiveSpec}}`. Do NOT create `plan.md` or begin planning until this command succeeds.
 
 ## Session Close
 

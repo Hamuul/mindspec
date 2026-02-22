@@ -3,6 +3,7 @@ package state
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -17,6 +18,29 @@ func TestCrossValidate_SpecMode_OK(t *testing.T) {
 
 	if len(warnings) != 0 {
 		t.Errorf("expected no warnings, got %v", warnings)
+	}
+}
+
+func TestCrossValidate_SpecMode_PlanExistsSkippedGate(t *testing.T) {
+	tmp := t.TempDir()
+	specDir := filepath.Join(tmp, "docs", "specs", "004-instruct")
+	os.MkdirAll(specDir, 0755)
+	os.WriteFile(filepath.Join(specDir, "spec.md"),
+		[]byte("# Spec\n\n## Approval\n\n- **Status**: DRAFT\n"), 0644)
+	os.WriteFile(filepath.Join(specDir, "plan.md"),
+		[]byte("---\nstatus: Draft\n---\n# Plan\n"), 0644)
+
+	s := &State{Mode: ModeSpec, ActiveSpec: "004-instruct"}
+	warnings := CrossValidate(tmp, s)
+
+	found := false
+	for _, w := range warnings {
+		if w.Field == "mode" && strings.Contains(w.Message, "SKIPPED GATE") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected SKIPPED GATE warning when plan.md exists in spec mode, got %v", warnings)
 	}
 }
 
