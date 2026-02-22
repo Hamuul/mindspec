@@ -39,6 +39,26 @@ Implementation beads, each with:
 - Dependencies between beads
 - ADR citations
 
+### Bead section format
+
+Each bead must use this exact structure (the validator parses these markers):
+
+```markdown
+## Bead 1: Short Title
+
+**Steps**
+1. First implementation step
+2. Second step
+3. Third step
+
+**Verification**
+- [ ] `go test ./internal/foo/...` passes
+- [ ] `mindspec validate plan <id>` passes
+
+**Depends on**
+None (or: Bead 1)
+```
+
 Required plan sections:
 - `## ADR Fitness` — evaluate whether each relevant ADR remains the best choice; if no ADRs are relevant, explain why (this section is **required** even when no ADRs apply)
 - `## Testing Strategy` — declare the overall test approach (unit, integration, e2e) and shared test infrastructure

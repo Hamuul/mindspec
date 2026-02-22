@@ -312,6 +312,51 @@ status: Draft
 	}
 }
 
+func TestParseBeadSections_H3Headings(t *testing.T) {
+	content := `---
+status: Draft
+---
+
+# Plan
+
+## Bead 006-A: First
+
+### Scope
+Something
+
+### Steps
+1. Step one
+2. Step two
+3. Step three
+4. Step four
+
+### Verification
+- [ ] Check one
+- [ ] Check two
+
+### Depends on
+nothing
+`
+
+	sections := parseBeadSections(content)
+	if len(sections) != 1 {
+		t.Fatalf("expected 1 bead section, got %d", len(sections))
+	}
+
+	if sections[0].stepsCount != 4 {
+		t.Errorf("expected 4 steps, got %d", sections[0].stepsCount)
+	}
+	if sections[0].verifyCount != 2 {
+		t.Errorf("expected 2 verification items, got %d", sections[0].verifyCount)
+	}
+	if !sections[0].hasVerify {
+		t.Error("expected hasVerify to be true")
+	}
+	if !sections[0].hasDependsOn {
+		t.Error("expected hasDependsOn to be true")
+	}
+}
+
 // --- ADR citation validation tests ---
 
 func makePlanWithSections(t *testing.T, root string, citations string, hasADRFitness bool, hasTestingStrategy bool, hasProvenance bool, status string, verifyLine string) {

@@ -233,25 +233,26 @@ func parseBeadSections(content string) []beadSection {
 			continue
 		}
 
-		// Detect section markers within a bead
-		if strings.HasPrefix(trimmed, "**Steps**") {
+		// Detect section markers within a bead.
+		// Accept both bold markers (**Steps**) and H3 headings (### Steps).
+		if strings.HasPrefix(trimmed, "**Steps**") || trimmed == "### Steps" {
 			inSteps = true
 			inVerify = false
 			continue
 		}
-		if strings.HasPrefix(trimmed, "**Verification**") {
+		if strings.HasPrefix(trimmed, "**Verification**") || trimmed == "### Verification" {
 			inVerify = true
 			inSteps = false
 			current.hasVerify = true
 			continue
 		}
-		if strings.HasPrefix(trimmed, "**Depends on**") {
+		if strings.HasPrefix(trimmed, "**Depends on**") || trimmed == "### Depends on" {
 			current.hasDependsOn = true
 			inSteps = false
 			inVerify = false
 			continue
 		}
-		if strings.HasPrefix(trimmed, "**Scope**") {
+		if strings.HasPrefix(trimmed, "**Scope**") || trimmed == "### Scope" {
 			inSteps = false
 			inVerify = false
 			continue
