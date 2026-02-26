@@ -184,7 +184,7 @@ func wantedHooks() map[string][]map[string]any {
 				"hooks": []map[string]any{
 					{
 						"type":          "command",
-						"command":       "mindspec instruct 2>/dev/null || echo 'mindspec instruct unavailable — run make build'",
+						"command":       "mindspec state clear-flag 2>/dev/null; mindspec instruct 2>/dev/null || echo 'mindspec instruct unavailable — run make build'",
 						"statusMessage": "Loading mode guidance...",
 					},
 				},
@@ -239,6 +239,11 @@ func wantedHooks() map[string][]map[string]any {
 						"command":       worktreeBashGuardScript(),
 						"statusMessage": "Checking worktree enforcement...",
 					},
+					{
+						"type":          "command",
+						"command":       needsClearBashGuardScript(),
+						"statusMessage": "Checking context clear gate...",
+					},
 				},
 			},
 		},
@@ -267,6 +272,17 @@ func worktreeBashGuardScript() string {
 		`cwd=$(pwd); ` +
 		`case "$cwd" in "$wt"*) exit 0;; esac; ` +
 		`echo "mindspec: blocked — your working directory is the main worktree. Run: cd $wt" >&2; exit 2`
+}
+
+// needsClearBashGuardScript returns a shell script that blocks `mindspec next`
+// when needs_clear is set in state.json, unless --force is present.
+func needsClearBashGuardScript() string {
+	return `nc=$(cat .mindspec/state.json 2>/dev/null | jq -r '.needs_clear // false'); ` +
+		`if [ "$nc" != "true" ]; then exit 0; fi; ` +
+		`cmd="$CLAUDE_TOOL_ARG_COMMAND"; ` +
+		`case "$cmd" in *"mindspec next"*) ;; *) exit 0;; esac; ` +
+		`case "$cmd" in *"--force"*) exit 0;; esac; ` +
+		`echo "needs_clear is set. Run /clear to reset your context, then retry mindspec next. Use --force to bypass." >&2; exit 2`
 }
 
 // hookEntryExists checks if a hook entry with the same matcher already exists.
