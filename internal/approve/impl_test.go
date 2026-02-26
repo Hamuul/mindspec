@@ -254,3 +254,151 @@ func TestApproveImpl_DirectMergeSummary(t *testing.T) {
 		t.Errorf("DiffStat should contain file stats, got: %q", result.DiffStat)
 	}
 }
+
+func TestApproveImpl_PRWaitFlow(t *testing.T) {
+	tmp := t.TempDir()
+	writeBoundSpec(t, tmp, "010-test")
+	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
+
+	state.Write(tmp, &state.State{
+		Mode:       state.ModeReview,
+		ActiveSpec: "010-test",
+		SpecBranch: "spec/010-test",
+	})
+
+	origRunBD := implRunBDFn
+	origRunBDCombined := implRunBDCombinedFn
+	origLoadConfig := loadConfigFn
+	origHasRemote := hasRemoteFn
+	origPushBranch := pushBranchFn
+	origCreatePR := createPRFn
+	origDeleteBranch := deleteBranchFn
+	origWorktreeRemove := worktreeRemoveFn
+	origDiffStat := diffStatFn
+	origCommitCount := commitCountFn
+	origPRChecksWatch := prChecksWatchFn
+	origMergePR := mergePRFn
+	defer func() {
+		implRunBDFn = origRunBD
+		implRunBDCombinedFn = origRunBDCombined
+		loadConfigFn = origLoadConfig
+		hasRemoteFn = origHasRemote
+		pushBranchFn = origPushBranch
+		createPRFn = origCreatePR
+		deleteBranchFn = origDeleteBranch
+		worktreeRemoveFn = origWorktreeRemove
+		diffStatFn = origDiffStat
+		commitCountFn = origCommitCount
+		prChecksWatchFn = origPRChecksWatch
+		mergePRFn = origMergePR
+	}()
+
+	implRunBDFn = func(args ...string) ([]byte, error) {
+		payload := []map[string]string{{"status": "open"}}
+		return json.Marshal(payload)
+	}
+	implRunBDCombinedFn = func(args ...string) ([]byte, error) { return []byte("ok"), nil }
+	loadConfigFn = func(root string) (*config.Config, error) {
+		cfg := config.DefaultConfig()
+		cfg.MergeStrategy = "pr"
+		return cfg, nil
+	}
+	hasRemoteFn = func() bool { return true }
+	pushBranchFn = func(branch string) error { return nil }
+	createPRFn = func(branch, base, title, body string) (string, error) {
+		return "https://github.com/test/repo/pull/42", nil
+	}
+	deleteBranchFn = func(name string) error { return nil }
+	worktreeRemoveFn = func(name string) error { return nil }
+	diffStatFn = func(workdir, base, head string) (string, error) { return "1 file changed", nil }
+	commitCountFn = func(workdir, base, head string) (int, error) { return 3, nil }
+	prChecksWatchFn = func(url string) error { return nil }
+	mergePRFn = func(url string) error { return nil }
+
+	result, err := ApproveImpl(tmp, "010-test", ImplOpts{Wait: true})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.MergeStrategy != "pr" {
+		t.Errorf("MergeStrategy: got %q, want %q", result.MergeStrategy, "pr")
+	}
+	if result.PRURL != "https://github.com/test/repo/pull/42" {
+		t.Errorf("PRURL: got %q", result.PRURL)
+	}
+	if !result.PRMerged {
+		t.Error("expected PRMerged to be true with --wait")
+	}
+}
+
+func TestApproveImpl_PRNoWaitFlow(t *testing.T) {
+	tmp := t.TempDir()
+	writeBoundSpec(t, tmp, "010-test")
+	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
+
+	state.Write(tmp, &state.State{
+		Mode:       state.ModeReview,
+		ActiveSpec: "010-test",
+		SpecBranch: "spec/010-test",
+	})
+
+	origRunBD := implRunBDFn
+	origRunBDCombined := implRunBDCombinedFn
+	origLoadConfig := loadConfigFn
+	origHasRemote := hasRemoteFn
+	origPushBranch := pushBranchFn
+	origCreatePR := createPRFn
+	origDeleteBranch := deleteBranchFn
+	origWorktreeRemove := worktreeRemoveFn
+	origDiffStat := diffStatFn
+	origCommitCount := commitCountFn
+	defer func() {
+		implRunBDFn = origRunBD
+		implRunBDCombinedFn = origRunBDCombined
+		loadConfigFn = origLoadConfig
+		hasRemoteFn = origHasRemote
+		pushBranchFn = origPushBranch
+		createPRFn = origCreatePR
+		deleteBranchFn = origDeleteBranch
+		worktreeRemoveFn = origWorktreeRemove
+		diffStatFn = origDiffStat
+		commitCountFn = origCommitCount
+	}()
+
+	implRunBDFn = func(args ...string) ([]byte, error) {
+		payload := []map[string]string{{"status": "open"}}
+		return json.Marshal(payload)
+	}
+	implRunBDCombinedFn = func(args ...string) ([]byte, error) { return []byte("ok"), nil }
+	loadConfigFn = func(root string) (*config.Config, error) {
+		cfg := config.DefaultConfig()
+		cfg.MergeStrategy = "pr"
+		return cfg, nil
+	}
+	hasRemoteFn = func() bool { return true }
+	pushBranchFn = func(branch string) error { return nil }
+	createPRFn = func(branch, base, title, body string) (string, error) {
+		return "https://github.com/test/repo/pull/42", nil
+	}
+	// These should NOT be called without --wait
+	var worktreeRemoved, branchDeleted bool
+	deleteBranchFn = func(name string) error { branchDeleted = true; return nil }
+	worktreeRemoveFn = func(name string) error { worktreeRemoved = true; return nil }
+	diffStatFn = func(workdir, base, head string) (string, error) { return "", nil }
+	commitCountFn = func(workdir, base, head string) (int, error) { return 0, nil }
+
+	result, err := ApproveImpl(tmp, "010-test") // no opts = no wait
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.PRMerged {
+		t.Error("expected PRMerged to be false without --wait")
+	}
+	if worktreeRemoved {
+		t.Error("worktree should not be removed without --wait PR merge")
+	}
+	if branchDeleted {
+		t.Error("branch should not be deleted without --wait PR merge")
+	}
+}

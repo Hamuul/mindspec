@@ -139,7 +139,10 @@ This is the final human gate in the spec lifecycle.`,
 			return err
 		}
 
-		result, err := approve.ApproveImpl(root, specID)
+		wait, _ := cmd.Flags().GetBool("wait")
+		opts := approve.ImplOpts{Wait: wait}
+
+		result, err := approve.ApproveImpl(root, specID, opts)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
@@ -161,6 +164,9 @@ This is the final human gate in the spec lifecycle.`,
 			}
 			if result.PRURL != "" {
 				fmt.Printf("  PR:       %s\n", result.PRURL)
+				if result.PRMerged {
+					fmt.Printf("  Status:   merged\n")
+				}
 			}
 			if result.DiffStat != "" {
 				fmt.Printf("\n%s\n", result.DiffStat)
@@ -180,6 +186,7 @@ This is the final human gate in the spec lifecycle.`,
 func init() {
 	approveSpecCmd.Flags().String("approved-by", "user", "Identity of the approver")
 	approvePlanCmd.Flags().String("approved-by", "user", "Identity of the approver")
+	approveImplCmd.Flags().Bool("wait", false, "Wait for CI checks to pass then merge PR (only applies to PR strategy)")
 	approveCmd.AddCommand(approveSpecCmd)
 	approveCmd.AddCommand(approvePlanCmd)
 	approveCmd.AddCommand(approveImplCmd)

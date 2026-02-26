@@ -26,7 +26,15 @@ var (
 	createPRFn          = gitops.CreatePR
 	diffStatFn          = gitops.DiffStat
 	commitCountFn       = gitops.CommitCount
+	prStatusFn          = gitops.PRStatus
+	prChecksWatchFn     = gitops.PRChecksWatch
+	mergePRFn           = gitops.MergePR
 )
+
+// ImplOpts holds options for implementation approval.
+type ImplOpts struct {
+	Wait bool // If true and strategy is PR, wait for CI checks then merge.
+}
 
 // ImplResult holds the result of implementation approval.
 type ImplResult struct {
@@ -37,10 +45,16 @@ type ImplResult struct {
 	CommitCount   int
 	DiffStat      string
 	PRURL         string // set when strategy is "pr"
+	PRMerged      bool   // true if PR was merged via --wait
 }
 
 // ApproveImpl transitions from review mode to idle, completing the spec lifecycle.
-func ApproveImpl(root, specID string) (*ImplResult, error) {
+func ApproveImpl(root, specID string, opts ...ImplOpts) (*ImplResult, error) {
+	var opt ImplOpts
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+	_ = opt // used below in merge flow
 	result := &ImplResult{SpecID: specID}
 
 	// Verify current state is review mode for this spec
@@ -83,11 +97,11 @@ func ApproveImpl(root, specID string) (*ImplResult, error) {
 			cfg = config.DefaultConfig()
 		}
 
-		mergeErr := mergeSpecToMain(root, s, cfg, result)
+		mergeErr := mergeSpecToMain(root, s, cfg, result, opt)
 		if mergeErr != nil {
 			result.Warnings = append(result.Warnings, fmt.Sprintf("spec→main merge: %v", mergeErr))
-		} else if result.MergeStrategy == "direct" {
-			// Clean up spec worktree and branch after successful direct merge.
+		} else if result.MergeStrategy == "direct" || result.PRMerged {
+			// Clean up spec worktree and branch after successful merge.
 			specWtName := "worktree-spec-" + specID
 			if err := worktreeRemoveFn(specWtName); err != nil {
 				result.Warnings = append(result.Warnings, fmt.Sprintf("could not remove spec worktree: %v", err))
@@ -168,7 +182,7 @@ func readBeadStatus(id string) (string, error) {
 
 // mergeSpecToMain merges the spec branch to main using the configured strategy.
 // It populates result with merge metadata (strategy, stats, PR URL).
-func mergeSpecToMain(root string, s *state.State, cfg *config.Config, result *ImplResult) error {
+func mergeSpecToMain(root string, s *state.State, cfg *config.Config, result *ImplResult, opt ImplOpts) error {
 	strategy := cfg.MergeStrategy
 
 	// "auto" resolves to "pr" if a remote exists, "direct" otherwise.
@@ -203,6 +217,17 @@ func mergeSpecToMain(root string, s *state.State, cfg *config.Config, result *Im
 			return fmt.Errorf("creating PR: %w", err)
 		}
 		result.PRURL = prURL
+
+		if opt.Wait {
+			fmt.Printf("Waiting for CI checks on %s...\n", prURL)
+			if err := prChecksWatchFn(prURL); err != nil {
+				return fmt.Errorf("CI checks failed: %w", err)
+			}
+			if err := mergePRFn(prURL); err != nil {
+				return fmt.Errorf("merging PR: %w", err)
+			}
+			result.PRMerged = true
+		}
 		return nil
 
 	case "direct":
