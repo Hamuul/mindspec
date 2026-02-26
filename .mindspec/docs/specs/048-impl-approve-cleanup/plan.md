@@ -7,8 +7,10 @@ approved_at: ""
 approved_by: ""
 bead_ids: []
 adr_citations:
-  - ADR-0006
-  - ADR-0019
+  - id: ADR-0006
+    sections: [ADR Fitness]
+  - id: ADR-0019
+    sections: [ADR Fitness]
 ---
 
 # Plan: 048-impl-approve-cleanup
