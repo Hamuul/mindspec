@@ -15,6 +15,8 @@ step_mapping:
 
 
 
+
+
 # Spec 049-hook-command: Consolidate hooks into mindspec hook CLI command
 
 ## Goal
