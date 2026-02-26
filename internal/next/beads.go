@@ -160,6 +160,38 @@ func ClaimBead(id string) error {
 	return err
 }
 
+// FetchBeadByID retrieves a single bead by its ID via bd show --json.
+func FetchBeadByID(id string) (BeadInfo, error) {
+	out, err := runBDFn("show", id, "--json")
+	if err != nil {
+		return BeadInfo{}, fmt.Errorf("bd show %s failed: %w", id, err)
+	}
+
+	trimmed := strings.TrimSpace(string(out))
+	if trimmed == "" {
+		return BeadInfo{}, fmt.Errorf("bd show %s returned empty output", id)
+	}
+
+	// bd show --json returns an array with one element
+	if strings.HasPrefix(trimmed, "[") {
+		var items []BeadInfo
+		if err := json.Unmarshal(out, &items); err != nil {
+			return BeadInfo{}, fmt.Errorf("parsing bead %s JSON: %w", id, err)
+		}
+		if len(items) == 0 {
+			return BeadInfo{}, fmt.Errorf("bead %s not found", id)
+		}
+		return items[0], nil
+	}
+
+	// Single object
+	var item BeadInfo
+	if err := json.Unmarshal(out, &item); err != nil {
+		return BeadInfo{}, fmt.Errorf("parsing bead %s JSON: %w", id, err)
+	}
+	return item, nil
+}
+
 // EnsureWorktree checks for an existing worktree for the bead, or creates one.
 // It reads state for SpecBranch (to branch from spec instead of main) and config
 // for WorktreeRoot (canonical .worktrees/ directory).
