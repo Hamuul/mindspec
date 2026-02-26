@@ -149,6 +149,23 @@ This is the final human gate in the spec lifecycle.`,
 		for _, w := range result.Warnings {
 			fmt.Fprintf(os.Stderr, "warning: %s\n", w)
 		}
+
+		// Print merge summary if a merge was performed.
+		if result.MergeStrategy != "" {
+			fmt.Println()
+			fmt.Printf("Merge summary:\n")
+			fmt.Printf("  Strategy: %s\n", result.MergeStrategy)
+			fmt.Printf("  Branch:   %s → main\n", result.SpecBranch)
+			if result.CommitCount > 0 {
+				fmt.Printf("  Commits:  %d\n", result.CommitCount)
+			}
+			if result.PRURL != "" {
+				fmt.Printf("  PR:       %s\n", result.PRURL)
+			}
+			if result.DiffStat != "" {
+				fmt.Printf("\n%s\n", result.DiffStat)
+			}
+		}
 		fmt.Println()
 
 		// Instruct-tail: emit idle guidance

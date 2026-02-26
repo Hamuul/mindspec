@@ -159,6 +159,31 @@ func EnsureGitignoreEntry(root, entry string) error {
 	return writeFile(gitignorePath, []byte(content), 0o644)
 }
 
+// DiffStat returns a short diffstat summary between two refs.
+// workdir specifies the git repository path.
+func DiffStat(workdir, base, head string) (string, error) {
+	cmd := execCommand("git", "-C", workdir, "diff", "--stat", base+".."+head)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("diffstat %s..%s: %w", base, head, err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// CommitCount returns the number of commits between base and head.
+func CommitCount(workdir, base, head string) (int, error) {
+	cmd := execCommand("git", "-C", workdir, "rev-list", "--count", base+".."+head)
+	out, err := cmd.Output()
+	if err != nil {
+		return 0, fmt.Errorf("commit count %s..%s: %w", base, head, err)
+	}
+	var count int
+	if _, err := fmt.Sscanf(strings.TrimSpace(string(out)), "%d", &count); err != nil {
+		return 0, fmt.Errorf("parsing commit count: %w", err)
+	}
+	return count, nil
+}
+
 // File I/O wrappers for testability.
 var (
 	readFile  = os.ReadFile

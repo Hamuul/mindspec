@@ -24,12 +24,19 @@ var (
 	hasRemoteFn         = gitops.HasRemote
 	pushBranchFn        = gitops.PushBranch
 	createPRFn          = gitops.CreatePR
+	diffStatFn          = gitops.DiffStat
+	commitCountFn       = gitops.CommitCount
 )
 
 // ImplResult holds the result of implementation approval.
 type ImplResult struct {
-	SpecID   string
-	Warnings []string
+	SpecID        string
+	Warnings      []string
+	MergeStrategy string // "direct", "pr", or "" if no merge
+	SpecBranch    string
+	CommitCount   int
+	DiffStat      string
+	PRURL         string // set when strategy is "pr"
 }
 
 // ApproveImpl transitions from review mode to idle, completing the spec lifecycle.
@@ -76,11 +83,11 @@ func ApproveImpl(root, specID string) (*ImplResult, error) {
 			cfg = config.DefaultConfig()
 		}
 
-		mergeErr := mergeSpecToMain(root, s, cfg)
+		mergeErr := mergeSpecToMain(root, s, cfg, result)
 		if mergeErr != nil {
 			result.Warnings = append(result.Warnings, fmt.Sprintf("spec→main merge: %v", mergeErr))
-		} else {
-			// Clean up spec worktree and branch.
+		} else if result.MergeStrategy == "direct" {
+			// Clean up spec worktree and branch after successful direct merge.
 			specWtName := "worktree-spec-" + specID
 			if err := worktreeRemoveFn(specWtName); err != nil {
 				result.Warnings = append(result.Warnings, fmt.Sprintf("could not remove spec worktree: %v", err))
@@ -160,7 +167,8 @@ func readBeadStatus(id string) (string, error) {
 }
 
 // mergeSpecToMain merges the spec branch to main using the configured strategy.
-func mergeSpecToMain(root string, s *state.State, cfg *config.Config) error {
+// It populates result with merge metadata (strategy, stats, PR URL).
+func mergeSpecToMain(root string, s *state.State, cfg *config.Config, result *ImplResult) error {
 	strategy := cfg.MergeStrategy
 
 	// "auto" resolves to "pr" if a remote exists, "direct" otherwise.
@@ -170,6 +178,17 @@ func mergeSpecToMain(root string, s *state.State, cfg *config.Config) error {
 		} else {
 			strategy = "direct"
 		}
+	}
+
+	result.MergeStrategy = strategy
+	result.SpecBranch = s.SpecBranch
+
+	// Gather pre-merge stats (best-effort).
+	if count, err := commitCountFn(root, "main", s.SpecBranch); err == nil {
+		result.CommitCount = count
+	}
+	if stat, err := diffStatFn(root, "main", s.SpecBranch); err == nil {
+		result.DiffStat = stat
 	}
 
 	switch strategy {
@@ -183,7 +202,7 @@ func mergeSpecToMain(root string, s *state.State, cfg *config.Config) error {
 		if err != nil {
 			return fmt.Errorf("creating PR: %w", err)
 		}
-		fmt.Printf("Pull request created: %s\n", prURL)
+		result.PRURL = prURL
 		return nil
 
 	case "direct":

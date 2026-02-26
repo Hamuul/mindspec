@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mindspec/mindspec/internal/config"
 	"github.com/mindspec/mindspec/internal/state"
 )
 
@@ -184,5 +185,72 @@ func TestApproveImpl_PartialCloseFailureWarnsAndContinues(t *testing.T) {
 	}
 	if len(closed) == 0 {
 		t.Fatal("expected other members to still be closed")
+	}
+}
+
+func TestApproveImpl_DirectMergeSummary(t *testing.T) {
+	tmp := t.TempDir()
+	writeBoundSpec(t, tmp, "010-test")
+	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
+
+	state.Write(tmp, &state.State{
+		Mode:       state.ModeReview,
+		ActiveSpec: "010-test",
+		SpecBranch: "spec/010-test",
+	})
+
+	origRunBD := implRunBDFn
+	origRunBDCombined := implRunBDCombinedFn
+	origLoadConfig := loadConfigFn
+	origMergeBranch := mergeBranchFn
+	origDeleteBranch := deleteBranchFn
+	origWorktreeRemove := worktreeRemoveFn
+	origDiffStat := diffStatFn
+	origCommitCount := commitCountFn
+	defer func() {
+		implRunBDFn = origRunBD
+		implRunBDCombinedFn = origRunBDCombined
+		loadConfigFn = origLoadConfig
+		mergeBranchFn = origMergeBranch
+		deleteBranchFn = origDeleteBranch
+		worktreeRemoveFn = origWorktreeRemove
+		diffStatFn = origDiffStat
+		commitCountFn = origCommitCount
+	}()
+
+	implRunBDFn = func(args ...string) ([]byte, error) {
+		payload := []map[string]string{{"status": "open"}}
+		return json.Marshal(payload)
+	}
+	implRunBDCombinedFn = func(args ...string) ([]byte, error) { return []byte("ok"), nil }
+	loadConfigFn = func(root string) (*config.Config, error) {
+		cfg := config.DefaultConfig()
+		cfg.MergeStrategy = "direct"
+		return cfg, nil
+	}
+	mergeBranchFn = func(workdir, source, target string) error { return nil }
+	deleteBranchFn = func(name string) error { return nil }
+	worktreeRemoveFn = func(name string) error { return nil }
+	diffStatFn = func(workdir, base, head string) (string, error) {
+		return " 3 files changed, 50 insertions(+), 10 deletions(-)", nil
+	}
+	commitCountFn = func(workdir, base, head string) (int, error) { return 5, nil }
+
+	result, err := ApproveImpl(tmp, "010-test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.MergeStrategy != "direct" {
+		t.Errorf("MergeStrategy: got %q, want %q", result.MergeStrategy, "direct")
+	}
+	if result.SpecBranch != "spec/010-test" {
+		t.Errorf("SpecBranch: got %q, want %q", result.SpecBranch, "spec/010-test")
+	}
+	if result.CommitCount != 5 {
+		t.Errorf("CommitCount: got %d, want 5", result.CommitCount)
+	}
+	if !strings.Contains(result.DiffStat, "3 files changed") {
+		t.Errorf("DiffStat should contain file stats, got: %q", result.DiffStat)
 	}
 }
