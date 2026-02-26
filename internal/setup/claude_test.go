@@ -196,6 +196,168 @@ func TestRunClaude_MergesExistingSettings(t *testing.T) {
 	}
 }
 
+func TestWorktreeFileGuardScript_ReadsStdinJSON(t *testing.T) {
+	t.Parallel()
+
+	script := worktreeFileGuardScript()
+	// Must read from stdin (cat | jq), not env vars
+	if strings.Contains(script, "CLAUDE_TOOL_ARG") {
+		t.Error("file guard should not reference CLAUDE_TOOL_ARG env vars")
+	}
+	if !strings.Contains(script, "tool_input.file_path") {
+		t.Error("file guard should read tool_input.file_path from stdin JSON")
+	}
+	if !strings.Contains(script, "cat | jq") && !strings.Contains(script, "$(cat |") {
+		t.Error("file guard should pipe stdin to jq")
+	}
+	// Must allow both worktree AND main worktree paths (same git repo)
+	if !strings.Contains(script, `"$main"`) {
+		t.Error("file guard should allow main worktree paths (shared git repo)")
+	}
+}
+
+func TestWorktreeBashGuardScript_ReadsStdinJSON(t *testing.T) {
+	t.Parallel()
+
+	script := worktreeBashGuardScript()
+	// Must read from stdin (cat | jq), not env vars
+	if strings.Contains(script, "CLAUDE_TOOL_ARG") {
+		t.Error("bash guard should not reference CLAUDE_TOOL_ARG env vars")
+	}
+	if !strings.Contains(script, "tool_input.command") {
+		t.Error("bash guard should read tool_input.command from stdin JSON")
+	}
+	// Must allow cd, mindspec, bd, git commands
+	if !strings.Contains(script, `"cd "`) {
+		t.Error("bash guard should allow cd commands")
+	}
+	if !strings.Contains(script, `"git "`) {
+		t.Error("bash guard should allow git commands")
+	}
+	if !strings.Contains(script, `"mindspec "`) {
+		t.Error("bash guard should allow mindspec commands")
+	}
+	if !strings.Contains(script, `"bd "`) {
+		t.Error("bash guard should allow bd commands")
+	}
+}
+
+func TestNeedsClearBashGuardScript_ReadsStdinJSON(t *testing.T) {
+	t.Parallel()
+
+	script := needsClearBashGuardScript()
+	if strings.Contains(script, "CLAUDE_TOOL_ARG_COMMAND") {
+		t.Error("needs_clear guard should not reference CLAUDE_TOOL_ARG_COMMAND env var")
+	}
+	if !strings.Contains(script, "tool_input.command") {
+		t.Error("needs_clear guard should read tool_input.command from stdin JSON")
+	}
+}
+
+func TestHookEntryStale_DetectsChangedCommand(t *testing.T) {
+	t.Parallel()
+
+	existing := []any{
+		map[string]any{
+			"matcher": "Bash",
+			"hooks": []any{
+				map[string]any{
+					"type":    "command",
+					"command": "old command",
+				},
+			},
+		},
+	}
+
+	wanted := map[string]any{
+		"matcher": "Bash",
+		"hooks": []map[string]any{
+			{
+				"type":    "command",
+				"command": "new command",
+			},
+		},
+	}
+
+	if !hookEntryStale(existing, wanted) {
+		t.Error("should detect stale hook when command differs")
+	}
+}
+
+func TestHookEntryStale_NotStaleWhenSame(t *testing.T) {
+	t.Parallel()
+
+	existing := []any{
+		map[string]any{
+			"matcher": "Bash",
+			"hooks": []any{
+				map[string]any{
+					"type":    "command",
+					"command": "same command",
+				},
+			},
+		},
+	}
+
+	wanted := map[string]any{
+		"matcher": "Bash",
+		"hooks": []map[string]any{
+			{
+				"type":    "command",
+				"command": "same command",
+			},
+		},
+	}
+
+	if hookEntryStale(existing, wanted) {
+		t.Error("should not detect stale hook when command is the same")
+	}
+}
+
+func TestRunClaude_UpdatesStaleHooks(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+
+	// First run: create settings with hooks
+	if _, err := RunClaude(root, false); err != nil {
+		t.Fatalf("first RunClaude: %v", err)
+	}
+
+	// Tamper with a hook command to simulate stale state
+	settingsPath := filepath.Join(root, ".claude", "settings.json")
+	data, _ := os.ReadFile(settingsPath)
+	// Replace a known substring to make it stale
+	tampered := strings.Replace(string(data), "tool_input.file_path", "STALE_ENV_VAR", 1)
+	os.WriteFile(settingsPath, []byte(tampered), 0o644)
+
+	// Second run: should detect and update stale hooks
+	r2, err := RunClaude(root, false)
+	if err != nil {
+		t.Fatalf("second RunClaude: %v", err)
+	}
+
+	// Should report hooks were merged (updated), not skipped
+	foundMerged := false
+	for _, c := range r2.Created {
+		if strings.Contains(c, "settings.json") && strings.Contains(c, "merged") {
+			foundMerged = true
+		}
+	}
+	if !foundMerged {
+		t.Errorf("expected stale hooks to be updated (merged), got created=%v skipped=%v", r2.Created, r2.Skipped)
+	}
+
+	// Verify the updated file no longer has the stale content
+	updated, _ := os.ReadFile(settingsPath)
+	if strings.Contains(string(updated), "STALE_ENV_VAR") {
+		t.Error("stale hook command was not replaced")
+	}
+	if !strings.Contains(string(updated), "tool_input.file_path") {
+		t.Error("updated hook should contain tool_input.file_path")
+	}
+}
+
 func TestWantedHooks_BashPreToolUseIncludesNeedsClearGuard(t *testing.T) {
 	t.Parallel()
 

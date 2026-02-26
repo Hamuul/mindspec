@@ -199,7 +199,8 @@ case "$TOOL" in
     # Check if target file is outside the worktree
     FILE_PATH=$(echo "$INPUT" | jq -r '.toolArgs.file_path // .toolArgs.path // empty' 2>/dev/null)
     if [ -n "$FILE_PATH" ]; then
-      case "$FILE_PATH" in "$WT"*)
+      MAIN=$(pwd)
+      case "$FILE_PATH" in "$WT"*|"$MAIN"*)
         exit 0 ;;
       esac
       echo "{\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"mindspec: blocked — file $FILE_PATH is outside active worktree $WT. Switch to: cd $WT\"}"
@@ -207,7 +208,10 @@ case "$TOOL" in
     fi
     ;;
   terminal|bash|shell)
-    # Check if CWD is outside the worktree
+    # Read command from stdin JSON and allow worktree-targeting commands
+    CMD=$(echo "$INPUT" | jq -r '.toolArgs.command // empty' 2>/dev/null)
+    case "$CMD" in "cd "*|"mindspec "*|"./bin/mindspec "*|"bd "*|"make "*|"git "*|"go "*) exit 0;; esac
+    # Fall back to CWD check
     CWD=$(pwd)
     case "$CWD" in "$WT"*)
       exit 0 ;;

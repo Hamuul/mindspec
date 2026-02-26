@@ -31,7 +31,7 @@
       {
         "hooks": [
           {
-            "command": "wt=$(cat .mindspec/state.json 2\u003e/dev/null | jq -r '.activeWorktree // empty'); if [ -z \"$wt\" ]; then exit 0; fi; enforce=$(cat .mindspec/config.yaml 2\u003e/dev/null | grep 'agent_hooks' | grep -c 'false'); if [ \"$enforce\" = \"1\" ]; then exit 0; fi; fp=\"$CLAUDE_TOOL_ARG_FILE_PATH\"; case \"$fp\" in \"$wt\"*) exit 0;; esac; echo \"mindspec: blocked — file $fp is outside active worktree $wt. Switch to: cd $wt\" \u003e\u00262; exit 2",
+            "command": "wt=$(cat .mindspec/state.json 2\u003e/dev/null | jq -r '.activeWorktree // empty'); if [ -z \"$wt\" ]; then exit 0; fi; enforce=$(cat .mindspec/config.yaml 2\u003e/dev/null | grep 'agent_hooks' | grep -c 'false'); if [ \"$enforce\" = \"1\" ]; then exit 0; fi; fp=$(cat | jq -r '.tool_input.file_path // empty'); if [ -z \"$fp\" ]; then exit 0; fi; main=$(pwd); case \"$fp\" in \"$wt\"*|\"$main\"*) exit 0;; esac; echo \"mindspec: blocked — file $fp is outside active worktree $wt. Switch to: cd $wt\" \u003e\u00262; exit 2",
             "statusMessage": "Checking worktree enforcement...",
             "type": "command"
           }
@@ -41,7 +41,7 @@
       {
         "hooks": [
           {
-            "command": "wt=$(cat .mindspec/state.json 2\u003e/dev/null | jq -r '.activeWorktree // empty'); if [ -z \"$wt\" ]; then exit 0; fi; enforce=$(cat .mindspec/config.yaml 2\u003e/dev/null | grep 'agent_hooks' | grep -c 'false'); if [ \"$enforce\" = \"1\" ]; then exit 0; fi; fp=\"$CLAUDE_TOOL_ARG_FILE_PATH\"; case \"$fp\" in \"$wt\"*) exit 0;; esac; echo \"mindspec: blocked — file $fp is outside active worktree $wt. Switch to: cd $wt\" \u003e\u00262; exit 2",
+            "command": "wt=$(cat .mindspec/state.json 2\u003e/dev/null | jq -r '.activeWorktree // empty'); if [ -z \"$wt\" ]; then exit 0; fi; enforce=$(cat .mindspec/config.yaml 2\u003e/dev/null | grep 'agent_hooks' | grep -c 'false'); if [ \"$enforce\" = \"1\" ]; then exit 0; fi; fp=$(cat | jq -r '.tool_input.file_path // empty'); if [ -z \"$fp\" ]; then exit 0; fi; main=$(pwd); case \"$fp\" in \"$wt\"*|\"$main\"*) exit 0;; esac; echo \"mindspec: blocked — file $fp is outside active worktree $wt. Switch to: cd $wt\" \u003e\u00262; exit 2",
             "statusMessage": "Checking worktree enforcement...",
             "type": "command"
           }
@@ -51,8 +51,13 @@
       {
         "hooks": [
           {
-            "command": "wt=$(cat .mindspec/state.json 2\u003e/dev/null | jq -r '.activeWorktree // empty'); if [ -z \"$wt\" ]; then exit 0; fi; enforce=$(cat .mindspec/config.yaml 2\u003e/dev/null | grep 'agent_hooks' | grep -c 'false'); if [ \"$enforce\" = \"1\" ]; then exit 0; fi; cwd=$(pwd); case \"$cwd\" in \"$wt\"*) exit 0;; esac; echo \"mindspec: blocked — your working directory is the main worktree. Run: cd $wt\" \u003e\u00262; exit 2",
+            "command": "wt=$(cat .mindspec/state.json 2\u003e/dev/null | jq -r '.activeWorktree // empty'); if [ -z \"$wt\" ]; then exit 0; fi; enforce=$(cat .mindspec/config.yaml 2\u003e/dev/null | grep 'agent_hooks' | grep -c 'false'); if [ \"$enforce\" = \"1\" ]; then exit 0; fi; cmd=$(cat | jq -r '.tool_input.command // empty'); stripped=\"$cmd\"; while :; do case \"$stripped\" in [A-Z_]*=*\" \"*) stripped=\"${stripped#* }\";; *) break;; esac; done; case \"$stripped\" in \"cd \"*|\"mindspec \"*|\"./bin/mindspec \"*|\"bd \"*|\"make \"*|\"git \"*|\"go \"*) exit 0;; esac; cwd=$(pwd); case \"$cwd\" in \"$wt\"*) exit 0;; esac; echo \"mindspec: blocked — your working directory is the main worktree. Run: cd $wt\" \u003e\u00262; exit 2",
             "statusMessage": "Checking worktree enforcement...",
+            "type": "command"
+          },
+          {
+            "command": "nc=$(cat .mindspec/state.json 2\u003e/dev/null | jq -r '.needs_clear // false'); if [ \"$nc\" != \"true\" ]; then exit 0; fi; cmd=$(cat | jq -r '.tool_input.command // empty'); case \"$cmd\" in *\"mindspec next\"*) ;; *) exit 0;; esac; case \"$cmd\" in *\"--force\"*) exit 0;; esac; echo \"needs_clear is set. Run /clear to reset your context, then retry mindspec next. Use --force to bypass.\" \u003e\u00262; exit 2",
+            "statusMessage": "Checking context clear gate...",
             "type": "command"
           }
         ],
@@ -63,7 +68,7 @@
       {
         "hooks": [
           {
-            "command": "./bin/mindspec record health 2\u003e/dev/null; ./bin/mindspec instruct 2\u003e/dev/null || echo 'mindspec instruct unavailable — run make build'",
+            "command": "mindspec state clear-flag 2\u003e/dev/null; mindspec instruct 2\u003e/dev/null || echo 'mindspec instruct unavailable — run make build'",
             "statusMessage": "Loading mode guidance...",
             "type": "command"
           }

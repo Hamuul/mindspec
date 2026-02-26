@@ -125,19 +125,22 @@ func ensureSettings(root string, check bool, r *Result) error {
 			hooks = make(map[string]any)
 		}
 
-		anyAdded := false
+		anyChanged := false
 		for event, entries := range wanted {
 			existing, _ := hooks[event].([]any)
 			for _, entry := range entries {
 				if !hookEntryExists(existing, entry) {
 					existing = append(existing, entry)
-					anyAdded = true
+					anyChanged = true
+				} else if hookEntryStale(existing, entry) {
+					existing = replaceHookEntry(existing, entry)
+					anyChanged = true
 				}
 			}
 			hooks[event] = existing
 		}
 
-		if !anyAdded {
+		if !anyChanged {
 			r.Skipped = append(r.Skipped, relPath)
 			return nil
 		}
@@ -216,7 +219,7 @@ func wantedHooks() map[string][]map[string]any {
 				"hooks": []map[string]any{
 					{
 						"type":          "command",
-						"command":       worktreeFileGuardScript("$CLAUDE_TOOL_ARG_FILE_PATH"),
+						"command":       worktreeFileGuardScript(),
 						"statusMessage": "Checking worktree enforcement...",
 					},
 				},
@@ -226,7 +229,7 @@ func wantedHooks() map[string][]map[string]any {
 				"hooks": []map[string]any{
 					{
 						"type":          "command",
-						"command":       worktreeFileGuardScript("$CLAUDE_TOOL_ARG_FILE_PATH"),
+						"command":       worktreeFileGuardScript(),
 						"statusMessage": "Checking worktree enforcement...",
 					},
 				},
@@ -251,24 +254,33 @@ func wantedHooks() map[string][]map[string]any {
 }
 
 // worktreeFileGuardScript returns a shell script that blocks file writes outside
-// the active worktree. filePathVar should be the env var holding the target path.
-func worktreeFileGuardScript(filePathVar string) string {
+// the active worktree. Reads tool_input.file_path from stdin JSON (Claude Code
+// passes tool arguments as JSON on stdin, not env vars).
+func worktreeFileGuardScript() string {
 	return `wt=$(cat .mindspec/state.json 2>/dev/null | jq -r '.activeWorktree // empty'); ` +
 		`if [ -z "$wt" ]; then exit 0; fi; ` +
 		`enforce=$(cat .mindspec/config.yaml 2>/dev/null | grep 'agent_hooks' | grep -c 'false'); ` +
 		`if [ "$enforce" = "1" ]; then exit 0; fi; ` +
-		`fp="` + filePathVar + `"; ` +
-		`case "$fp" in "$wt"*) exit 0;; esac; ` +
+		`fp=$(cat | jq -r '.tool_input.file_path // empty'); ` +
+		`if [ -z "$fp" ]; then exit 0; fi; ` +
+		`main=$(pwd); ` +
+		`case "$fp" in "$wt"*|"$main"*) exit 0;; esac; ` +
 		`echo "mindspec: blocked — file $fp is outside active worktree $wt. Switch to: cd $wt" >&2; exit 2`
 }
 
 // worktreeBashGuardScript returns a shell script that blocks bash execution
-// when CWD is the main worktree and a worktree is active.
+// when CWD is the main worktree and a worktree is active. Reads the command
+// from stdin JSON (tool_input.command) and allows commands that target the
+// worktree (cd, mindspec, bd) since those either comply with or enforce
+// worktree isolation via their own Layer 2 guards.
 func worktreeBashGuardScript() string {
 	return `wt=$(cat .mindspec/state.json 2>/dev/null | jq -r '.activeWorktree // empty'); ` +
 		`if [ -z "$wt" ]; then exit 0; fi; ` +
 		`enforce=$(cat .mindspec/config.yaml 2>/dev/null | grep 'agent_hooks' | grep -c 'false'); ` +
 		`if [ "$enforce" = "1" ]; then exit 0; fi; ` +
+		`cmd=$(cat | jq -r '.tool_input.command // empty'); ` +
+		`stripped="$cmd"; while :; do case "$stripped" in [A-Z_]*=*" "*) stripped="${stripped#* }";; *) break;; esac; done; ` +
+		`case "$stripped" in "cd "*|"mindspec "*|"./bin/mindspec "*|"bd "*|"make "*|"git "*|"go "*) exit 0;; esac; ` +
 		`cwd=$(pwd); ` +
 		`case "$cwd" in "$wt"*) exit 0;; esac; ` +
 		`echo "mindspec: blocked — your working directory is the main worktree. Run: cd $wt" >&2; exit 2`
@@ -276,10 +288,11 @@ func worktreeBashGuardScript() string {
 
 // needsClearBashGuardScript returns a shell script that blocks `mindspec next`
 // when needs_clear is set in state.json, unless --force is present.
+// Reads the command from stdin JSON (tool_input.command).
 func needsClearBashGuardScript() string {
 	return `nc=$(cat .mindspec/state.json 2>/dev/null | jq -r '.needs_clear // false'); ` +
 		`if [ "$nc" != "true" ]; then exit 0; fi; ` +
-		`cmd="$CLAUDE_TOOL_ARG_COMMAND"; ` +
+		`cmd=$(cat | jq -r '.tool_input.command // empty'); ` +
 		`case "$cmd" in *"mindspec next"*) ;; *) exit 0;; esac; ` +
 		`case "$cmd" in *"--force"*) exit 0;; esac; ` +
 		`echo "needs_clear is set. Run /clear to reset your context, then retry mindspec next. Use --force to bypass." >&2; exit 2`
@@ -298,6 +311,59 @@ func hookEntryExists(existing []any, entry map[string]any) bool {
 		}
 	}
 	return false
+}
+
+// hookEntryStale checks if an existing hook entry with the same matcher has
+// different command content than the wanted entry (i.e. needs updating).
+func hookEntryStale(existing []any, entry map[string]any) bool {
+	wantMatcher, _ := entry["matcher"].(string)
+	wantHooks, _ := entry["hooks"].([]map[string]any)
+	for _, e := range existing {
+		m, ok := e.(map[string]any)
+		if !ok {
+			continue
+		}
+		if matcher, _ := m["matcher"].(string); matcher != wantMatcher {
+			continue
+		}
+		// Same matcher — compare hook commands
+		existHooks, _ := m["hooks"].([]any)
+		if len(existHooks) != len(wantHooks) {
+			return true
+		}
+		for i, wh := range wantHooks {
+			if i >= len(existHooks) {
+				return true
+			}
+			eh, ok := existHooks[i].(map[string]any)
+			if !ok {
+				return true
+			}
+			wantCmd, _ := wh["command"].(string)
+			existCmd, _ := eh["command"].(string)
+			if wantCmd != existCmd {
+				return true
+			}
+		}
+		return false
+	}
+	return false // not found = not stale (it's new)
+}
+
+// replaceHookEntry replaces an existing hook entry matching the same matcher.
+func replaceHookEntry(existing []any, entry map[string]any) []any {
+	wantMatcher, _ := entry["matcher"].(string)
+	for i, e := range existing {
+		m, ok := e.(map[string]any)
+		if !ok {
+			continue
+		}
+		if matcher, _ := m["matcher"].(string); matcher == wantMatcher {
+			existing[i] = entry
+			return existing
+		}
+	}
+	return append(existing, entry)
 }
 
 // ensureClaudeMD creates or appends MindSpec block to CLAUDE.md.
