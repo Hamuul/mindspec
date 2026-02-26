@@ -199,7 +199,7 @@ func wantedHooks() map[string][]map[string]any {
 				"hooks": []map[string]any{
 					{
 						"type":          "command",
-						"command":       `state=$(cat .mindspec/state.json 2>/dev/null | jq -r '.mode // empty'); if [ "$state" = "plan" ]; then echo 'MindSpec plan mode is active. Do NOT exit plan mode directly. Run /ms-plan-approve to validate the plan, create beads, and transition to implementation.' >&2; exit 2; fi`,
+						"command":       "mindspec hook plan-gate-exit",
 						"statusMessage": "Checking MindSpec plan gate...",
 					},
 				},
@@ -209,7 +209,7 @@ func wantedHooks() map[string][]map[string]any {
 				"hooks": []map[string]any{
 					{
 						"type":          "command",
-						"command":       `state=$(cat .mindspec/state.json 2>/dev/null | jq -r '.mode // empty'); if [ "$state" = "plan" ]; then echo '{"additionalContext": "MindSpec plan mode is active. Write your plan to docs/specs/*/plan.md. When complete, use /ms-plan-approve — do NOT use ExitPlanMode directly."}'; fi`,
+						"command":       "mindspec hook plan-gate-enter",
 						"statusMessage": "Checking MindSpec plan gate...",
 					},
 				},
@@ -219,8 +219,13 @@ func wantedHooks() map[string][]map[string]any {
 				"hooks": []map[string]any{
 					{
 						"type":          "command",
-						"command":       worktreeFileGuardScript(),
+						"command":       "mindspec hook worktree-file",
 						"statusMessage": "Checking worktree enforcement...",
+					},
+					{
+						"type":          "command",
+						"command":       "mindspec hook workflow-guard",
+						"statusMessage": "Checking workflow guard...",
 					},
 				},
 			},
@@ -229,8 +234,13 @@ func wantedHooks() map[string][]map[string]any {
 				"hooks": []map[string]any{
 					{
 						"type":          "command",
-						"command":       worktreeFileGuardScript(),
+						"command":       "mindspec hook worktree-file",
 						"statusMessage": "Checking worktree enforcement...",
+					},
+					{
+						"type":          "command",
+						"command":       "mindspec hook workflow-guard",
+						"statusMessage": "Checking workflow guard...",
 					},
 				},
 			},
@@ -239,63 +249,23 @@ func wantedHooks() map[string][]map[string]any {
 				"hooks": []map[string]any{
 					{
 						"type":          "command",
-						"command":       worktreeBashGuardScript(),
+						"command":       "mindspec hook worktree-bash",
 						"statusMessage": "Checking worktree enforcement...",
 					},
 					{
 						"type":          "command",
-						"command":       needsClearBashGuardScript(),
+						"command":       "mindspec hook needs-clear",
 						"statusMessage": "Checking context clear gate...",
+					},
+					{
+						"type":          "command",
+						"command":       "mindspec hook workflow-guard",
+						"statusMessage": "Checking workflow guard...",
 					},
 				},
 			},
 		},
 	}
-}
-
-// worktreeFileGuardScript returns a shell script that blocks file writes outside
-// the active worktree. Reads tool_input.file_path from stdin JSON (Claude Code
-// passes tool arguments as JSON on stdin, not env vars).
-func worktreeFileGuardScript() string {
-	return `wt=$(cat .mindspec/state.json 2>/dev/null | jq -r '.activeWorktree // empty'); ` +
-		`if [ -z "$wt" ]; then exit 0; fi; ` +
-		`enforce=$(cat .mindspec/config.yaml 2>/dev/null | grep 'agent_hooks' | grep -c 'false'); ` +
-		`if [ "$enforce" = "1" ]; then exit 0; fi; ` +
-		`fp=$(cat | jq -r '.tool_input.file_path // empty'); ` +
-		`if [ -z "$fp" ]; then exit 0; fi; ` +
-		`main=$(pwd); ` +
-		`case "$fp" in "$wt"*|"$main"*) exit 0;; esac; ` +
-		`echo "mindspec: blocked — file $fp is outside active worktree $wt. Switch to: cd $wt" >&2; exit 2`
-}
-
-// worktreeBashGuardScript returns a shell script that blocks bash execution
-// when CWD is the main worktree and a worktree is active. Reads the command
-// from stdin JSON (tool_input.command) and allows commands that target the
-// worktree (cd, mindspec, bd) since those either comply with or enforce
-// worktree isolation via their own Layer 2 guards.
-func worktreeBashGuardScript() string {
-	return `wt=$(cat .mindspec/state.json 2>/dev/null | jq -r '.activeWorktree // empty'); ` +
-		`if [ -z "$wt" ]; then exit 0; fi; ` +
-		`enforce=$(cat .mindspec/config.yaml 2>/dev/null | grep 'agent_hooks' | grep -c 'false'); ` +
-		`if [ "$enforce" = "1" ]; then exit 0; fi; ` +
-		`cmd=$(cat | jq -r '.tool_input.command // empty'); ` +
-		`stripped="$cmd"; while :; do case "$stripped" in [A-Z_]*=*" "*) stripped="${stripped#* }";; *) break;; esac; done; ` +
-		`case "$stripped" in "cd "*|"mindspec "*|"./bin/mindspec "*|"bd "*|"make "*|"git "*|"go "*) exit 0;; esac; ` +
-		`cwd=$(pwd); ` +
-		`case "$cwd" in "$wt"*) exit 0;; esac; ` +
-		`echo "mindspec: blocked — your working directory is the main worktree. Run: cd $wt" >&2; exit 2`
-}
-
-// needsClearBashGuardScript returns a shell script that blocks `mindspec next`
-// when needs_clear is set in state.json, unless --force is present.
-// Reads the command from stdin JSON (tool_input.command).
-func needsClearBashGuardScript() string {
-	return `nc=$(cat .mindspec/state.json 2>/dev/null | jq -r '.needs_clear // false'); ` +
-		`if [ "$nc" != "true" ]; then exit 0; fi; ` +
-		`cmd=$(cat | jq -r '.tool_input.command // empty'); ` +
-		`case "$cmd" in *"mindspec next"*) ;; *) exit 0;; esac; ` +
-		`case "$cmd" in *"--force"*) exit 0;; esac; ` +
-		`echo "needs_clear is set. Run /clear to reset your context, then retry mindspec next. Use --force to bypass." >&2; exit 2`
 }
 
 // hookEntryExists checks if a hook entry with the same matcher already exists.
@@ -437,13 +407,11 @@ func commandFiles() map[string]string {
 description: Enter, promote, or dismiss an Explore Mode session
 ---
 
-# Explore
+# Explore Mode
 
-1. If the user provides a description, run ` + "`mindspec explore \"description\"`" + ` to enter Explore Mode
-2. If the user wants to promote, ask for a spec ID (check ` + "`docs/specs/`" + ` for next available number) and run ` + "`mindspec explore promote <spec-id>`" + `
-3. If the user wants to dismiss, run ` + "`mindspec explore dismiss`" + ` (optionally with ` + "`--adr`" + ` to record an ADR)
-4. If unclear what the user wants, show the three options and ask
-5. On success: relay the CLI output to the user
+- Enter: ` + "`mindspec explore \"short description\"`" + `
+- Promote to spec: ` + "`mindspec explore promote <spec-id>`" + `
+- Dismiss: ` + "`mindspec explore dismiss`" + ` (optionally ` + "`--adr`" + ` to record decision)
 `,
 
 		"ms-spec-init.md": `---
