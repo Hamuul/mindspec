@@ -539,3 +539,78 @@ func contains(s, substr string) bool {
 	}
 	return false
 }
+
+// --- FetchBeadByID tests ---
+
+func TestFetchBeadByID_ArrayResponse(t *testing.T) {
+	orig := runBDFn
+	defer func() { runBDFn = orig }()
+
+	runBDFn = func(args ...string) ([]byte, error) {
+		if len(args) >= 3 && args[0] == "show" && args[1] == "bead-abc" {
+			items := []BeadInfo{{
+				ID:    "bead-abc",
+				Title: "[IMPL 047.1] Test bead",
+			}}
+			return json.Marshal(items)
+		}
+		return nil, fmt.Errorf("unexpected: %v", args)
+	}
+
+	info, err := FetchBeadByID("bead-abc")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if info.ID != "bead-abc" {
+		t.Errorf("ID = %q, want %q", info.ID, "bead-abc")
+	}
+	if info.Title != "[IMPL 047.1] Test bead" {
+		t.Errorf("Title = %q", info.Title)
+	}
+}
+
+func TestFetchBeadByID_SingleObjectResponse(t *testing.T) {
+	orig := runBDFn
+	defer func() { runBDFn = orig }()
+
+	runBDFn = func(args ...string) ([]byte, error) {
+		item := BeadInfo{ID: "bead-xyz", Title: "Single object"}
+		return json.Marshal(item)
+	}
+
+	info, err := FetchBeadByID("bead-xyz")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if info.ID != "bead-xyz" {
+		t.Errorf("ID = %q, want %q", info.ID, "bead-xyz")
+	}
+}
+
+func TestFetchBeadByID_NotFound(t *testing.T) {
+	orig := runBDFn
+	defer func() { runBDFn = orig }()
+
+	runBDFn = func(args ...string) ([]byte, error) {
+		return nil, fmt.Errorf("bead not found")
+	}
+
+	_, err := FetchBeadByID("nonexistent")
+	if err == nil {
+		t.Fatal("expected error for nonexistent bead")
+	}
+}
+
+func TestFetchBeadByID_EmptyArray(t *testing.T) {
+	orig := runBDFn
+	defer func() { runBDFn = orig }()
+
+	runBDFn = func(args ...string) ([]byte, error) {
+		return []byte("[]"), nil
+	}
+
+	_, err := FetchBeadByID("bead-empty")
+	if err == nil {
+		t.Fatal("expected error for empty array response")
+	}
+}

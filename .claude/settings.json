@@ -1,45 +1,75 @@
 {
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "./bin/mindspec record health 2>/dev/null; ./bin/mindspec instruct 2>/dev/null || echo 'mindspec instruct unavailable — run make build'",
-            "statusMessage": "Loading mode guidance..."
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "ExitPlanMode",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "state=$(cat .mindspec/state.json 2>/dev/null | jq -r '.mode // empty'); if [ \"$state\" = \"plan\" ]; then echo 'MindSpec plan mode is active. Do NOT exit plan mode directly. Run /plan-approve to validate the plan, create beads, and transition to implementation.' >&2; exit 2; fi",
-            "statusMessage": "Checking MindSpec plan gate..."
-          }
-        ]
-      },
-      {
-        "matcher": "EnterPlanMode",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "state=$(cat .mindspec/state.json 2>/dev/null | jq -r '.mode // empty'); if [ \"$state\" = \"plan\" ]; then echo '{\"additionalContext\": \"MindSpec plan mode is active. Write your plan to docs/specs/*/plan.md. When complete, use /plan-approve — do NOT use ExitPlanMode directly.\"}'; fi",
-            "statusMessage": "Checking MindSpec plan gate..."
-          }
-        ]
-      }
-    ]
-  },
   "env": {
     "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
-    "OTEL_METRICS_EXPORTER": "otlp",
-    "OTEL_LOGS_EXPORTER": "otlp",
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318",
     "OTEL_EXPORTER_OTLP_PROTOCOL": "http/json",
-    "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318"
+    "OTEL_LOGS_EXPORTER": "otlp",
+    "OTEL_METRICS_EXPORTER": "otlp"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "state=$(cat .mindspec/state.json 2\u003e/dev/null | jq -r '.mode // empty'); if [ \"$state\" = \"plan\" ]; then echo 'MindSpec plan mode is active. Do NOT exit plan mode directly. Run /plan-approve to validate the plan, create beads, and transition to implementation.' \u003e\u00262; exit 2; fi",
+            "statusMessage": "Checking MindSpec plan gate...",
+            "type": "command"
+          }
+        ],
+        "matcher": "ExitPlanMode"
+      },
+      {
+        "hooks": [
+          {
+            "command": "state=$(cat .mindspec/state.json 2\u003e/dev/null | jq -r '.mode // empty'); if [ \"$state\" = \"plan\" ]; then echo '{\"additionalContext\": \"MindSpec plan mode is active. Write your plan to docs/specs/*/plan.md. When complete, use /plan-approve — do NOT use ExitPlanMode directly.\"}'; fi",
+            "statusMessage": "Checking MindSpec plan gate...",
+            "type": "command"
+          }
+        ],
+        "matcher": "EnterPlanMode"
+      },
+      {
+        "hooks": [
+          {
+            "command": "wt=$(cat .mindspec/state.json 2\u003e/dev/null | jq -r '.activeWorktree // empty'); if [ -z \"$wt\" ]; then exit 0; fi; enforce=$(cat .mindspec/config.yaml 2\u003e/dev/null | grep 'agent_hooks' | grep -c 'false'); if [ \"$enforce\" = \"1\" ]; then exit 0; fi; fp=\"$CLAUDE_TOOL_ARG_FILE_PATH\"; case \"$fp\" in \"$wt\"*) exit 0;; esac; echo \"mindspec: blocked — file $fp is outside active worktree $wt. Switch to: cd $wt\" \u003e\u00262; exit 2",
+            "statusMessage": "Checking worktree enforcement...",
+            "type": "command"
+          }
+        ],
+        "matcher": "Write"
+      },
+      {
+        "hooks": [
+          {
+            "command": "wt=$(cat .mindspec/state.json 2\u003e/dev/null | jq -r '.activeWorktree // empty'); if [ -z \"$wt\" ]; then exit 0; fi; enforce=$(cat .mindspec/config.yaml 2\u003e/dev/null | grep 'agent_hooks' | grep -c 'false'); if [ \"$enforce\" = \"1\" ]; then exit 0; fi; fp=\"$CLAUDE_TOOL_ARG_FILE_PATH\"; case \"$fp\" in \"$wt\"*) exit 0;; esac; echo \"mindspec: blocked — file $fp is outside active worktree $wt. Switch to: cd $wt\" \u003e\u00262; exit 2",
+            "statusMessage": "Checking worktree enforcement...",
+            "type": "command"
+          }
+        ],
+        "matcher": "Edit"
+      },
+      {
+        "hooks": [
+          {
+            "command": "wt=$(cat .mindspec/state.json 2\u003e/dev/null | jq -r '.activeWorktree // empty'); if [ -z \"$wt\" ]; then exit 0; fi; enforce=$(cat .mindspec/config.yaml 2\u003e/dev/null | grep 'agent_hooks' | grep -c 'false'); if [ \"$enforce\" = \"1\" ]; then exit 0; fi; cwd=$(pwd); case \"$cwd\" in \"$wt\"*) exit 0;; esac; echo \"mindspec: blocked — your working directory is the main worktree. Run: cd $wt\" \u003e\u00262; exit 2",
+            "statusMessage": "Checking worktree enforcement...",
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash"
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "./bin/mindspec record health 2\u003e/dev/null; ./bin/mindspec instruct 2\u003e/dev/null || echo 'mindspec instruct unavailable — run make build'",
+            "statusMessage": "Loading mode guidance...",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ]
   }
 }

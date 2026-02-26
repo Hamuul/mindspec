@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"text/template"
 
+	"github.com/mindspec/mindspec/internal/contextpack"
 	"github.com/mindspec/mindspec/internal/state"
 	"github.com/mindspec/mindspec/internal/workspace"
 )
@@ -24,6 +25,7 @@ type Context struct {
 	SpecGoal       string   `json:"spec_goal,omitempty"`
 	PlanApproved   bool     `json:"plan_approved,omitempty"`
 	AvailableSpecs []string `json:"available_specs,omitempty"`
+	BeadPrimer     string   `json:"bead_primer,omitempty"`
 	BeadsContext   string   `json:"beads_context,omitempty"`
 	Warnings       []string `json:"warnings,omitempty"`
 }
@@ -62,6 +64,14 @@ func BuildContext(root string, s *state.State) *Context {
 		ctx.AvailableSpecs = listSpecs(root)
 	}
 
+	// Build bead primer for implement mode with active bead (session recovery)
+	if s.Mode == state.ModeImplement && s.ActiveBead != "" && s.ActiveSpec != "" {
+		primer, err := contextpack.BuildBeadPrimer(root, s.ActiveSpec, s.ActiveBead)
+		if err == nil {
+			ctx.BeadPrimer = contextpack.RenderBeadPrimer(primer)
+		}
+	}
+
 	// Capture Beads workflow context
 	ctx.BeadsContext = CapturePrime()
 	if ctx.BeadsContext == "" {
@@ -98,6 +108,11 @@ func Render(ctx *Context) (string, error) {
 	}
 
 	result := buf.String()
+
+	// Append bead primer if available (implement mode with active bead)
+	if ctx.BeadPrimer != "" {
+		result += "\n---\n\n" + ctx.BeadPrimer
+	}
 
 	// Append Beads context if available
 	if ctx.BeadsContext != "" {

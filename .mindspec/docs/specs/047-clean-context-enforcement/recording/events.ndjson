@@ -1,0 +1,6 @@
+{"ts":"2026-02-26T09:52:40.815778Z","event":"lifecycle.start","data":{"phase":"spec","spec_id":"047-clean-context-enforcement"}}
+{"ts":"2026-02-26T10:03:58.047349Z","event":"lifecycle.phase","data":{"from":"spec","spec_id":"047-clean-context-enforcement","to":"plan"}}
+{"ts":"2026-02-26T12:00:45.644812Z","event":"lifecycle.phase","data":{"from":"plan","spec_id":"047-clean-context-enforcement","to":"plan-approved"}}
+{"ts":"2026-02-26T12:03:01.713816Z","event":"lifecycle.bead.start","data":{"bead_id":"mindspec-u7mk","spec_id":"047-clean-context-enforcement"}}
+{"ts":"2026-02-26T14:04:31.33355Z","event":"lifecycle.bead.complete","data":{"bead_id":"mindspec-wym1","spec_id":"047-clean-context-enforcement"}}
+{"ts":"2026-02-26T14:04:36.865669Z","event":"lifecycle.end","data":{"spec_id":"047-clean-context-enforcement"}}

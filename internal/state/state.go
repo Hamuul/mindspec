@@ -35,6 +35,7 @@ type State struct {
 	SpecBranch     string            `json:"specBranch,omitempty"`
 	ActiveMolecule string            `json:"activeMolecule,omitempty"`
 	StepMapping    map[string]string `json:"stepMapping,omitempty"`
+	NeedsClear     bool              `json:"needs_clear,omitempty"`
 	LastUpdated    string            `json:"lastUpdated"`
 }
 
@@ -93,6 +94,17 @@ func Write(root string, s *State) error {
 	}
 
 	return nil
+}
+
+// ClearNeedsClear reads state, sets NeedsClear to false, and writes it back.
+// Used by the SessionStart hook after a context clear.
+func ClearNeedsClear(root string) error {
+	s, err := Read(root)
+	if err != nil {
+		return err
+	}
+	s.NeedsClear = false
+	return Write(root, s)
 }
 
 // mainWorktreeRoot returns the main worktree's root path if the given root

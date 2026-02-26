@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/mindspec/mindspec/internal/bead"
-	"github.com/mindspec/mindspec/internal/contextpack"
 	"github.com/mindspec/mindspec/internal/recording"
 	"github.com/mindspec/mindspec/internal/specmeta"
 	"github.com/mindspec/mindspec/internal/state"
@@ -60,22 +59,12 @@ func ApproveSpec(root, specID, approvedBy string) (*SpecResult, error) {
 		result.GateID = stepID
 	}
 
-	// Step 5: Generate context pack (best-effort).
-	pack, err := contextpack.Build(root, specID, contextpack.ModePlan)
-	if err != nil {
-		result.Warnings = append(result.Warnings, fmt.Sprintf("could not generate context pack: %v", err))
-	} else {
-		if err := pack.WriteToFile(root, specID); err != nil {
-			result.Warnings = append(result.Warnings, fmt.Sprintf("could not write context pack: %v", err))
-		}
-	}
-
-	// Step 6: Set state to plan mode while retaining molecule metadata.
+	// Step 5: Set state to plan mode while retaining molecule metadata.
 	if err := state.SetModeWithMetadata(root, state.ModePlan, specID, "", meta.MoleculeID, meta.StepMapping); err != nil {
 		return nil, fmt.Errorf("setting state: %w", err)
 	}
 
-	// Step 7: Emit recording phase marker (best-effort)
+	// Step 6: Emit recording phase marker (best-effort)
 	if err := recording.EmitPhaseMarker(root, specID, "spec", "plan"); err != nil {
 		result.Warnings = append(result.Warnings, fmt.Sprintf("could not emit recording marker: %v", err))
 	}

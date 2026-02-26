@@ -196,6 +196,81 @@ func TestRunClaude_MergesExistingSettings(t *testing.T) {
 	}
 }
 
+func TestWantedHooks_BashPreToolUseIncludesNeedsClearGuard(t *testing.T) {
+	t.Parallel()
+
+	hooks := wantedHooks()
+	preToolUse, ok := hooks["PreToolUse"]
+	if !ok {
+		t.Fatal("missing PreToolUse hooks")
+	}
+
+	// Find the Bash matcher entry
+	var bashEntry map[string]any
+	for _, entry := range preToolUse {
+		if m, _ := entry["matcher"].(string); m == "Bash" {
+			bashEntry = entry
+			break
+		}
+	}
+	if bashEntry == nil {
+		t.Fatal("missing Bash matcher in PreToolUse")
+	}
+
+	// Should have at least 2 hooks (worktree guard + needs_clear guard)
+	hooksList, ok := bashEntry["hooks"].([]map[string]any)
+	if !ok {
+		t.Fatal("Bash hooks is not []map[string]any")
+	}
+	if len(hooksList) < 2 {
+		t.Fatalf("expected at least 2 Bash hooks, got %d", len(hooksList))
+	}
+
+	// Verify needs_clear guard is present
+	found := false
+	for _, h := range hooksList {
+		cmd, _ := h["command"].(string)
+		if strings.Contains(cmd, "needs_clear") && strings.Contains(cmd, "mindspec next") {
+			found = true
+			// Verify it allows --force
+			if !strings.Contains(cmd, "--force") {
+				t.Error("needs_clear guard should check for --force bypass")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("Bash PreToolUse hooks missing needs_clear guard")
+	}
+}
+
+func TestWantedHooks_SessionStartIncludesClearFlag(t *testing.T) {
+	t.Parallel()
+
+	hooks := wantedHooks()
+	sessionStart, ok := hooks["SessionStart"]
+	if !ok {
+		t.Fatal("missing SessionStart hooks")
+	}
+
+	if len(sessionStart) == 0 {
+		t.Fatal("SessionStart has no entries")
+	}
+
+	hooksList, ok := sessionStart[0]["hooks"].([]map[string]any)
+	if !ok || len(hooksList) == 0 {
+		t.Fatal("SessionStart hooks is empty")
+	}
+
+	cmd, _ := hooksList[0]["command"].(string)
+	if !strings.Contains(cmd, "state clear-flag") {
+		t.Errorf("SessionStart command should include 'state clear-flag', got: %s", cmd)
+	}
+	if !strings.Contains(cmd, "mindspec instruct") {
+		t.Error("SessionStart command should still include 'mindspec instruct'")
+	}
+}
+
 func TestRunClaude_AppendExistingClaudeMD(t *testing.T) {
 	t.Parallel()
 
