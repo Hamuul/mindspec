@@ -18,6 +18,7 @@ step_mapping:
 
 
 
+
 # Spec 048-impl-approve-cleanup: Implementation Approval Cleanup
 
 ## Goal
