@@ -199,7 +199,7 @@ func wantedHooks() map[string][]map[string]any {
 				"hooks": []map[string]any{
 					{
 						"type":          "command",
-						"command":       `state=$(cat .mindspec/state.json 2>/dev/null | jq -r '.mode // empty'); if [ "$state" = "plan" ]; then echo 'MindSpec plan mode is active. Do NOT exit plan mode directly. Run /plan-approve to validate the plan, create beads, and transition to implementation.' >&2; exit 2; fi`,
+						"command":       `state=$(cat .mindspec/state.json 2>/dev/null | jq -r '.mode // empty'); if [ "$state" = "plan" ]; then echo 'MindSpec plan mode is active. Do NOT exit plan mode directly. Run /ms-plan-approve to validate the plan, create beads, and transition to implementation.' >&2; exit 2; fi`,
 						"statusMessage": "Checking MindSpec plan gate...",
 					},
 				},
@@ -209,7 +209,7 @@ func wantedHooks() map[string][]map[string]any {
 				"hooks": []map[string]any{
 					{
 						"type":          "command",
-						"command":       `state=$(cat .mindspec/state.json 2>/dev/null | jq -r '.mode // empty'); if [ "$state" = "plan" ]; then echo '{"additionalContext": "MindSpec plan mode is active. Write your plan to docs/specs/*/plan.md. When complete, use /plan-approve — do NOT use ExitPlanMode directly."}'; fi`,
+						"command":       `state=$(cat .mindspec/state.json 2>/dev/null | jq -r '.mode // empty'); if [ "$state" = "plan" ]; then echo '{"additionalContext": "MindSpec plan mode is active. Write your plan to docs/specs/*/plan.md. When complete, use /ms-plan-approve — do NOT use ExitPlanMode directly."}'; fi`,
 						"statusMessage": "Checking MindSpec plan gate...",
 					},
 				},
@@ -433,7 +433,20 @@ func fileExists(path string) bool {
 // commandFiles returns the slash command file contents keyed by filename.
 func commandFiles() map[string]string {
 	return map[string]string{
-		"spec-init.md": `---
+		"ms-explore.md": `---
+description: Enter, promote, or dismiss an Explore Mode session
+---
+
+# Explore
+
+1. If the user provides a description, run ` + "`mindspec explore \"description\"`" + ` to enter Explore Mode
+2. If the user wants to promote, ask for a spec ID (check ` + "`docs/specs/`" + ` for next available number) and run ` + "`mindspec explore promote <spec-id>`" + `
+3. If the user wants to dismiss, run ` + "`mindspec explore dismiss`" + ` (optionally with ` + "`--adr`" + ` to record an ADR)
+4. If unclear what the user wants, show the three options and ask
+5. On success: relay the CLI output to the user
+`,
+
+		"ms-spec-init.md": `---
 description: Initialize a new MindSpec specification
 ---
 
@@ -445,7 +458,7 @@ description: Initialize a new MindSpec specification
 4. On success: begin drafting the spec (the init output includes guidance)
 `,
 
-		"spec-approve.md": `---
+		"ms-spec-approve.md": `---
 description: Approve a spec and transition to Plan Mode
 ---
 
@@ -457,7 +470,7 @@ description: Approve a spec and transition to Plan Mode
 4. On success: immediately begin planning (the approval is the authorization)
 `,
 
-		"plan-approve.md": `---
+		"ms-plan-approve.md": `---
 description: Approve a plan and transition toward Implementation Mode
 ---
 
@@ -469,7 +482,7 @@ description: Approve a plan and transition toward Implementation Mode
 4. On success: run ` + "`mindspec next`" + ` to claim the first bead and enter Implementation Mode (do NOT ask the user — just do it)
 `,
 
-		"impl-approve.md": `---
+		"ms-impl-approve.md": `---
 description: Approve implementation and close out the spec lifecycle
 ---
 
@@ -487,7 +500,7 @@ description: Approve implementation and close out the spec lifecycle
    - ` + "`git push`" + `
 `,
 
-		"spec-status.md": `---
+		"ms-spec-status.md": `---
 description: Check the current MindSpec mode and active specification
 ---
 
@@ -511,11 +524,12 @@ Run ` + "`mindspec instruct`" + ` for mode-appropriate operating guidance. This 
 
 | Command | Purpose |
 |:--------|:--------|
-| ` + "`/spec-init`" + ` | Initialize a new specification (enters Spec Mode) |
-| ` + "`/spec-approve`" + ` | Approve spec → Plan Mode |
-| ` + "`/plan-approve`" + ` | Approve plan → Implementation Mode |
-| ` + "`/impl-approve`" + ` | Approve implementation → Idle |
-| ` + "`/spec-status`" + ` | Check current mode and active spec/bead state |
+| ` + "`/ms-explore`" + ` | Enter, promote, or dismiss an Explore Mode session |
+| ` + "`/ms-spec-init`" + ` | Initialize a new specification (enters Spec Mode) |
+| ` + "`/ms-spec-approve`" + ` | Approve spec → Plan Mode |
+| ` + "`/ms-plan-approve`" + ` | Approve plan → Implementation Mode |
+| ` + "`/ms-impl-approve`" + ` | Approve implementation → Idle |
+| ` + "`/ms-spec-status`" + ` | Check current mode and active spec/bead state |
 `
 
 // claudeMDAppendBlock is appended to an existing CLAUDE.md.
@@ -530,9 +544,10 @@ Run ` + "`mindspec instruct`" + ` for mode-appropriate operating guidance. This 
 
 | Command | Purpose |
 |:--------|:--------|
-| ` + "`/spec-init`" + ` | Initialize a new specification (enters Spec Mode) |
-| ` + "`/spec-approve`" + ` | Approve spec → Plan Mode |
-| ` + "`/plan-approve`" + ` | Approve plan → Implementation Mode |
-| ` + "`/impl-approve`" + ` | Approve implementation → Idle |
-| ` + "`/spec-status`" + ` | Check current mode and active spec/bead state |
+| ` + "`/ms-explore`" + ` | Enter, promote, or dismiss an Explore Mode session |
+| ` + "`/ms-spec-init`" + ` | Initialize a new specification (enters Spec Mode) |
+| ` + "`/ms-spec-approve`" + ` | Approve spec → Plan Mode |
+| ` + "`/ms-plan-approve`" + ` | Approve plan → Implementation Mode |
+| ` + "`/ms-impl-approve`" + ` | Approve implementation → Idle |
+| ` + "`/ms-spec-status`" + ` | Check current mode and active spec/bead state |
 `

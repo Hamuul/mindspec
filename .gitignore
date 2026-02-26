@@ -43,9 +43,7 @@ Thumbs.db
 beads/
 # mindspec worktrees
 .worktrees/
-# bd worktree
 .worktrees/worktree-mindspec-u7mk/
-# bd worktree
 worktree-mindspec-u7mk/
 # bd worktree
 .worktrees/worktree-mindspec-mol-41m89.1/

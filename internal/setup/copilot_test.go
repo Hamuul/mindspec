@@ -49,11 +49,12 @@ func TestRunCopilot_Greenfield(t *testing.T) {
 
 	// Verify prompt files
 	expectedPrompts := []string{
-		"spec-init.prompt.md",
-		"spec-approve.prompt.md",
-		"plan-approve.prompt.md",
-		"impl-approve.prompt.md",
-		"spec-status.prompt.md",
+		"ms-explore.prompt.md",
+		"ms-spec-init.prompt.md",
+		"ms-spec-approve.prompt.md",
+		"ms-plan-approve.prompt.md",
+		"ms-impl-approve.prompt.md",
+		"ms-spec-status.prompt.md",
 	}
 	for _, name := range expectedPrompts {
 		p := filepath.Join(root, ".github/prompts", name)
@@ -71,17 +72,17 @@ func TestRunCopilot_PromptFileContent(t *testing.T) {
 		t.Fatalf("RunCopilot() error: %v", err)
 	}
 
-	// Check spec-approve prompt has correct frontmatter and content
-	data, err := os.ReadFile(filepath.Join(root, ".github/prompts/spec-approve.prompt.md"))
+	// Check ms-spec-approve prompt has correct frontmatter and content
+	data, err := os.ReadFile(filepath.Join(root, ".github/prompts/ms-spec-approve.prompt.md"))
 	if err != nil {
-		t.Fatalf("reading spec-approve.prompt.md: %v", err)
+		t.Fatalf("reading ms-spec-approve.prompt.md: %v", err)
 	}
 	content := string(data)
 	if !strings.Contains(content, "agent: \"agent\"") {
 		t.Error("prompt file should have agent: \"agent\" in frontmatter")
 	}
 	if !strings.Contains(content, "mindspec approve spec") {
-		t.Error("spec-approve prompt should reference mindspec approve spec command")
+		t.Error("ms-spec-approve prompt should reference mindspec approve spec command")
 	}
 }
 

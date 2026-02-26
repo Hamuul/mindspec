@@ -248,7 +248,7 @@ TOOL=$(echo "$INPUT" | jq -r '.toolName // empty' 2>/dev/null)
 # Block file-writing tools during plan mode
 case "$TOOL" in
   edit|write|create_file|insert|replace)
-    echo '{"permissionDecision":"deny","permissionDecisionReason":"MindSpec plan mode is active. Only documentation files (plan.md) may be edited. Use /plan-approve to transition to implementation mode."}'
+    echo '{"permissionDecision":"deny","permissionDecisionReason":"MindSpec plan mode is active. Only documentation files (plan.md) may be edited. Use /ms-plan-approve to transition to implementation mode."}'
     ;;
   *)
     # Allow all other tools
@@ -262,7 +262,21 @@ esac
 // copilotPromptFiles returns the prompt file contents keyed by filename.
 func copilotPromptFiles() map[string]string {
 	return map[string]string{
-		"spec-init.prompt.md": `---
+		"ms-explore.prompt.md": `---
+description: "Enter, promote, or dismiss an Explore Mode session"
+agent: "agent"
+---
+
+# Explore
+
+1. If the user provides a description, run ` + "`mindspec explore \"description\"`" + ` in the terminal to enter Explore Mode
+2. If the user wants to promote, ask for a spec ID (check ` + "`docs/specs/`" + ` for next available number) and run ` + "`mindspec explore promote <spec-id>`" + `
+3. If the user wants to dismiss, run ` + "`mindspec explore dismiss`" + ` (optionally with ` + "`--adr`" + ` to record an ADR)
+4. If unclear what the user wants, show the three options and ask
+5. On success: relay the CLI output to the user
+`,
+
+		"ms-spec-init.prompt.md": `---
 description: "Initialize a new MindSpec specification"
 agent: "agent"
 ---
@@ -275,7 +289,7 @@ agent: "agent"
 4. On success: begin drafting the spec (the init output includes guidance)
 `,
 
-		"spec-approve.prompt.md": `---
+		"ms-spec-approve.prompt.md": `---
 description: "Approve a spec and transition to Plan Mode"
 agent: "agent"
 ---
@@ -288,7 +302,7 @@ agent: "agent"
 4. On success: immediately begin planning (the approval is the authorization)
 `,
 
-		"plan-approve.prompt.md": `---
+		"ms-plan-approve.prompt.md": `---
 description: "Approve a plan and transition toward Implementation Mode"
 agent: "agent"
 ---
@@ -301,7 +315,7 @@ agent: "agent"
 4. On success: run ` + "`mindspec next`" + ` to claim the first bead and enter Implementation Mode
 `,
 
-		"impl-approve.prompt.md": `---
+		"ms-impl-approve.prompt.md": `---
 description: "Approve implementation and close out the spec lifecycle"
 agent: "agent"
 ---
@@ -320,7 +334,7 @@ agent: "agent"
    - ` + "`git push`" + `
 `,
 
-		"spec-status.prompt.md": `---
+		"ms-spec-status.prompt.md": `---
 description: "Check the current MindSpec mode and active specification"
 agent: "agent"
 ---
@@ -347,11 +361,12 @@ This project includes MindSpec workflow prompt files in ` + "`.github/prompts/`"
 
 | Command | Purpose |
 |:--------|:--------|
-| ` + "`/spec-init`" + ` | Initialize a new specification (enters Spec Mode) |
-| ` + "`/spec-approve`" + ` | Approve spec → Plan Mode |
-| ` + "`/plan-approve`" + ` | Approve plan → Implementation Mode |
-| ` + "`/impl-approve`" + ` | Approve implementation → Idle |
-| ` + "`/spec-status`" + ` | Check current mode and active spec/bead state |
+| ` + "`/ms-explore`" + ` | Enter, promote, or dismiss an Explore Mode session |
+| ` + "`/ms-spec-init`" + ` | Initialize a new specification (enters Spec Mode) |
+| ` + "`/ms-spec-approve`" + ` | Approve spec → Plan Mode |
+| ` + "`/ms-plan-approve`" + ` | Approve plan → Implementation Mode |
+| ` + "`/ms-impl-approve`" + ` | Approve implementation → Idle |
+| ` + "`/ms-spec-status`" + ` | Check current mode and active spec/bead state |
 `
 
 // copilotInstructionsAppendBlock is appended to an existing copilot-instructions.md.
@@ -368,9 +383,10 @@ This project includes MindSpec workflow prompt files in ` + "`.github/prompts/`"
 
 | Command | Purpose |
 |:--------|:--------|
-| ` + "`/spec-init`" + ` | Initialize a new specification (enters Spec Mode) |
-| ` + "`/spec-approve`" + ` | Approve spec → Plan Mode |
-| ` + "`/plan-approve`" + ` | Approve plan → Implementation Mode |
-| ` + "`/impl-approve`" + ` | Approve implementation → Idle |
-| ` + "`/spec-status`" + ` | Check current mode and active spec/bead state |
+| ` + "`/ms-explore`" + ` | Enter, promote, or dismiss an Explore Mode session |
+| ` + "`/ms-spec-init`" + ` | Initialize a new specification (enters Spec Mode) |
+| ` + "`/ms-spec-approve`" + ` | Approve spec → Plan Mode |
+| ` + "`/ms-plan-approve`" + ` | Approve plan → Implementation Mode |
+| ` + "`/ms-impl-approve`" + ` | Approve implementation → Idle |
+| ` + "`/ms-spec-status`" + ` | Check current mode and active spec/bead state |
 `
