@@ -71,6 +71,7 @@ func init() {
 
 	rootCmd.AddCommand(benchCmd)
 	rootCmd.AddCommand(adrCmd)
+	rootCmd.AddCommand(cleanupCmd)
 	rootCmd.AddCommand(approveCmd)
 	rootCmd.AddCommand(beadCmd)
 	rootCmd.AddCommand(completeCmd)
