@@ -117,10 +117,10 @@ func Run(root, specID, title string) (*Result, error) {
 	// --- Phase 3: Molecule setup (beads) ---
 
 	s := &state.State{
-		Mode:            state.ModeSpec,
-		ActiveSpec:      specID,
-		ActiveWorktree:  wtPath,
-		SpecBranch:      specBranch,
+		Mode:           state.ModeSpec,
+		ActiveSpec:     specID,
+		ActiveWorktree: wtPath,
+		SpecBranch:     specBranch,
 	}
 	if err := preflightFn(root); err != nil {
 		return nil, fmt.Errorf("creating lifecycle molecule requires beads to be available: %w", err)
