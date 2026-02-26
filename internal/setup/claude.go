@@ -211,8 +211,62 @@ func wantedHooks() map[string][]map[string]any {
 					},
 				},
 			},
+			{
+				"matcher": "Write",
+				"hooks": []map[string]any{
+					{
+						"type":          "command",
+						"command":       worktreeFileGuardScript("$CLAUDE_TOOL_ARG_FILE_PATH"),
+						"statusMessage": "Checking worktree enforcement...",
+					},
+				},
+			},
+			{
+				"matcher": "Edit",
+				"hooks": []map[string]any{
+					{
+						"type":          "command",
+						"command":       worktreeFileGuardScript("$CLAUDE_TOOL_ARG_FILE_PATH"),
+						"statusMessage": "Checking worktree enforcement...",
+					},
+				},
+			},
+			{
+				"matcher": "Bash",
+				"hooks": []map[string]any{
+					{
+						"type":          "command",
+						"command":       worktreeBashGuardScript(),
+						"statusMessage": "Checking worktree enforcement...",
+					},
+				},
+			},
 		},
 	}
+}
+
+// worktreeFileGuardScript returns a shell script that blocks file writes outside
+// the active worktree. filePathVar should be the env var holding the target path.
+func worktreeFileGuardScript(filePathVar string) string {
+	return `wt=$(cat .mindspec/state.json 2>/dev/null | jq -r '.activeWorktree // empty'); ` +
+		`if [ -z "$wt" ]; then exit 0; fi; ` +
+		`enforce=$(cat .mindspec/config.yaml 2>/dev/null | grep 'agent_hooks' | grep -c 'false'); ` +
+		`if [ "$enforce" = "1" ]; then exit 0; fi; ` +
+		`fp="` + filePathVar + `"; ` +
+		`case "$fp" in "$wt"*) exit 0;; esac; ` +
+		`echo "mindspec: blocked — file $fp is outside active worktree $wt. Switch to: cd $wt" >&2; exit 2`
+}
+
+// worktreeBashGuardScript returns a shell script that blocks bash execution
+// when CWD is the main worktree and a worktree is active.
+func worktreeBashGuardScript() string {
+	return `wt=$(cat .mindspec/state.json 2>/dev/null | jq -r '.activeWorktree // empty'); ` +
+		`if [ -z "$wt" ]; then exit 0; fi; ` +
+		`enforce=$(cat .mindspec/config.yaml 2>/dev/null | grep 'agent_hooks' | grep -c 'false'); ` +
+		`if [ "$enforce" = "1" ]; then exit 0; fi; ` +
+		`cwd=$(pwd); ` +
+		`case "$cwd" in "$wt"*) exit 0;; esac; ` +
+		`echo "mindspec: blocked — your working directory is the main worktree. Run: cd $wt" >&2; exit 2`
 }
 
 // hookEntryExists checks if a hook entry with the same matcher already exists.

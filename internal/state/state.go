@@ -26,12 +26,14 @@ var ValidModes = []string{ModeIdle, ModeExplore, ModeSpec, ModePlan, ModeImpleme
 
 // State represents the MindSpec workflow state persisted at .mindspec/state.json.
 type State struct {
-	Mode           string            `json:"mode"`
-	ActiveSpec     string            `json:"activeSpec"`
-	ActiveBead     string            `json:"activeBead"`
-	ActiveMolecule string            `json:"activeMolecule,omitempty"`
-	StepMapping    map[string]string `json:"stepMapping,omitempty"`
-	LastUpdated    string            `json:"lastUpdated"`
+	Mode            string            `json:"mode"`
+	ActiveSpec      string            `json:"activeSpec"`
+	ActiveBead      string            `json:"activeBead"`
+	ActiveWorktree  string            `json:"activeWorktree,omitempty"`
+	SpecBranch      string            `json:"specBranch,omitempty"`
+	ActiveMolecule  string            `json:"activeMolecule,omitempty"`
+	StepMapping     map[string]string `json:"stepMapping,omitempty"`
+	LastUpdated     string            `json:"lastUpdated"`
 }
 
 // ErrNoState is returned when .mindspec/state.json does not exist.
@@ -131,6 +133,11 @@ func SetModeWithMetadata(root, mode, spec, bead, moleculeID string, stepMapping 
 		} else if prev != nil && prev.ActiveSpec == spec {
 			s.ActiveMolecule = prev.ActiveMolecule
 			s.StepMapping = copyStepMapping(prev.StepMapping)
+		}
+		// Preserve worktree/branch bindings across transitions for the same spec.
+		if prev != nil && prev.ActiveSpec == spec {
+			s.ActiveWorktree = prev.ActiveWorktree
+			s.SpecBranch = prev.SpecBranch
 		}
 	}
 

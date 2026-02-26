@@ -7,13 +7,24 @@ import (
 	"strings"
 
 	"github.com/mindspec/mindspec/internal/bead"
+	"github.com/mindspec/mindspec/internal/config"
+	"github.com/mindspec/mindspec/internal/gitops"
 	"github.com/mindspec/mindspec/internal/recording"
 	"github.com/mindspec/mindspec/internal/specmeta"
 	"github.com/mindspec/mindspec/internal/state"
 )
 
-var implRunBDCombinedFn = bead.RunBDCombined
-var implRunBDFn = bead.RunBD
+var (
+	implRunBDCombinedFn = bead.RunBDCombined
+	implRunBDFn         = bead.RunBD
+	loadConfigFn        = config.Load
+	mergeBranchFn       = gitops.MergeBranch
+	deleteBranchFn      = gitops.DeleteBranch
+	worktreeRemoveFn    = bead.WorktreeRemove
+	hasRemoteFn         = gitops.HasRemote
+	pushBranchFn        = gitops.PushBranch
+	createPRFn          = gitops.CreatePR
+)
 
 // ImplResult holds the result of implementation approval.
 type ImplResult struct {
@@ -55,6 +66,28 @@ func ApproveImpl(root, specID string) (*ImplResult, error) {
 				continue
 			}
 			result.Warnings = append(result.Warnings, fmt.Sprintf("could not close molecule member %s: %v", targetID, err))
+		}
+	}
+
+	// Merge spec branch → main (ADR-0006: one PR per spec lifecycle).
+	if s.SpecBranch != "" {
+		cfg, cfgErr := loadConfigFn(root)
+		if cfgErr != nil {
+			cfg = config.DefaultConfig()
+		}
+
+		mergeErr := mergeSpecToMain(root, s, cfg)
+		if mergeErr != nil {
+			result.Warnings = append(result.Warnings, fmt.Sprintf("spec→main merge: %v", mergeErr))
+		} else {
+			// Clean up spec worktree and branch.
+			specWtName := "worktree-spec-" + specID
+			if err := worktreeRemoveFn(specWtName); err != nil {
+				result.Warnings = append(result.Warnings, fmt.Sprintf("could not remove spec worktree: %v", err))
+			}
+			if err := deleteBranchFn(s.SpecBranch); err != nil {
+				result.Warnings = append(result.Warnings, fmt.Sprintf("could not delete spec branch: %v", err))
+			}
 		}
 	}
 
@@ -124,6 +157,41 @@ func readBeadStatus(id string) (string, error) {
 		return "", fmt.Errorf("no bead returned for %s", id)
 	}
 	return strings.ToLower(strings.TrimSpace(payload[0].Status)), nil
+}
+
+// mergeSpecToMain merges the spec branch to main using the configured strategy.
+func mergeSpecToMain(root string, s *state.State, cfg *config.Config) error {
+	strategy := cfg.MergeStrategy
+
+	// "auto" resolves to "pr" if a remote exists, "direct" otherwise.
+	if strategy == "auto" {
+		if hasRemoteFn() {
+			strategy = "pr"
+		} else {
+			strategy = "direct"
+		}
+	}
+
+	switch strategy {
+	case "pr":
+		if err := pushBranchFn(s.SpecBranch); err != nil {
+			return fmt.Errorf("pushing spec branch: %w", err)
+		}
+		title := fmt.Sprintf("[SPEC %s] Merge spec branch to main", s.ActiveSpec)
+		body := fmt.Sprintf("Automated PR for spec %s lifecycle completion.", s.ActiveSpec)
+		prURL, err := createPRFn(s.SpecBranch, "main", title, body)
+		if err != nil {
+			return fmt.Errorf("creating PR: %w", err)
+		}
+		fmt.Printf("Pull request created: %s\n", prURL)
+		return nil
+
+	case "direct":
+		return mergeBranchFn(root, s.SpecBranch, "main")
+
+	default:
+		return fmt.Errorf("unknown merge strategy: %s", strategy)
+	}
 }
 
 func isAlreadyClosedErr(err error) bool {

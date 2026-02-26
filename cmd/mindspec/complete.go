@@ -6,6 +6,7 @@ import (
 
 	"github.com/mindspec/mindspec/internal/bead"
 	"github.com/mindspec/mindspec/internal/complete"
+	"github.com/mindspec/mindspec/internal/guard"
 	"github.com/spf13/cobra"
 )
 
@@ -24,6 +25,11 @@ Use --spec to specify the target spec (used for state cursor update).`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		root, err := findRoot()
 		if err != nil {
+			return err
+		}
+
+		// CWD guard: must run from the bead worktree, not main.
+		if err := guard.CheckCWD(root); err != nil {
 			return err
 		}
 

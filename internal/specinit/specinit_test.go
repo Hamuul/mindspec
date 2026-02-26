@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mindspec/mindspec/internal/config"
 	"github.com/mindspec/mindspec/internal/state"
 )
 
@@ -15,10 +16,20 @@ func mockMoleculeSuccess(t *testing.T) {
 	origPreflight := preflightFn
 	origPour := pourFormulaFn
 	origRunBDCombined := runBDCombined
+	origLoadConfig := loadConfigFn
+	origCreateBranch := createBranchFn
+	origBranchExists := branchExistsFn
+	origWorktreeCreate := worktreeCreateFn
+	origEnsureGitignore := ensureGitignore
 	t.Cleanup(func() {
 		preflightFn = origPreflight
 		pourFormulaFn = origPour
 		runBDCombined = origRunBDCombined
+		loadConfigFn = origLoadConfig
+		createBranchFn = origCreateBranch
+		branchExistsFn = origBranchExists
+		worktreeCreateFn = origWorktreeCreate
+		ensureGitignore = origEnsureGitignore
 	})
 
 	preflightFn = func(root string) error { return nil }
@@ -34,6 +45,12 @@ func mockMoleculeSuccess(t *testing.T) {
 		}, nil
 	}
 	runBDCombined = func(args ...string) ([]byte, error) { return []byte("ok"), nil }
+	// Stub out git/worktree operations for unit tests.
+	loadConfigFn = func(root string) (*config.Config, error) { return config.DefaultConfig(), nil }
+	createBranchFn = func(name, from string) error { return nil }
+	branchExistsFn = func(name string) bool { return false }
+	worktreeCreateFn = func(name, branch string) error { return nil }
+	ensureGitignore = func(root, entry string) error { return nil }
 }
 
 // setupTestRoot creates a minimal project root with the spec template.
@@ -56,7 +73,7 @@ func TestRunCreatesSpecFromTemplate(t *testing.T) {
 	root := setupTestRoot(t)
 	mockMoleculeSuccess(t)
 
-	err := Run(root, "010-my-feature", "")
+	_, err := Run(root, "010-my-feature", "")
 	if err != nil {
 		t.Fatalf("Run() error: %v", err)
 	}
@@ -77,7 +94,7 @@ func TestRunWithExplicitTitle(t *testing.T) {
 	root := setupTestRoot(t)
 	mockMoleculeSuccess(t)
 
-	err := Run(root, "011-custom", "Custom Title")
+	_, err := Run(root, "011-custom", "Custom Title")
 	if err != nil {
 		t.Fatalf("Run() error: %v", err)
 	}
@@ -101,7 +118,7 @@ func TestRunErrorsOnExistingDirectory(t *testing.T) {
 	specDir := filepath.Join(root, "docs", "specs", "010-exists")
 	os.MkdirAll(specDir, 0755)
 
-	err := Run(root, "010-exists", "")
+	_, err := Run(root, "010-exists", "")
 	if err == nil {
 		t.Fatal("expected error for existing directory, got nil")
 	}
@@ -114,7 +131,7 @@ func TestRunSetsState(t *testing.T) {
 	root := setupTestRoot(t)
 	mockMoleculeSuccess(t)
 
-	err := Run(root, "012-state-test", "")
+	_, err := Run(root, "012-state-test", "")
 	if err != nil {
 		t.Fatalf("Run() error: %v", err)
 	}
@@ -168,7 +185,7 @@ func TestRunRejectsInvalidSpecID(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		err := Run(root, tt.id, "")
+		_, err := Run(root, tt.id, "")
 		if tt.wantErr && err == nil {
 			t.Errorf("Run(%q): expected error, got nil", tt.id)
 		}
@@ -208,7 +225,7 @@ func TestRunCreatesFormulaIfMissing(t *testing.T) {
 		t.Fatal("formula should not exist before test")
 	}
 
-	err := Run(root, "014-formula-test", "")
+	_, err := Run(root, "014-formula-test", "")
 	if err != nil {
 		t.Fatalf("Run() error: %v", err)
 	}
@@ -232,7 +249,7 @@ func TestRunSkipsFormulaIfExists(t *testing.T) {
 	customContent := "# custom formula\n"
 	os.WriteFile(filepath.Join(formulaDir, "spec-lifecycle.formula.toml"), []byte(customContent), 0644)
 
-	err := Run(root, "015-formula-exists", "")
+	_, err := Run(root, "015-formula-exists", "")
 	if err != nil {
 		t.Fatalf("Run() error: %v", err)
 	}
@@ -254,7 +271,7 @@ func TestRunFailsWhenMoleculeUnavailable(t *testing.T) {
 	defer func() { preflightFn = origPreflight }()
 	preflightFn = func(root string) error { return fmt.Errorf("bd unavailable") }
 
-	err := Run(root, "013-molecule-required", "")
+	_, err := Run(root, "013-molecule-required", "")
 	if err == nil {
 		t.Fatal("expected error when molecule setup is unavailable")
 	}

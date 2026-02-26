@@ -3,9 +3,13 @@ package next
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/mindspec/mindspec/internal/bead"
+	"github.com/mindspec/mindspec/internal/config"
+	"github.com/mindspec/mindspec/internal/gitops"
 	"github.com/mindspec/mindspec/internal/state"
 )
 
@@ -23,11 +27,15 @@ type BeadInfo struct {
 
 // Package-level function variables for testability.
 var (
-	runBDFn        = bead.RunBD
-	runBDCombFn    = bead.RunBDCombined
-	worktreeList   = bead.WorktreeList
-	worktreeCreate = bead.WorktreeCreate
-	readStateFn    = state.Read
+	runBDFn          = bead.RunBD
+	runBDCombFn      = bead.RunBDCombined
+	worktreeList     = bead.WorktreeList
+	worktreeCreate   = bead.WorktreeCreate
+	readStateFn      = state.Read
+	loadConfigFn     = config.Load
+	createBranchFn   = gitops.CreateBranch
+	branchExistsFn   = gitops.BranchExists
+	ensureGitignore  = gitops.EnsureGitignoreEntry
 )
 
 // QueryReady discovers ready work. If an active molecule exists in state,
@@ -153,12 +161,20 @@ func ClaimBead(id string) error {
 }
 
 // EnsureWorktree checks for an existing worktree for the bead, or creates one.
+// It reads state for SpecBranch (to branch from spec instead of main) and config
+// for WorktreeRoot (canonical .worktrees/ directory).
 // Returns the worktree path. Returns empty string if worktree creation is not
 // applicable (e.g., working on main).
-func EnsureWorktree(beadID string) (string, error) {
+func EnsureWorktree(root, beadID string) (string, error) {
 	entries, err := worktreeList()
 	if err != nil {
 		return "", fmt.Errorf("listing worktrees: %w", err)
+	}
+
+	// Load config for worktree root path.
+	cfg, cfgErr := loadConfigFn(root)
+	if cfgErr != nil {
+		cfg = config.DefaultConfig()
 	}
 
 	// Check for existing worktree matching this bead
@@ -170,22 +186,45 @@ func EnsureWorktree(beadID string) (string, error) {
 		}
 	}
 
-	// Create new worktree via bd worktree create
-	if err := worktreeCreate(wtName, branchName); err != nil {
-		return "", fmt.Errorf("creating worktree: %w", err)
+	// Determine the base branch: use spec branch from state if available.
+	baseBranch := "HEAD"
+	s, stateErr := readStateFn(root)
+	if stateErr == nil && s.SpecBranch != "" {
+		baseBranch = s.SpecBranch
 	}
 
-	// Read back path from worktree list
-	entries, err = worktreeList()
-	if err != nil {
-		return "", fmt.Errorf("reading worktree path: %w", err)
-	}
-	for _, e := range entries {
-		if e.Name == wtName || strings.HasSuffix(e.Path, wtName) {
-			return e.Path, nil
+	// Create the bead branch from the spec branch (or HEAD).
+	if !branchExistsFn(branchName) {
+		if err := createBranchFn(branchName, baseBranch); err != nil {
+			return "", fmt.Errorf("creating branch %s from %s: %w", branchName, baseBranch, err)
 		}
 	}
 
-	// Fallback: return the name (relative path)
-	return wtName, nil
+	// Ensure .worktrees/ directory exists and is gitignored.
+	if err := os.MkdirAll(filepath.Join(root, cfg.WorktreeRoot), 0755); err != nil {
+		return "", fmt.Errorf("creating %s directory: %w", cfg.WorktreeRoot, err)
+	}
+	if err := ensureGitignore(root, cfg.WorktreeRoot); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not update .gitignore: %v\n", err)
+	}
+
+	// Create new worktree via bd worktree create under .worktrees/
+	relWtPath := filepath.Join(cfg.WorktreeRoot, wtName)
+	if err := worktreeCreate(relWtPath, branchName); err != nil {
+		return "", fmt.Errorf("creating worktree: %w", err)
+	}
+
+	wtPath := cfg.WorktreePath(root, wtName)
+
+	// Read back path from worktree list to confirm
+	entries, err = worktreeList()
+	if err == nil {
+		for _, e := range entries {
+			if e.Name == wtName || strings.HasSuffix(e.Path, wtName) {
+				return e.Path, nil
+			}
+		}
+	}
+
+	return wtPath, nil
 }

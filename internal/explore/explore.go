@@ -48,5 +48,6 @@ func Promote(root, specID, title string) error {
 		return fmt.Errorf("cannot promote: not in explore mode (currently %q)", s.Mode)
 	}
 
-	return specinit.Run(root, specID, title)
+	_, err = specinit.Run(root, specID, title)
+	return err
 }

@@ -9,6 +9,9 @@ import (
 	"strings"
 
 	"github.com/mindspec/mindspec/internal/bead"
+	"github.com/mindspec/mindspec/internal/config"
+	"github.com/mindspec/mindspec/internal/gitops"
+	"github.com/mindspec/mindspec/internal/hooks"
 	"github.com/mindspec/mindspec/internal/recording"
 	"github.com/mindspec/mindspec/internal/specmeta"
 	"github.com/mindspec/mindspec/internal/state"
@@ -20,23 +23,35 @@ import (
 var specIDPattern = regexp.MustCompile(`^\d{3,}-[a-z][a-z0-9]*(-[a-z0-9]+)*$`)
 
 var (
-	preflightFn   = bead.Preflight
-	pourFormulaFn = pourFormula
-	runBDCombined = bead.RunBDCombined
-	writeSpecMeta = specmeta.Write
+	preflightFn      = bead.Preflight
+	pourFormulaFn    = pourFormula
+	runBDCombined    = bead.RunBDCombined
+	writeSpecMeta    = specmeta.Write
+	loadConfigFn     = config.Load
+	createBranchFn   = gitops.CreateBranch
+	branchExistsFn   = gitops.BranchExists
+	worktreeCreateFn = bead.WorktreeCreate
+	ensureGitignore  = gitops.EnsureGitignoreEntry
 )
+
+// Result holds the output of a spec-init operation.
+type Result struct {
+	SpecDir      string // Path to the spec directory
+	WorktreePath string // Path to the created worktree (empty if not created)
+	SpecBranch   string // Name of the spec branch (empty if not created)
+}
 
 // Run creates a new spec directory with a spec.md from the template,
 // then sets state to spec mode. If title is empty, it is derived from
 // the slug portion of specID (e.g. "010-spec-init-cmd" → "Spec Init Cmd").
-func Run(root, specID, title string) error {
+func Run(root, specID, title string) (*Result, error) {
 	if !specIDPattern.MatchString(specID) {
-		return fmt.Errorf("invalid spec ID %q: must match NNN-kebab-case (e.g. 010-my-feature)", specID)
+		return nil, fmt.Errorf("invalid spec ID %q: must match NNN-kebab-case (e.g. 010-my-feature)", specID)
 	}
 
 	specDir := workspace.SpecDir(root, specID)
 	if _, err := os.Stat(specDir); err == nil {
-		return fmt.Errorf("spec directory already exists: %s", specDir)
+		return nil, fmt.Errorf("spec directory already exists: %s", specDir)
 	}
 
 	if title == "" {
@@ -49,11 +64,11 @@ func Run(root, specID, title string) error {
 
 	// Create directory and write spec
 	if err := os.MkdirAll(specDir, 0755); err != nil {
-		return fmt.Errorf("creating spec directory: %w", err)
+		return nil, fmt.Errorf("creating spec directory: %w", err)
 	}
 	specPath := filepath.Join(specDir, "spec.md")
 	if err := os.WriteFile(specPath, []byte(content), 0644); err != nil {
-		return fmt.Errorf("writing spec file: %w", err)
+		return nil, fmt.Errorf("writing spec file: %w", err)
 	}
 
 	// Pour and bind the spec-lifecycle molecule (required).
@@ -62,18 +77,18 @@ func Run(root, specID, title string) error {
 		ActiveSpec: specID,
 	}
 	if err := preflightFn(root); err != nil {
-		return fmt.Errorf("creating lifecycle molecule requires beads to be available: %w", err)
+		return nil, fmt.Errorf("creating lifecycle molecule requires beads to be available: %w", err)
 	}
 
 	// Ensure the spec-lifecycle formula exists (self-healing for projects
 	// bootstrapped before the formula was included in mindspec init).
 	if err := ensureFormula(root); err != nil {
-		return fmt.Errorf("ensuring spec-lifecycle formula: %w", err)
+		return nil, fmt.Errorf("ensuring spec-lifecycle formula: %w", err)
 	}
 
 	molID, stepMap, err := pourFormulaFn(specID)
 	if err != nil {
-		return fmt.Errorf("pouring spec-lifecycle molecule: %w", err)
+		return nil, fmt.Errorf("pouring spec-lifecycle molecule: %w", err)
 	}
 
 	s.ActiveMolecule = molID
@@ -96,12 +111,55 @@ func Run(root, specID, title string) error {
 		StepMapping: stepMap,
 	}
 	if err := writeSpecMeta(specDir, meta); err != nil {
-		return fmt.Errorf("writing molecule binding to spec frontmatter: %w", err)
+		return nil, fmt.Errorf("writing molecule binding to spec frontmatter: %w", err)
 	}
 
-	// Write state
+	result := &Result{SpecDir: specDir}
+
+	// Create spec branch + worktree (ADR-0006: zero changes on main).
+	cfg, cfgErr := loadConfigFn(root)
+	if cfgErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not load config: %v (skipping worktree creation)\n", cfgErr)
+	} else {
+		specBranch := "spec/" + specID
+		wtName := "worktree-spec-" + specID
+		wtPath := cfg.WorktreePath(root, wtName)
+
+		// Ensure .worktrees/ dir exists and is gitignored.
+		if err := os.MkdirAll(filepath.Join(root, cfg.WorktreeRoot), 0755); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not create %s directory: %v\n", cfg.WorktreeRoot, err)
+		}
+		if err := ensureGitignore(root, cfg.WorktreeRoot); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not update .gitignore: %v\n", err)
+		}
+
+		// Create spec branch from HEAD if it doesn't exist.
+		if !branchExistsFn(specBranch) {
+			if err := createBranchFn(specBranch, "HEAD"); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: could not create branch %s: %v\n", specBranch, err)
+			}
+		}
+
+		// Create worktree via beads (sets up .beads/redirect for shared DB).
+		relWtPath := filepath.Join(cfg.WorktreeRoot, wtName)
+		if err := worktreeCreateFn(relWtPath, specBranch); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not create worktree: %v\n", err)
+		} else {
+			result.WorktreePath = wtPath
+			result.SpecBranch = specBranch
+			s.ActiveWorktree = wtPath
+			s.SpecBranch = specBranch
+		}
+	}
+
+	// Write state (on main — enforcement hooks read this).
 	if err := state.Write(root, s); err != nil {
-		return fmt.Errorf("setting state: %w", err)
+		return nil, fmt.Errorf("setting state: %w", err)
+	}
+
+	// Install pre-commit hook (best-effort, ensures Layer 1 enforcement).
+	if err := hooks.InstallPreCommit(root); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not install pre-commit hook: %v\n", err)
 	}
 
 	// Start recording (best-effort)
@@ -115,7 +173,7 @@ func Run(root, specID, title string) error {
 		fmt.Fprintf(os.Stderr, "warning: could not start recording: %v\n", err)
 	}
 
-	return nil
+	return result, nil
 }
 
 // pourResult represents the JSON output from `bd mol pour --json`.

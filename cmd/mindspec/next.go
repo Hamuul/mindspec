@@ -126,7 +126,7 @@ exist and no --spec is given, the command fails with a list of candidates.`,
 		}
 
 		// Step 5.5: Create or reuse worktree
-		wtPath, wtErr := next.EnsureWorktree(selected.ID)
+		wtPath, wtErr := next.EnsureWorktree(root, selected.ID)
 		if wtErr != nil {
 			fmt.Fprintf(os.Stderr, "Warning: worktree setup failed: %v\n", wtErr)
 		} else if wtPath != "" {
@@ -150,6 +150,16 @@ exist and no --spec is given, the command fails with a list of candidates.`,
 		}
 		if err != nil {
 			return fmt.Errorf("updating state: %w", err)
+		}
+
+		// Update activeWorktree if a bead worktree was created.
+		if wtErr == nil && wtPath != "" {
+			if curState, readErr := state.Read(root); readErr == nil {
+				curState.ActiveWorktree = wtPath
+				if writeErr := state.Write(root, curState); writeErr != nil {
+					fmt.Fprintf(os.Stderr, "warning: could not update activeWorktree in state: %v\n", writeErr)
+				}
+			}
 		}
 
 		fmt.Printf("State updated: mode=%s, spec=%s, bead=%s\n", resolved.Mode, resolved.SpecID, selected.ID)

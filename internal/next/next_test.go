@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/mindspec/mindspec/internal/bead"
+	"github.com/mindspec/mindspec/internal/config"
 	"github.com/mindspec/mindspec/internal/state"
 )
 
@@ -400,25 +401,52 @@ func TestClaimBead_PropagatesError(t *testing.T) {
 
 // --- EnsureWorktree tests ---
 
-func TestEnsureWorktree_CreatesNew(t *testing.T) {
+// stubWorktreeHelpers saves and restores function variables used by EnsureWorktree.
+func stubWorktreeHelpers(t *testing.T) {
+	t.Helper()
 	origList := worktreeList
 	origCreate := worktreeCreate
-	defer func() {
+	origConfig := loadConfigFn
+	origBranch := createBranchFn
+	origExists := branchExistsFn
+	origGitignore := ensureGitignore
+	origState := readStateFn
+	t.Cleanup(func() {
 		worktreeList = origList
 		worktreeCreate = origCreate
-	}()
+		loadConfigFn = origConfig
+		createBranchFn = origBranch
+		branchExistsFn = origExists
+		ensureGitignore = origGitignore
+		readStateFn = origState
+	})
+
+	// Defaults: config returns defaults, no spec branch, branch doesn't exist.
+	loadConfigFn = func(root string) (*config.Config, error) { return config.DefaultConfig(), nil }
+	createBranchFn = func(name, from string) error { return nil }
+	branchExistsFn = func(name string) bool { return false }
+	ensureGitignore = func(root, entry string) error { return nil }
+	readStateFn = func(root string) (*state.State, error) {
+		return &state.State{Mode: state.ModeImplement}, nil
+	}
+}
+
+func TestEnsureWorktree_CreatesNew(t *testing.T) {
+	stubWorktreeHelpers(t)
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, ".worktrees"), 0755)
 
 	listCallCount := 0
 	worktreeList = func() ([]bead.WorktreeListEntry, error) {
 		listCallCount++
 		if listCallCount == 1 {
 			return []bead.WorktreeListEntry{
-				{Name: "mindspec", Path: "/home/user/mindspec", Branch: "main", IsMain: true},
+				{Name: "mindspec", Path: root, Branch: "main", IsMain: true},
 			}, nil
 		}
 		return []bead.WorktreeListEntry{
-			{Name: "mindspec", Path: "/home/user/mindspec", Branch: "main", IsMain: true},
-			{Name: "worktree-bead-abc", Path: "/home/user/worktree-bead-abc", Branch: "bead/bead-abc", IsMain: false},
+			{Name: "mindspec", Path: root, Branch: "main", IsMain: true},
+			{Name: "worktree-bead-abc", Path: filepath.Join(root, ".worktrees", "worktree-bead-abc"), Branch: "bead/bead-abc", IsMain: false},
 		}, nil
 	}
 
@@ -429,33 +457,62 @@ func TestEnsureWorktree_CreatesNew(t *testing.T) {
 		return nil
 	}
 
-	path, err := EnsureWorktree("bead-abc")
+	path, err := EnsureWorktree(root, "bead-abc")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if path != "/home/user/worktree-bead-abc" {
-		t.Errorf("path: got %q, want %q", path, "/home/user/worktree-bead-abc")
+	expectedPath := filepath.Join(root, ".worktrees", "worktree-bead-abc")
+	if path != expectedPath {
+		t.Errorf("path: got %q, want %q", path, expectedPath)
 	}
-	if createdName != "worktree-bead-abc" {
-		t.Errorf("created name: got %q, want %q", createdName, "worktree-bead-abc")
+	if createdName != ".worktrees/worktree-bead-abc" {
+		t.Errorf("created name: got %q, want %q", createdName, ".worktrees/worktree-bead-abc")
 	}
 	if createdBranch != "bead/bead-abc" {
 		t.Errorf("created branch: got %q, want %q", createdBranch, "bead/bead-abc")
 	}
 }
 
+func TestEnsureWorktree_BranchesFromSpecBranch(t *testing.T) {
+	stubWorktreeHelpers(t)
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, ".worktrees"), 0755)
+
+	readStateFn = func(root string) (*state.State, error) {
+		return &state.State{
+			Mode:       state.ModeImplement,
+			SpecBranch: "spec/046-test",
+		}, nil
+	}
+
+	var branchFrom string
+	createBranchFn = func(name, from string) error {
+		branchFrom = from
+		return nil
+	}
+
+	worktreeList = func() ([]bead.WorktreeListEntry, error) {
+		return nil, nil
+	}
+	worktreeCreate = func(name, branch string) error { return nil }
+
+	_, err := EnsureWorktree(root, "bead-xyz")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if branchFrom != "spec/046-test" {
+		t.Errorf("branch created from %q, want %q", branchFrom, "spec/046-test")
+	}
+}
+
 func TestEnsureWorktree_ReusesExisting(t *testing.T) {
-	origList := worktreeList
-	origCreate := worktreeCreate
-	defer func() {
-		worktreeList = origList
-		worktreeCreate = origCreate
-	}()
+	stubWorktreeHelpers(t)
+	root := t.TempDir()
 
 	worktreeList = func() ([]bead.WorktreeListEntry, error) {
 		return []bead.WorktreeListEntry{
-			{Name: "mindspec", Path: "/home/user/mindspec", Branch: "main", IsMain: true},
-			{Name: "worktree-bead-abc", Path: "/home/user/worktree-bead-abc", Branch: "bead/bead-abc", IsMain: false},
+			{Name: "mindspec", Path: root, Branch: "main", IsMain: true},
+			{Name: "worktree-bead-abc", Path: filepath.Join(root, ".worktrees", "worktree-bead-abc"), Branch: "bead/bead-abc", IsMain: false},
 		}, nil
 	}
 
@@ -464,12 +521,13 @@ func TestEnsureWorktree_ReusesExisting(t *testing.T) {
 		return nil
 	}
 
-	path, err := EnsureWorktree("bead-abc")
+	path, err := EnsureWorktree(root, "bead-abc")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if path != "/home/user/worktree-bead-abc" {
-		t.Errorf("path: got %q, want %q", path, "/home/user/worktree-bead-abc")
+	expectedPath := filepath.Join(root, ".worktrees", "worktree-bead-abc")
+	if path != expectedPath {
+		t.Errorf("path: got %q, want %q", path, expectedPath)
 	}
 }
 

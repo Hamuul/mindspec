@@ -25,7 +25,8 @@ sets state to spec mode, and emits spec mode guidance.`,
 			return err
 		}
 
-		if err := specinit.Run(root, specID, title); err != nil {
+		result, err := specinit.Run(root, specID, title)
+		if err != nil {
 			return err
 		}
 
@@ -34,7 +35,14 @@ sets state to spec mode, and emits spec mode guidance.`,
 		if err != nil {
 			relPath = specPath
 		}
-		fmt.Printf("Spec initialized: %s\n\n", filepath.ToSlash(relPath))
+		fmt.Printf("Spec initialized: %s\n", filepath.ToSlash(relPath))
+
+		if result.WorktreePath != "" {
+			fmt.Printf("Worktree: %s (branch: %s)\n", result.WorktreePath, result.SpecBranch)
+			fmt.Printf("\n  cd %s\n\n", result.WorktreePath)
+		} else {
+			fmt.Println()
+		}
 
 		if err := emitInstruct(root); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: could not emit guidance: %v\n", err)

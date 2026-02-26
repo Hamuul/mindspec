@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/mindspec/mindspec/internal/guard"
 	"github.com/mindspec/mindspec/internal/instruct"
 	"github.com/mindspec/mindspec/internal/resolve"
 	"github.com/mindspec/mindspec/internal/state"
@@ -32,6 +33,19 @@ If multiple active specs exist, the command fails with a list of candidates.`,
 		root, err := workspace.FindRoot(cwd)
 		if err != nil {
 			return err
+		}
+
+		// CWD redirect: if running from main with an active worktree,
+		// emit ONLY the redirect message — no normal guidance.
+		if wtPath := guard.ActiveWorktreePath(root); wtPath != "" && guard.IsMainCWD(root) {
+			msg := fmt.Sprintf("# MindSpec — CWD Redirect\n\nYou are in the main worktree. Run:\n\n  cd %s\n\nThen run `mindspec instruct` for mode-appropriate guidance.\n", wtPath)
+			if format == "json" {
+				fmt.Printf(`{"redirect":true,"worktree_path":%q,"message":"Switch to worktree"}`, wtPath)
+				fmt.Println()
+			} else {
+				fmt.Print(msg)
+			}
+			return nil
 		}
 
 		// Resolve target spec (ADR-0015 targeting rules)
@@ -75,9 +89,9 @@ If multiple active specs exist, the command fails with a list of candidates.`,
 
 		ctx := instruct.BuildContext(root, s)
 
-		// Add worktree check for implement mode
-		if s.Mode == state.ModeImplement {
-			if warning := instruct.CheckWorktree(s.ActiveBead); warning != "" {
+		// Add worktree check when an active worktree is set.
+		if s.ActiveWorktree != "" {
+			if warning := instruct.CheckWorktree(s.ActiveWorktree); warning != "" {
 				ctx.Warnings = append(ctx.Warnings, "[worktree] "+warning)
 			}
 		}

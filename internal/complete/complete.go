@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/mindspec/mindspec/internal/bead"
+	"github.com/mindspec/mindspec/internal/gitops"
 	"github.com/mindspec/mindspec/internal/recording"
 	"github.com/mindspec/mindspec/internal/state"
 )
@@ -14,12 +15,15 @@ import (
 // Package-level function variables for testability.
 var (
 	readStateFn      = state.Read
+	writeStateFn     = state.Write
 	setModeFn        = state.SetMode
 	closeBeadFn      = bead.Close
 	worktreeListFn   = bead.WorktreeList
 	worktreeRemoveFn = bead.WorktreeRemove
 	runBDFn          = bead.RunBD
 	execCommandFn    = exec.Command
+	mergeBranchFn    = gitops.MergeBranch
+	deleteBranchFn   = gitops.DeleteBranch
 )
 
 // Result summarizes what mindspec complete did.
@@ -88,6 +92,14 @@ func Run(root, beadID string) (*Result, error) {
 		BeadClosed: true,
 	}
 
+	// 4.7. Merge bead branch back to spec branch (ADR-0006).
+	beadBranch := "bead/" + beadID
+	if s.SpecBranch != "" && wtPath != "" {
+		if err := mergeBranchFn(wtPath, beadBranch, s.SpecBranch); err != nil {
+			fmt.Printf("Warning: could not merge %s → %s: %v\n", beadBranch, s.SpecBranch, err)
+		}
+	}
+
 	// 5. Remove worktree (if found)
 	if wtName != "" {
 		if err := worktreeRemoveFn(wtName); err != nil {
@@ -95,6 +107,31 @@ func Run(root, beadID string) (*Result, error) {
 			fmt.Printf("Warning: could not remove worktree %s: %v\n", wtName, err)
 		} else {
 			result.WorktreeRemoved = true
+		}
+	}
+
+	// 5.5. Delete the bead branch after merge + worktree removal (best-effort).
+	if s.SpecBranch != "" {
+		if err := deleteBranchFn(beadBranch); err != nil {
+			fmt.Printf("Warning: could not delete branch %s: %v\n", beadBranch, err)
+		}
+	}
+
+	// 5.7. Reset activeWorktree to spec worktree (so agent returns to spec context).
+	if s.SpecBranch != "" && s.ActiveWorktree != "" {
+		// Find the spec worktree (worktree-spec-<specID>).
+		specWtName := "worktree-spec-" + specID
+		entries2, listErr := worktreeListFn()
+		if listErr == nil {
+			for _, e := range entries2 {
+				if e.Name == specWtName || e.Branch == s.SpecBranch {
+					s.ActiveWorktree = e.Path
+					if writeErr := writeStateFn(root, s); writeErr != nil {
+						fmt.Printf("Warning: could not update activeWorktree: %v\n", writeErr)
+					}
+					break
+				}
+			}
 		}
 	}
 
