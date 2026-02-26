@@ -45,3 +45,5 @@ beads/
 .worktrees/
 # bd worktree
 .worktrees/worktree-mindspec-u7mk/
+# bd worktree
+worktree-mindspec-u7mk/
