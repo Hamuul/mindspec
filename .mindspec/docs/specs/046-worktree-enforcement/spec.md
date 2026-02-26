@@ -14,6 +14,7 @@ step_mapping:
 ---
 
 
+
 # Spec 046-worktree-enforcement: Deterministic Worktree and Branch Enforcement
 
 ## Goal
@@ -95,6 +96,7 @@ When an agent opens a session in an IDE, the workspace root is typically the mai
 22. `.mindspec/config.yaml` supports:
     - `protected_branches`: list of branches to protect (default: `[main, master]`)
     - `merge_strategy`: `pr` | `direct` | `auto` (default: `auto`)
+    - `worktree_root`: directory for worktrees relative to repo root (default: `.worktrees`)
     - `enforcement.pre_commit_hook`: bool (default: `true`)
     - `enforcement.cli_guards`: bool (default: `true`)
     - `enforcement.agent_hooks`: bool (default: `true`)
