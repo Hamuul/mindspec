@@ -41,3 +41,7 @@ Thumbs.db
 
 # beads git submodule
 beads/
+# mindspec worktrees
+.worktrees/
+# bd worktree
+.worktrees/worktree-mindspec-u7mk/
