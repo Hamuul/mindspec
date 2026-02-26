@@ -6,9 +6,11 @@ adr_citations:
     - id: ADR-0019
       sections:
         - ADR Fitness
+approved_at: "2026-02-26T12:00:45Z"
+approved_by: user
 last_updated: "2026-02-26T15:30:00Z"
 spec_id: 047-clean-context-enforcement
-status: Draft
+status: Approved
 version: 4
 ---
 

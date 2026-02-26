@@ -1,2 +1,3 @@
 {"ts":"2026-02-26T09:52:40.815778Z","event":"lifecycle.start","data":{"phase":"spec","spec_id":"047-clean-context-enforcement"}}
 {"ts":"2026-02-26T10:03:58.047349Z","event":"lifecycle.phase","data":{"from":"spec","spec_id":"047-clean-context-enforcement","to":"plan"}}
+{"ts":"2026-02-26T12:00:45.644812Z","event":"lifecycle.phase","data":{"from":"plan","spec_id":"047-clean-context-enforcement","to":"plan-approved"}}
