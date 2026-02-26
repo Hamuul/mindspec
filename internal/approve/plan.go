@@ -1,9 +1,12 @@
 package approve
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,10 +23,14 @@ import (
 // planRunBDCombinedFn is a package-level variable for testability.
 var planRunBDCombinedFn = bead.RunBDCombined
 
+// planRunBDFn is for JSON-returning bd commands (stdout only, no stderr mixing).
+var planRunBDFn = bead.RunBD
+
 // PlanResult holds the result of plan approval.
 type PlanResult struct {
 	SpecID   string
 	GateID   string // empty if no gate found
+	BeadIDs  []string
 	Warnings []string
 }
 
@@ -47,6 +54,22 @@ func ApprovePlan(root, specID, approvedBy string) (*PlanResult, error) {
 	planPath := filepath.Join(workspace.SpecDir(root, specID), "plan.md")
 	if err := updatePlanApproval(planPath, approvedBy); err != nil {
 		return nil, fmt.Errorf("updating plan approval: %w", err)
+	}
+
+	// Step 2b: Auto-create implementation beads from plan sections
+	implementStepID := strings.TrimSpace(meta.StepMapping["implement"])
+	if implementStepID != "" {
+		beadIDs, err := createImplementationBeads(planPath, specID, implementStepID)
+		if err != nil {
+			result.Warnings = append(result.Warnings, fmt.Sprintf("could not auto-create implementation beads: %v", err))
+		} else if len(beadIDs) > 0 {
+			result.BeadIDs = beadIDs
+			if err := writeBeadIDsToFrontmatter(planPath, beadIDs); err != nil {
+				result.Warnings = append(result.Warnings, fmt.Sprintf("could not write bead IDs to plan frontmatter: %v", err))
+			}
+		}
+	} else {
+		result.Warnings = append(result.Warnings, "no implement step in molecule; skipping bead auto-creation")
 	}
 
 	// Step 3: Close plan-approve step in molecule (best-effort)
@@ -136,6 +159,146 @@ func updatePlanApproval(planPath, approvedBy string) error {
 	}
 
 	// Splice back
+	body := strings.Join(lines[fmEndIdx+1:], "\n")
+	output := "---\n" + string(newFm) + "---\n" + body
+
+	return os.WriteFile(planPath, []byte(output), 0644)
+}
+
+// beadNumRe matches "Bead N" where N is the bead number in the heading.
+var beadNumRe = regexp.MustCompile(`^Bead\s+(\d+)`)
+
+// createImplementationBeads parses plan.md for ## Bead sections, creates child
+// beads under the implement molecule step, and wires inter-bead dependencies.
+// Returns the ordered list of created bead IDs.
+func createImplementationBeads(planPath, specID, parentID string) ([]string, error) {
+	data, err := os.ReadFile(planPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading plan: %w", err)
+	}
+
+	sections := validate.ParseBeadSections(string(data))
+	if len(sections) == 0 {
+		return nil, nil
+	}
+
+	// Map from bead number (from heading) to created bead ID for dependency wiring.
+	numToID := make(map[int]string)
+	var beadIDs []string
+
+	for _, sec := range sections {
+		title := fmt.Sprintf("[%s] %s", specID, sec.Heading)
+		args := []string{"create", "--title", title, "--type", "task", "--parent", parentID, "--json"}
+		out, err := planRunBDFn(args...)
+		if err != nil {
+			return beadIDs, fmt.Errorf("creating bead for %q: %w", sec.Heading, err)
+		}
+
+		var created struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(out, &created); err != nil {
+			return beadIDs, fmt.Errorf("parsing create output for %q: %w", sec.Heading, err)
+		}
+
+		beadIDs = append(beadIDs, created.ID)
+
+		// Extract bead number from heading for dependency resolution.
+		if m := beadNumRe.FindStringSubmatch(sec.Heading); len(m) > 1 {
+			if n, err := strconv.Atoi(m[1]); err == nil {
+				numToID[n] = created.ID
+			}
+		}
+	}
+
+	// Wire dependencies: parse "Depends on" text for "Bead N" references.
+	depRe := regexp.MustCompile(`(?i)bead\s+(\d+)`)
+	for i, sec := range sections {
+		if sec.DependsOn == "" {
+			continue
+		}
+		depText := strings.ToLower(sec.DependsOn)
+		if depText == "none" || depText == "nothing" || depText == "n/a" {
+			continue
+		}
+
+		matches := depRe.FindAllStringSubmatch(sec.DependsOn, -1)
+		for _, m := range matches {
+			depNum, err := strconv.Atoi(m[1])
+			if err != nil {
+				continue
+			}
+			depID, ok := numToID[depNum]
+			if !ok {
+				continue
+			}
+			// Wire: beadIDs[i] depends on depID
+			if _, err := planRunBDFn("dep", "add", beadIDs[i], depID); err != nil {
+				// Best-effort: don't fail the whole operation for a dep wiring issue
+				continue
+			}
+		}
+	}
+
+	return beadIDs, nil
+}
+
+// writeBeadIDsToFrontmatter adds the bead_ids list to the plan's YAML frontmatter.
+func writeBeadIDsToFrontmatter(planPath string, beadIDs []string) error {
+	data, err := os.ReadFile(planPath)
+	if err != nil {
+		return fmt.Errorf("reading plan: %w", err)
+	}
+
+	content := string(data)
+	lines := strings.Split(content, "\n")
+
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+		return fmt.Errorf("no frontmatter found")
+	}
+
+	fmEndIdx := -1
+	for i, line := range lines[1:] {
+		if strings.TrimSpace(line) == "---" {
+			fmEndIdx = i + 1
+			break
+		}
+	}
+	if fmEndIdx == -1 {
+		return fmt.Errorf("unclosed frontmatter")
+	}
+
+	// Extract and parse frontmatter
+	fmLines := lines[1:fmEndIdx]
+	var activeFmLines []string
+	for _, line := range fmLines {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "#") {
+			activeFmLines = append(activeFmLines, line)
+		}
+	}
+
+	fmContent := strings.Join(activeFmLines, "\n")
+	var fmMap map[string]interface{}
+	if err := yaml.Unmarshal([]byte(fmContent), &fmMap); err != nil {
+		return fmt.Errorf("parsing frontmatter: %w", err)
+	}
+	if fmMap == nil {
+		fmMap = make(map[string]interface{})
+	}
+
+	// Convert []string to []interface{} for YAML
+	ids := make([]interface{}, len(beadIDs))
+	for i, id := range beadIDs {
+		ids[i] = id
+	}
+	fmMap["bead_ids"] = ids
+
+	newFm, err := yaml.Marshal(fmMap)
+	if err != nil {
+		return fmt.Errorf("marshaling frontmatter: %w", err)
+	}
+
 	body := strings.Join(lines[fmEndIdx+1:], "\n")
 	output := "---\n" + string(newFm) + "---\n" + body
 

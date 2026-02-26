@@ -91,7 +91,7 @@ func ValidatePlan(root, specID string) *Result {
 	checkPlanApprovalGateConsistency(r, root, specID, fm)
 
 	// Parse and check bead sections
-	beadSections := parseBeadSections(content)
+	beadSections := ParseBeadSections(content)
 	if len(beadSections) == 0 {
 		r.AddError("bead-sections", "no bead sections found (expected ## Bead ... headings)")
 		return r
@@ -184,14 +184,15 @@ func checkFrontmatterFields(r *Result, fm *PlanFrontmatter) {
 	}
 }
 
-// beadSection represents a parsed bead section from a plan.
-type beadSection struct {
-	heading      string
-	stepsCount   int
-	hasVerify    bool
-	verifyCount  int
-	verifyLines  []string // raw text of verification items
-	hasDependsOn bool
+// BeadSection represents a parsed bead section from a plan.
+type BeadSection struct {
+	Heading      string
+	StepsCount   int
+	HasVerify    bool
+	VerifyCount  int
+	VerifyLines  []string // raw text of verification items
+	HasDependsOn bool
+	DependsOn    string // raw text after "Depends on" marker
 }
 
 // testArtifactPatterns are substrings that indicate a concrete test artifact reference.
@@ -207,14 +208,15 @@ var testArtifactPatterns = []string{
 	"mindspec validate",
 }
 
-// parseBeadSections finds and parses ## Bead ... sections.
-func parseBeadSections(content string) []beadSection {
-	var sections []beadSection
+// ParseBeadSections finds and parses ## Bead ... sections from plan content.
+func ParseBeadSections(content string) []BeadSection {
+	var sections []BeadSection
 	lines := strings.Split(content, "\n")
 
-	var current *beadSection
+	var current *BeadSection
 	inSteps := false
 	inVerify := false
+	inDependsOn := false
 
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -223,9 +225,10 @@ func parseBeadSections(content string) []beadSection {
 			if current != nil {
 				sections = append(sections, *current)
 			}
-			current = &beadSection{heading: strings.TrimPrefix(line, "## ")}
+			current = &BeadSection{Heading: strings.TrimPrefix(line, "## ")}
 			inSteps = false
 			inVerify = false
+			inDependsOn = false
 			continue
 		}
 
@@ -238,23 +241,35 @@ func parseBeadSections(content string) []beadSection {
 		if strings.HasPrefix(trimmed, "**Steps**") || trimmed == "### Steps" {
 			inSteps = true
 			inVerify = false
+			inDependsOn = false
 			continue
 		}
 		if strings.HasPrefix(trimmed, "**Verification**") || trimmed == "### Verification" {
 			inVerify = true
 			inSteps = false
-			current.hasVerify = true
+			inDependsOn = false
+			current.HasVerify = true
 			continue
 		}
 		if strings.HasPrefix(trimmed, "**Depends on**") || trimmed == "### Depends on" {
-			current.hasDependsOn = true
+			current.HasDependsOn = true
 			inSteps = false
 			inVerify = false
+			inDependsOn = true
+			// Capture inline text after colon, e.g. "**Depends on**: Bead 1"
+			if idx := strings.Index(trimmed, ":"); idx >= 0 {
+				after := strings.TrimSpace(trimmed[idx+1:])
+				if after != "" {
+					current.DependsOn = after
+					inDependsOn = false
+				}
+			}
 			continue
 		}
 		if strings.HasPrefix(trimmed, "**Scope**") || trimmed == "### Scope" {
 			inSteps = false
 			inVerify = false
+			inDependsOn = false
 			continue
 		}
 
@@ -266,16 +281,21 @@ func parseBeadSections(content string) []beadSection {
 			}
 			inSteps = false
 			inVerify = false
+			inDependsOn = false
 			continue
 		}
 
 		// Count items
 		if inSteps && len(trimmed) > 2 && trimmed[0] >= '1' && trimmed[0] <= '9' && trimmed[1] == '.' {
-			current.stepsCount++
+			current.StepsCount++
 		}
 		if inVerify && (strings.HasPrefix(trimmed, "- [ ]") || strings.HasPrefix(trimmed, "- [x]")) {
-			current.verifyCount++
-			current.verifyLines = append(current.verifyLines, trimmed)
+			current.VerifyCount++
+			current.VerifyLines = append(current.VerifyLines, trimmed)
+		}
+		if inDependsOn && trimmed != "" {
+			current.DependsOn = trimmed
+			inDependsOn = false
 		}
 	}
 
@@ -325,30 +345,30 @@ func hasSection(content, heading string) bool {
 }
 
 // checkBeadSection validates a single bead section.
-func checkBeadSection(r *Result, bs beadSection, isApproved bool) {
-	if bs.stepsCount < 3 {
-		r.AddError("bead-steps", fmt.Sprintf("%s: expected 3-7 steps, found %d", bs.heading, bs.stepsCount))
-	} else if bs.stepsCount > 7 {
-		r.AddWarning("bead-steps", fmt.Sprintf("%s: has %d steps (recommended 3-7)", bs.heading, bs.stepsCount))
+func checkBeadSection(r *Result, bs BeadSection, isApproved bool) {
+	if bs.StepsCount < 3 {
+		r.AddError("bead-steps", fmt.Sprintf("%s: expected 3-7 steps, found %d", bs.Heading, bs.StepsCount))
+	} else if bs.StepsCount > 7 {
+		r.AddWarning("bead-steps", fmt.Sprintf("%s: has %d steps (recommended 3-7)", bs.Heading, bs.StepsCount))
 	}
 
-	if !bs.hasVerify || bs.verifyCount == 0 {
-		r.AddError("bead-verification", fmt.Sprintf("%s: missing verification steps", bs.heading))
+	if !bs.HasVerify || bs.VerifyCount == 0 {
+		r.AddError("bead-verification", fmt.Sprintf("%s: missing verification steps", bs.Heading))
 	}
 
 	// Spec 039: check verification testability
-	if bs.hasVerify && bs.verifyCount > 0 && !isApproved {
+	if bs.HasVerify && bs.VerifyCount > 0 && !isApproved {
 		checkVerificationTestability(r, bs)
 	}
 
-	if !bs.hasDependsOn {
-		r.AddWarning("bead-depends", fmt.Sprintf("%s: no 'Depends on' declaration", bs.heading))
+	if !bs.HasDependsOn {
+		r.AddWarning("bead-depends", fmt.Sprintf("%s: no 'Depends on' declaration", bs.Heading))
 	}
 }
 
 // checkVerificationTestability ensures at least one verification item references a test artifact.
-func checkVerificationTestability(r *Result, bs beadSection) {
-	for _, line := range bs.verifyLines {
+func checkVerificationTestability(r *Result, bs BeadSection) {
+	for _, line := range bs.VerifyLines {
 		lower := strings.ToLower(line)
 		for _, pattern := range testArtifactPatterns {
 			if strings.Contains(lower, strings.ToLower(pattern)) {
@@ -357,5 +377,5 @@ func checkVerificationTestability(r *Result, bs beadSection) {
 		}
 	}
 	r.AddError("bead-verification-testability",
-		fmt.Sprintf("%s: verification steps must reference at least one test artifact (e.g., _test.go, make test, go test, pytest)", bs.heading))
+		fmt.Sprintf("%s: verification steps must reference at least one test artifact (e.g., _test.go, make test, go test, pytest)", bs.Heading))
 }
