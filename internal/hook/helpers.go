@@ -2,6 +2,7 @@ package hook
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -80,4 +81,49 @@ func containsWord(haystack, needle string) bool {
 // getCwd returns the current working directory.
 func getCwd() (string, error) {
 	return os.Getwd()
+}
+
+// isCodeFile returns true if the path looks like a code file (not documentation).
+func isCodeFile(path string) bool {
+	if path == "" {
+		return false
+	}
+
+	// Documentation paths — always allowed
+	docPrefixes := []string{
+		".mindspec/docs/",
+		"docs/",
+		".mindspec/",
+		".claude/",
+		".github/",
+	}
+	for _, prefix := range docPrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return false
+		}
+	}
+
+	// Documentation file extensions/names — always allowed
+	docFiles := []string{
+		"GLOSSARY.md",
+		"AGENTS.md",
+		"CLAUDE.md",
+		"README.md",
+		"CHANGELOG.md",
+		"LICENSE",
+	}
+	base := filepath.Base(path)
+	for _, name := range docFiles {
+		if base == name {
+			return false
+		}
+	}
+
+	// Markdown files are generally docs
+	if strings.HasSuffix(path, ".md") {
+		return false
+	}
+
+	// Everything else is considered code
+	return true
 }

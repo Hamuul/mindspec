@@ -114,8 +114,71 @@ func NeedsClear(inp *Input, st *state.State) Result {
 	}
 }
 
-// WorkflowGuard is the universal state-aware guard (Bead 3).
-func WorkflowGuard(_ *Input, _ *state.State, _ bool) Result {
-	// Stub — implemented in Bead 3
-	return Result{Action: Pass}
+// WorkflowGuard is the universal state-aware guard.
+// It checks the current mode and the target file/command, then responds with
+// graduated enforcement: hard blocks for clear violations, warnings for grey areas.
+func WorkflowGuard(inp *Input, st *state.State, enforce bool) Result {
+	if st == nil || !enforce {
+		return Result{Action: Pass}
+	}
+
+	switch st.Mode {
+	case state.ModeIdle, "":
+		return Result{
+			Action:  Warn,
+			Message: warnIdle,
+		}
+
+	case state.ModeExplore:
+		return Result{
+			Action:  Warn,
+			Message: warnExplore,
+		}
+
+	case state.ModeSpec:
+		if isCodeFile(inp.FilePath) {
+			return Result{
+				Action:  Block,
+				Message: "mindspec: blocked — code edits are not allowed during Spec Mode. Only documentation files may be edited.",
+			}
+		}
+		return Result{Action: Pass}
+
+	case state.ModePlan:
+		if isCodeFile(inp.FilePath) {
+			return Result{
+				Action:  Block,
+				Message: "mindspec: blocked — code edits are not allowed during Plan Mode. Only documentation and plan files may be edited.",
+			}
+		}
+		return Result{Action: Pass}
+
+	case state.ModeImplement:
+		// In implement mode, worktree enforcement handles scope.
+		// Workflow guard passes silently.
+		return Result{Action: Pass}
+
+	case state.ModeReview:
+		return Result{
+			Action:  Warn,
+			Message: warnReview,
+		}
+
+	default:
+		return Result{Action: Pass}
+	}
 }
+
+const warnIdle = "⚠️ WORKFLOW VIOLATION: You are editing files with no active spec. " +
+	"You must stop and go through the spec lifecycle (/ms-spec-init or /ms-explore). " +
+	"If these are exceptional circumstances (debugging a CI failure, fixing a broken build, " +
+	"correcting a typo in config, or other urgent operational fix), you may proceed but must note the reason."
+
+const warnExplore = "⚠️ WORKFLOW VIOLATION: Explore Mode is for evaluating ideas, not implementing them. " +
+	"You must stop editing files. Promote to a spec (/ms-explore promote) or dismiss (/ms-explore dismiss). " +
+	"If these are exceptional circumstances (debugging a CI failure, fixing a broken build, " +
+	"correcting a typo in config, or other urgent operational fix), you may proceed but must note the reason."
+
+const warnReview = "⚠️ WORKFLOW WARNING: Review Mode — implementation is complete. " +
+	"Edits should only address review feedback. If you need to make substantial changes, " +
+	"consider opening a new spec."
