@@ -14,6 +14,7 @@ step_mapping:
 ---
 
 
+
 # Spec 042-copilot-cli-support: Copilot Integration Support (CLI + VS Code)
 
 ## Goal
@@ -61,22 +62,23 @@ This spec adds first-class Copilot onboarding (both surfaces) and migration-prov
 4. Update user-facing entry points (README and guide index references) so Copilot is listed alongside Claude and Codex.
 5. Extend `mindspec init` scaffolding to add `.github/copilot-instructions.md` that points to `AGENTS.md` for shared workflow conventions (per ADR-0017), plus any Copilot-specific notes for both CLI and VS Code Chat usage.
 6. Extend `mindspec init` scaffolding to add a repository hook template under `.github/hooks/` that runs `mindspec instruct` on session start (or equivalent supported hook event) for Copilot CLI.
-7. Bootstrap creation must remain additive and non-destructive: existing Copilot files are never overwritten.
+7. `mindspec setup copilot` must create prompt files (`.github/prompts/*.prompt.md`) equivalent to Claude's slash commands (`.claude/commands/*.md`): `spec-init`, `spec-approve`, `plan-approve`, `impl-approve`, `spec-status`.
+8. Bootstrap creation must remain additive and non-destructive: existing Copilot files are never overwritten.
 
 ### 2. Brownfield migrate provider support
 
-8. Add explicit `copilot-cli` provider support to migration classification.
-9. Classification execution must be provider-routed (not hardwired to `claude`), so the selected provider determines which CLI is executed.
-10. When `MINDSPEC_LLM_PROVIDER=copilot-cli`, migrate plan/apply must not execute a Claude probe or Claude classifier call.
-11. Provider auto-detection when `MINDSPEC_LLM_PROVIDER` is unset must support Copilot CLI availability (with deterministic precedence documented in code and tests).
-12. Unsupported/missing provider errors must be explicit and actionable, including remediation via `MINDSPEC_LLM_PROVIDER` and `MINDSPEC_LLM_MODEL`.
+9. Add explicit `copilot-cli` provider support to migration classification.
+10. Classification execution must be provider-routed (not hardwired to `claude`), so the selected provider determines which CLI is executed.
+11. When `MINDSPEC_LLM_PROVIDER=copilot-cli`, migrate plan/apply must not execute a Claude probe or Claude classifier call.
+12. Provider auto-detection when `MINDSPEC_LLM_PROVIDER` is unset must support Copilot CLI availability (with deterministic precedence documented in code and tests).
+13. Unsupported/missing provider errors must be explicit and actionable, including remediation via `MINDSPEC_LLM_PROVIDER` and `MINDSPEC_LLM_MODEL`.
 
 ### 3. Quality and compatibility
 
-13. Existing Claude-based migrate behavior remains backward compatible when Claude is selected.
-14. Existing deterministic-only mode (`MINDSPEC_LLM_PROVIDER=off`) remains unchanged.
-15. New and updated tests cover provider resolution, probe behavior, and classification command routing.
-16. `make test` passes.
+14. Existing Claude-based migrate behavior remains backward compatible when Claude is selected.
+15. Existing deterministic-only mode (`MINDSPEC_LLM_PROVIDER=off`) remains unchanged.
+16. New and updated tests cover provider resolution, probe behavior, and classification command routing.
+17. `make test` passes.
 
 ## Scope
 
@@ -84,6 +86,7 @@ This spec adds first-class Copilot onboarding (both surfaces) and migration-prov
 - Copilot documentation covering both CLI and VS Code Chat in user docs/README
 - Bootstrap changes in `mindspec init` for Copilot instruction/hook artifacts
 - `.github/copilot-instructions.md` content that serves both CLI and VS Code Chat surfaces
+- `mindspec setup copilot` command creating prompt files (`.github/prompts/*.prompt.md`) with feature parity to Claude's slash commands
 - Migration provider resolution and classifier execution path updates
 - Unit/integration tests for migrate provider behavior
 
@@ -91,12 +94,12 @@ This spec adds first-class Copilot onboarding (both surfaces) and migration-prov
 - Full AgentMind telemetry setup automation specifically for Copilot
 - Redesign of MindSpec workflow modes, state model, or Beads lifecycle
 - GitHub-hosted coding-agent policy configuration outside repository-controlled files
-- VS Code extension development or Copilot Chat extension points beyond `.github/copilot-instructions.md`
+- VS Code extension development or Copilot Chat extension points beyond `.github/copilot-instructions.md` and `.github/prompts/`
 
 ## Non-Goals
 
 - Replacing or regressing existing Claude/Codex integrations
-- Introducing Copilot-specific slash commands instead of direct `mindspec` CLI usage
+- Introducing Copilot-specific workflow logic — prompt files are thin shims that call `mindspec` CLI, same as Claude's slash commands
 - Building a generic multi-provider SDK beyond what migrate classification currently needs
 - Building a VS Code extension for Copilot Chat — the integration is purely via repository-native config files and CLI commands
 
@@ -106,6 +109,7 @@ This spec adds first-class Copilot onboarding (both surfaces) and migration-prov
 - [ ] The guide documents how VS Code Copilot Chat users drive the workflow (integrated terminal for CLI commands, `.github/copilot-instructions.md` for workspace context).
 - [ ] `mindspec init` creates Copilot bootstrap artifacts (`.github/copilot-instructions.md` and hook template) additively.
 - [ ] `.github/copilot-instructions.md` points to `AGENTS.md` for shared conventions (per ADR-0017) and works for both Copilot CLI and VS Code Copilot Chat.
+- [ ] `mindspec setup copilot` creates prompt files in `.github/prompts/` equivalent to Claude's slash commands (`spec-init`, `spec-approve`, `plan-approve`, `impl-approve`, `spec-status`).
 - [ ] Running `mindspec migrate plan` with `MINDSPEC_LLM_PROVIDER=copilot-cli` routes LLM classification through Copilot CLI and does not invoke Claude.
 - [ ] Running `mindspec migrate plan` with `MINDSPEC_LLM_PROVIDER=off` performs deterministic-only classification with no LLM CLI execution.
 - [ ] Running migrate with unset provider on a Copilot-only environment can resolve/use Copilot provider per documented precedence.
