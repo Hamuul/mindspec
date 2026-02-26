@@ -196,61 +196,40 @@ func TestRunClaude_MergesExistingSettings(t *testing.T) {
 	}
 }
 
-func TestWorktreeFileGuardScript_ReadsStdinJSON(t *testing.T) {
+func TestWantedHooks_UseMindspecHookCommands(t *testing.T) {
 	t.Parallel()
 
-	script := worktreeFileGuardScript()
-	// Must read from stdin (cat | jq), not env vars
-	if strings.Contains(script, "CLAUDE_TOOL_ARG") {
-		t.Error("file guard should not reference CLAUDE_TOOL_ARG env vars")
+	hooks := wantedHooks()
+	preToolUse, ok := hooks["PreToolUse"]
+	if !ok {
+		t.Fatal("missing PreToolUse hooks")
 	}
-	if !strings.Contains(script, "tool_input.file_path") {
-		t.Error("file guard should read tool_input.file_path from stdin JSON")
-	}
-	if !strings.Contains(script, "cat | jq") && !strings.Contains(script, "$(cat |") {
-		t.Error("file guard should pipe stdin to jq")
-	}
-	// Must allow both worktree AND main worktree paths (same git repo)
-	if !strings.Contains(script, `"$main"`) {
-		t.Error("file guard should allow main worktree paths (shared git repo)")
-	}
-}
 
-func TestWorktreeBashGuardScript_ReadsStdinJSON(t *testing.T) {
-	t.Parallel()
+	// Collect all commands from all PreToolUse entries
+	var allCommands []string
+	for _, entry := range preToolUse {
+		hooksList, ok := entry["hooks"].([]map[string]any)
+		if !ok {
+			continue
+		}
+		for _, h := range hooksList {
+			cmd, _ := h["command"].(string)
+			allCommands = append(allCommands, cmd)
+		}
+	}
 
-	script := worktreeBashGuardScript()
-	// Must read from stdin (cat | jq), not env vars
-	if strings.Contains(script, "CLAUDE_TOOL_ARG") {
-		t.Error("bash guard should not reference CLAUDE_TOOL_ARG env vars")
+	// All PreToolUse hooks should use mindspec hook commands, not inline shell
+	for _, cmd := range allCommands {
+		if !strings.HasPrefix(cmd, "mindspec hook ") {
+			t.Errorf("PreToolUse hook should use 'mindspec hook' command, got: %s", cmd)
+		}
 	}
-	if !strings.Contains(script, "tool_input.command") {
-		t.Error("bash guard should read tool_input.command from stdin JSON")
-	}
-	// Must allow cd, mindspec, bd, git commands
-	if !strings.Contains(script, `"cd "`) {
-		t.Error("bash guard should allow cd commands")
-	}
-	if !strings.Contains(script, `"git "`) {
-		t.Error("bash guard should allow git commands")
-	}
-	if !strings.Contains(script, `"mindspec "`) {
-		t.Error("bash guard should allow mindspec commands")
-	}
-	if !strings.Contains(script, `"bd "`) {
-		t.Error("bash guard should allow bd commands")
-	}
-}
 
-func TestNeedsClearBashGuardScript_ReadsStdinJSON(t *testing.T) {
-	t.Parallel()
-
-	script := needsClearBashGuardScript()
-	if strings.Contains(script, "CLAUDE_TOOL_ARG_COMMAND") {
-		t.Error("needs_clear guard should not reference CLAUDE_TOOL_ARG_COMMAND env var")
-	}
-	if !strings.Contains(script, "tool_input.command") {
-		t.Error("needs_clear guard should read tool_input.command from stdin JSON")
+	// Should have no jq references
+	for _, cmd := range allCommands {
+		if strings.Contains(cmd, "jq") {
+			t.Errorf("hooks should not contain jq references, got: %s", cmd)
+		}
 	}
 }
 
@@ -328,7 +307,7 @@ func TestRunClaude_UpdatesStaleHooks(t *testing.T) {
 	settingsPath := filepath.Join(root, ".claude", "settings.json")
 	data, _ := os.ReadFile(settingsPath)
 	// Replace a known substring to make it stale
-	tampered := strings.Replace(string(data), "tool_input.file_path", "STALE_ENV_VAR", 1)
+	tampered := strings.Replace(string(data), "mindspec hook worktree-file", "STALE_OLD_SCRIPT", 1)
 	os.WriteFile(settingsPath, []byte(tampered), 0o644)
 
 	// Second run: should detect and update stale hooks
@@ -350,11 +329,11 @@ func TestRunClaude_UpdatesStaleHooks(t *testing.T) {
 
 	// Verify the updated file no longer has the stale content
 	updated, _ := os.ReadFile(settingsPath)
-	if strings.Contains(string(updated), "STALE_ENV_VAR") {
+	if strings.Contains(string(updated), "STALE_OLD_SCRIPT") {
 		t.Error("stale hook command was not replaced")
 	}
-	if !strings.Contains(string(updated), "tool_input.file_path") {
-		t.Error("updated hook should contain tool_input.file_path")
+	if !strings.Contains(string(updated), "mindspec hook worktree-file") {
+		t.Error("updated hook should contain mindspec hook worktree-file")
 	}
 }
 
@@ -379,30 +358,26 @@ func TestWantedHooks_BashPreToolUseIncludesNeedsClearGuard(t *testing.T) {
 		t.Fatal("missing Bash matcher in PreToolUse")
 	}
 
-	// Should have at least 2 hooks (worktree guard + needs_clear guard)
+	// Should have at least 3 hooks (worktree-bash + needs-clear + workflow-guard)
 	hooksList, ok := bashEntry["hooks"].([]map[string]any)
 	if !ok {
 		t.Fatal("Bash hooks is not []map[string]any")
 	}
-	if len(hooksList) < 2 {
-		t.Fatalf("expected at least 2 Bash hooks, got %d", len(hooksList))
+	if len(hooksList) < 3 {
+		t.Fatalf("expected at least 3 Bash hooks, got %d", len(hooksList))
 	}
 
-	// Verify needs_clear guard is present
+	// Verify needs-clear guard is present
 	found := false
 	for _, h := range hooksList {
 		cmd, _ := h["command"].(string)
-		if strings.Contains(cmd, "needs_clear") && strings.Contains(cmd, "mindspec next") {
+		if cmd == "mindspec hook needs-clear" {
 			found = true
-			// Verify it allows --force
-			if !strings.Contains(cmd, "--force") {
-				t.Error("needs_clear guard should check for --force bypass")
-			}
 			break
 		}
 	}
 	if !found {
-		t.Error("Bash PreToolUse hooks missing needs_clear guard")
+		t.Error("Bash PreToolUse hooks missing mindspec hook needs-clear")
 	}
 }
 
