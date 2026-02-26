@@ -286,28 +286,28 @@ status: Draft
 **Depends on**: 006-A
 `
 
-	sections := parseBeadSections(content)
+	sections := ParseBeadSections(content)
 	if len(sections) != 2 {
 		t.Fatalf("expected 2 bead sections, got %d", len(sections))
 	}
 
-	if sections[0].stepsCount != 4 {
-		t.Errorf("bead A: expected 4 steps, got %d", sections[0].stepsCount)
+	if sections[0].StepsCount != 4 {
+		t.Errorf("bead A: expected 4 steps, got %d", sections[0].StepsCount)
 	}
-	if sections[0].verifyCount != 2 {
-		t.Errorf("bead A: expected 2 verification items, got %d", sections[0].verifyCount)
+	if sections[0].VerifyCount != 2 {
+		t.Errorf("bead A: expected 2 verification items, got %d", sections[0].VerifyCount)
 	}
-	if len(sections[0].verifyLines) != 2 {
-		t.Errorf("bead A: expected 2 verification lines, got %d", len(sections[0].verifyLines))
+	if len(sections[0].VerifyLines) != 2 {
+		t.Errorf("bead A: expected 2 verification lines, got %d", len(sections[0].VerifyLines))
 	}
-	if !sections[0].hasDependsOn {
+	if !sections[0].HasDependsOn {
 		t.Error("bead A: expected depends-on to be present")
 	}
 
-	if sections[1].stepsCount != 3 {
-		t.Errorf("bead B: expected 3 steps, got %d", sections[1].stepsCount)
+	if sections[1].StepsCount != 3 {
+		t.Errorf("bead B: expected 3 steps, got %d", sections[1].StepsCount)
 	}
-	if !sections[1].hasDependsOn {
+	if !sections[1].HasDependsOn {
 		t.Error("bead B: expected depends-on to be present")
 	}
 }
@@ -338,21 +338,21 @@ Something
 nothing
 `
 
-	sections := parseBeadSections(content)
+	sections := ParseBeadSections(content)
 	if len(sections) != 1 {
 		t.Fatalf("expected 1 bead section, got %d", len(sections))
 	}
 
-	if sections[0].stepsCount != 4 {
-		t.Errorf("expected 4 steps, got %d", sections[0].stepsCount)
+	if sections[0].StepsCount != 4 {
+		t.Errorf("expected 4 steps, got %d", sections[0].StepsCount)
 	}
-	if sections[0].verifyCount != 2 {
-		t.Errorf("expected 2 verification items, got %d", sections[0].verifyCount)
+	if sections[0].VerifyCount != 2 {
+		t.Errorf("expected 2 verification items, got %d", sections[0].VerifyCount)
 	}
-	if !sections[0].hasVerify {
+	if !sections[0].HasVerify {
 		t.Error("expected hasVerify to be true")
 	}
-	if !sections[0].hasDependsOn {
+	if !sections[0].HasDependsOn {
 		t.Error("expected hasDependsOn to be true")
 	}
 }

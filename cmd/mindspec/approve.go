@@ -99,6 +99,12 @@ Run 'mindspec next' after this to claim work and enter Implementation Mode.`,
 		if result.GateID != "" {
 			fmt.Printf("Gate resolved: %s\n", result.GateID)
 		}
+		if len(result.BeadIDs) > 0 {
+			fmt.Printf("Created %d implementation beads:\n", len(result.BeadIDs))
+			for _, id := range result.BeadIDs {
+				fmt.Printf("  - %s\n", id)
+			}
+		}
 		for _, w := range result.Warnings {
 			fmt.Fprintf(os.Stderr, "warning: %s\n", w)
 		}
