@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/mindspec/mindspec/internal/contextpack"
 	"github.com/mindspec/mindspec/internal/next"
 	"github.com/mindspec/mindspec/internal/recording"
 	"github.com/mindspec/mindspec/internal/resolve"
@@ -186,9 +187,22 @@ exist and no --spec is given, the command fails with a list of candidates.`,
 			}
 		}
 
-		// Step 8: Emit guidance (instruct-tail convention)
-		if err := emitInstruct(root); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: could not emit guidance: %v\n", err)
+		// Step 8: Emit bead primer (falls back to instruct-tail)
+		if resolved.SpecID != "" && selected.ID != "" {
+			primer, primerErr := contextpack.BuildBeadPrimer(root, resolved.SpecID, selected.ID)
+			if primerErr == nil {
+				fmt.Println()
+				fmt.Print(contextpack.RenderBeadPrimer(primer))
+			} else {
+				fmt.Fprintf(os.Stderr, "warning: could not build bead primer: %v (falling back to generic guidance)\n", primerErr)
+				if err := emitInstruct(root); err != nil {
+					fmt.Fprintf(os.Stderr, "warning: could not emit guidance: %v\n", err)
+				}
+			}
+		} else {
+			if err := emitInstruct(root); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: could not emit guidance: %v\n", err)
+			}
 		}
 
 		return nil

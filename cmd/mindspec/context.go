@@ -2,28 +2,23 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
-	"time"
 
 	"github.com/mindspec/mindspec/internal/contextpack"
-	"github.com/mindspec/mindspec/internal/trace"
-	"github.com/mindspec/mindspec/internal/workspace"
 	"github.com/spf13/cobra"
 )
 
 var contextCmd = &cobra.Command{
 	Use:   "context",
-	Short: "Context pack generation commands",
-	Long:  `Assemble DDD-informed context packs for agent sessions.`,
+	Short: "Context generation commands",
+	Long:  `Generate bead-scoped context primers for agent sessions.`,
 }
 
-var contextPackMode string
-
-var contextPackCmd = &cobra.Command{
-	Use:   "pack <spec-id>",
-	Short: "Generate a context pack for a spec",
-	Long: `Generate a context-pack.md file bundling domain docs, ADRs, policies,
-and provenance for the specified spec. Content varies by --mode.`,
+var contextBeadCmd = &cobra.Command{
+	Use:   "bead <spec-id>",
+	Short: "Generate a bead context primer",
+	Long: `Generate a bead-scoped context primer to stdout.
+Includes bead scope, spec requirements, plan work chunk, ADR decisions,
+and domain overviews — everything an agent needs to start a bead.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		root, err := findRoot()
@@ -32,57 +27,22 @@ and provenance for the specified spec. Content varies by --mode.`,
 		}
 
 		specID := args[0]
-		mode := contextPackMode
-
-		// Validate mode
-		switch mode {
-		case contextpack.ModeSpec, contextpack.ModePlan, contextpack.ModeImplement:
-			// valid
-		default:
-			return fmt.Errorf("invalid mode %q: must be spec, plan, or implement", mode)
+		beadID, _ := cmd.Flags().GetString("bead")
+		if beadID == "" {
+			return fmt.Errorf("--bead is required")
 		}
 
-		buildStart := time.Now()
-		pack, err := contextpack.Build(root, specID, mode)
+		primer, err := contextpack.BuildBeadPrimer(root, specID, beadID)
 		if err != nil {
-			return fmt.Errorf("building context pack: %w", err)
+			return fmt.Errorf("building bead primer: %w", err)
 		}
 
-		// Emit trace with per-section token breakdown
-		sectionTokens := make(map[string]any)
-		tokensTotal := 0
-		rendered := pack.Render()
-		for _, s := range pack.Sections {
-			t := trace.EstimateTokens(s.Content)
-			sectionTokens[s.Heading] = t
-			tokensTotal += t
-		}
-		trace.Emit(trace.NewEvent("contextpack.build").
-			WithSpec(specID).
-			WithDuration(time.Since(buildStart)).
-			WithTokens(trace.EstimateTokens(rendered)).
-			WithData(map[string]any{
-				"tokens_total":  tokensTotal,
-				"sections":      sectionTokens,
-				"section_count": len(pack.Sections),
-				"mode":          mode,
-			}))
-
-		if err := pack.WriteToFile(root, specID); err != nil {
-			return fmt.Errorf("writing context pack: %w", err)
-		}
-
-		outPath := filepath.Join(workspace.SpecDir(root, specID), "context-pack.md")
-		relPath, err := filepath.Rel(root, outPath)
-		if err != nil {
-			relPath = outPath
-		}
-		fmt.Printf("Context pack generated: %s (mode=%s)\n", filepath.ToSlash(relPath), mode)
+		fmt.Print(contextpack.RenderBeadPrimer(primer))
 		return nil
 	},
 }
 
 func init() {
-	contextPackCmd.Flags().StringVar(&contextPackMode, "mode", "spec", "content tier: spec, plan, or implement")
-	contextCmd.AddCommand(contextPackCmd)
+	contextBeadCmd.Flags().String("bead", "", "Bead ID to generate primer for (required)")
+	contextCmd.AddCommand(contextBeadCmd)
 }

@@ -1,254 +1,166 @@
 package contextpack
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
 
-// setupTestProject creates a minimal project structure for integration testing.
-func setupTestProject(t *testing.T) string {
-	t.Helper()
-	root := t.TempDir()
-
-	// Spec
-	specDir := filepath.Join(root, "docs", "specs", "001-test")
-	os.MkdirAll(specDir, 0o755)
-	os.WriteFile(filepath.Join(specDir, "spec.md"), []byte(`# Spec 001: Test
+func TestExtractSection(t *testing.T) {
+	content := `# Spec
 
 ## Goal
 
 Build a test feature.
 
-## Impacted Domains
-
-- core: CLI and workspace
-- context-system: context delivery
-
 ## Requirements
 
-1. Test requirement
-`), 0o644)
+1. First requirement
+2. Second requirement
 
-	// Domain docs - core
-	coreDir := filepath.Join(root, "docs", "domains", "core")
-	os.MkdirAll(coreDir, 0o755)
-	os.WriteFile(filepath.Join(coreDir, "overview.md"), []byte("# Core Overview\nCore owns the CLI."), 0o644)
-	os.WriteFile(filepath.Join(coreDir, "architecture.md"), []byte("# Core Architecture\nCLI patterns."), 0o644)
-	os.WriteFile(filepath.Join(coreDir, "interfaces.md"), []byte("# Core Interfaces\nFindRoot() etc."), 0o644)
-	os.WriteFile(filepath.Join(coreDir, "runbook.md"), []byte("# Core Runbook\nBuild with make."), 0o644)
+## Acceptance Criteria
 
-	// Domain docs - context-system
-	csDir := filepath.Join(root, "docs", "domains", "context-system")
-	os.MkdirAll(csDir, 0o755)
-	os.WriteFile(filepath.Join(csDir, "overview.md"), []byte("# Context-System Overview\nOwns context packs."), 0o644)
-	os.WriteFile(filepath.Join(csDir, "architecture.md"), []byte("# Context-System Architecture\nDDD routing."), 0o644)
-	os.WriteFile(filepath.Join(csDir, "interfaces.md"), []byte("# Context-System Interfaces\nBuild() etc."), 0o644)
-	os.WriteFile(filepath.Join(csDir, "runbook.md"), []byte("# Context-System Runbook\nGenerate packs."), 0o644)
+- AC1: Thing works
+- AC2: Other thing works
 
-	// Neighbor domain - workflow
-	wfDir := filepath.Join(root, "docs", "domains", "workflow")
-	os.MkdirAll(wfDir, 0o755)
-	os.WriteFile(filepath.Join(wfDir, "overview.md"), []byte("# Workflow Overview\nModes and lifecycle."), 0o644)
-	os.WriteFile(filepath.Join(wfDir, "interfaces.md"), []byte("# Workflow Interfaces\nSpec metadata."), 0o644)
+## Background
 
-	// Context map
-	os.WriteFile(filepath.Join(root, "docs", "context-map.md"), []byte(`# Context Map
-
-## Relationships
-
-### Core → Context-System (upstream)
-
-Core provides workspace resolution.
-
-**Contract**: [interfaces](domains/core/interfaces.md)
-
-### Core → Workflow (upstream)
-
-Core provides CLI shell.
-
-**Contract**: [interfaces](domains/core/interfaces.md)
-
-### Workflow → Context-System (upstream)
-
-Workflow provides spec metadata.
-
-**Contract**: [interfaces](domains/workflow/interfaces.md)
-
-### Context-System → Workflow (downstream)
-
-Context-system delivers context packs.
-`), 0o644)
-
-	// ADRs
-	adrDir := filepath.Join(root, "docs", "adr")
-	os.MkdirAll(adrDir, 0o755)
-	os.WriteFile(filepath.Join(adrDir, "ADR-0001.md"), []byte(`# ADR-0001: DDD
-
-- **Status**: Accepted
-- **Domain(s)**: core, context-system
-
-## Decision
-Use DDD.
-`), 0o644)
-	os.WriteFile(filepath.Join(adrDir, "ADR-0002.md"), []byte(`# ADR-0002: Beads
-
-- **Status**: Accepted
-- **Domain(s)**: workflow
-
-## Decision
-Beads as substrate.
-`), 0o644)
-
-	return root
-}
-
-func TestBuild_SpecMode(t *testing.T) {
-	root := setupTestProject(t)
-
-	pack, err := Build(root, "001-test", ModeSpec)
-	if err != nil {
-		t.Fatalf("Build: %v", err)
+Some background.
+`
+	tests := []struct {
+		heading string
+		want    string
+	}{
+		{"Goal", "Build a test feature."},
+		{"Requirements", "1. First requirement\n2. Second requirement"},
+		{"Acceptance Criteria", "- AC1: Thing works\n- AC2: Other thing works"},
+		{"Background", "Some background."},
+		{"Nonexistent", ""},
 	}
 
-	if pack.SpecID != "001-test" {
-		t.Errorf("SpecID = %q", pack.SpecID)
-	}
-	if pack.Mode != ModeSpec {
-		t.Errorf("Mode = %q", pack.Mode)
-	}
-	if pack.Goal != "Build a test feature." {
-		t.Errorf("Goal = %q", pack.Goal)
-	}
-
-	rendered := pack.Render()
-
-	// Spec mode should include overview but NOT architecture
-	if !strings.Contains(rendered, "Core Overview") {
-		t.Error("missing core overview in spec mode")
-	}
-	if strings.Contains(rendered, "Core Architecture") {
-		t.Error("spec mode should not include architecture")
-	}
-
-	// Should include ADR-0001 (domains: core, context-system) but not ADR-0002 (workflow)
-	if !strings.Contains(rendered, "ADR-0001") {
-		t.Error("missing ADR-0001")
-	}
-	if strings.Contains(rendered, "ADR-0002") {
-		t.Error("should not include ADR-0002 (workflow domain only)")
-	}
-
-	// Provenance
-	if !strings.Contains(rendered, "## Provenance") {
-		t.Error("missing provenance section")
+	for _, tt := range tests {
+		t.Run(tt.heading, func(t *testing.T) {
+			got := ExtractSection(content, tt.heading)
+			if got != tt.want {
+				t.Errorf("ExtractSection(%q) = %q, want %q", tt.heading, got, tt.want)
+			}
+		})
 	}
 }
 
-func TestBuild_PlanMode(t *testing.T) {
-	root := setupTestProject(t)
-
-	pack, err := Build(root, "001-test", ModePlan)
-	if err != nil {
-		t.Fatalf("Build: %v", err)
-	}
-
-	rendered := pack.Render()
-
-	// Plan mode should include architecture
-	if !strings.Contains(rendered, "Core Architecture") {
-		t.Error("plan mode should include architecture")
-	}
-
-	// Plan mode should include neighbor interfaces
-	if !strings.Contains(rendered, "Workflow Interfaces") {
-		t.Error("plan mode should include neighbor interfaces")
-	}
-
-	// Plan mode should NOT include impacted domain interfaces (that's implement tier)
-	if strings.Contains(rendered, "Domain: core — Interfaces") {
-		t.Error("plan mode should not include impacted domain interfaces")
+func TestExtractSection_CaseInsensitive(t *testing.T) {
+	content := "## decision\n\nUse DDD.\n"
+	got := ExtractSection(content, "Decision")
+	if got != "Use DDD." {
+		t.Errorf("got %q, want %q", got, "Use DDD.")
 	}
 }
 
-func TestBuild_ImplementMode(t *testing.T) {
-	root := setupTestProject(t)
-
-	pack, err := Build(root, "001-test", ModeImplement)
-	if err != nil {
-		t.Fatalf("Build: %v", err)
+func TestExtractFilePathsFromText(t *testing.T) {
+	text := `
+1. Modify internal/state/state.go to add the flag
+2. Update cmd/mindspec/next.go and cmd/mindspec/state.go
+3. Also check internal/complete/complete_test.go
+`
+	paths := ExtractFilePathsFromText(text)
+	if len(paths) != 4 {
+		t.Fatalf("expected 4 paths, got %d: %v", len(paths), paths)
 	}
-
-	rendered := pack.Render()
-
-	// Implement mode should include everything
-	if !strings.Contains(rendered, "Core Architecture") {
-		t.Error("implement mode should include architecture")
+	expected := []string{
+		"internal/state/state.go",
+		"cmd/mindspec/next.go",
+		"cmd/mindspec/state.go",
+		"internal/complete/complete_test.go",
 	}
-	if !strings.Contains(rendered, "Domain: core — Interfaces") {
-		t.Error("implement mode should include impacted domain interfaces")
-	}
-	if !strings.Contains(rendered, "Core Runbook") {
-		t.Error("implement mode should include runbook")
-	}
-	if !strings.Contains(rendered, "Workflow Interfaces") {
-		t.Error("implement mode should include neighbor interfaces")
-	}
-}
-
-func TestBuild_NonexistentSpec(t *testing.T) {
-	root := setupTestProject(t)
-	_, err := Build(root, "nonexistent", ModeSpec)
-	if err == nil {
-		t.Fatal("expected error for nonexistent spec")
-	}
-}
-
-func TestWriteToFile(t *testing.T) {
-	root := setupTestProject(t)
-
-	pack, err := Build(root, "001-test", ModeSpec)
-	if err != nil {
-		t.Fatalf("Build: %v", err)
-	}
-
-	if err := pack.WriteToFile(root, "001-test"); err != nil {
-		t.Fatalf("WriteToFile: %v", err)
-	}
-
-	outPath := filepath.Join(root, "docs", "specs", "001-test", "context-pack.md")
-	data, err := os.ReadFile(outPath)
-	if err != nil {
-		t.Fatalf("reading output: %v", err)
-	}
-
-	content := string(data)
-	if !strings.Contains(content, "# Context Pack") {
-		t.Error("output missing header")
-	}
-	if !strings.Contains(content, "## Provenance") {
-		t.Error("output missing provenance")
-	}
-}
-
-func TestProvenance_HasEntryPerSection(t *testing.T) {
-	root := setupTestProject(t)
-
-	pack, err := Build(root, "001-test", ModeSpec)
-	if err != nil {
-		t.Fatalf("Build: %v", err)
-	}
-
-	// In spec mode with 2 impacted domains: 2 overviews + 1 ADR + 1 policies = 4 provenance entries
-	if len(pack.Provenance) < 3 {
-		t.Errorf("expected at least 3 provenance entries, got %d", len(pack.Provenance))
-	}
-
-	// Each section should have a corresponding provenance entry
-	for _, p := range pack.Provenance {
-		if p.Source == "" || p.Reason == "" {
-			t.Errorf("provenance entry missing source or reason: %+v", p)
+	for i, want := range expected {
+		if paths[i] != want {
+			t.Errorf("path[%d] = %q, want %q", i, paths[i], want)
 		}
+	}
+}
+
+func TestExtractFilePathsFromText_BacktickWrapped(t *testing.T) {
+	text := "Modify `internal/foo/bar.go` to add feature"
+	paths := ExtractFilePathsFromText(text)
+	if len(paths) != 1 || paths[0] != "internal/foo/bar.go" {
+		t.Errorf("got %v", paths)
+	}
+}
+
+func TestExtractFilePathsFromText_NoPaths(t *testing.T) {
+	text := "No file paths here at all."
+	paths := ExtractFilePathsFromText(text)
+	if len(paths) != 0 {
+		t.Errorf("expected 0 paths, got %v", paths)
+	}
+}
+
+func TestExtractFilePathsFromText_Dedup(t *testing.T) {
+	text := "internal/foo.go and internal/foo.go again"
+	paths := ExtractFilePathsFromText(text)
+	if len(paths) != 1 {
+		t.Errorf("expected 1 deduplicated path, got %v", paths)
+	}
+}
+
+func TestRenderBeadPrimer_AllSections(t *testing.T) {
+	p := &BeadPrimer{
+		BeadID:             "bead-123",
+		BeadTitle:          "Test Bead",
+		BeadDescription:    "Do the thing",
+		SpecID:             "047-test",
+		Requirements:       "1. Req one",
+		AcceptanceCriteria: "- AC1",
+		PlanWorkChunk:      "Step 1\nStep 2",
+		FilePaths:          []string{"internal/foo.go", "cmd/bar.go"},
+		ADRDecisions:       []ADRDecision{{ID: "ADR-0001", Decision: "Use DDD"}},
+		DomainOverviews:    []DomainOverview{{Domain: "core", Overview: "Core overview"}},
+		EstimatedTokens:    500,
+	}
+
+	rendered := RenderBeadPrimer(p)
+
+	checks := []string{
+		"# Bead Context: Test Bead",
+		"**Spec**: 047-test",
+		"**Bead**: bead-123",
+		"~500 tokens",
+		"## Scope",
+		"Do the thing",
+		"## Requirements",
+		"1. Req one",
+		"## Acceptance Criteria",
+		"- AC1",
+		"## Work Chunk",
+		"Step 1",
+		"## Key File Paths",
+		"internal/foo.go",
+		"## ADR Decisions",
+		"ADR-0001",
+		"Use DDD",
+		"## Domain Context",
+		"### core",
+		"Core overview",
+	}
+	for _, check := range checks {
+		if !strings.Contains(rendered, check) {
+			t.Errorf("rendered primer missing %q", check)
+		}
+	}
+}
+
+func TestRenderBeadPrimer_MinimalFields(t *testing.T) {
+	p := &BeadPrimer{
+		BeadID:    "bead-1",
+		BeadTitle: "Minimal",
+		SpecID:    "001",
+	}
+
+	rendered := RenderBeadPrimer(p)
+	if !strings.Contains(rendered, "# Bead Context: Minimal") {
+		t.Error("missing header")
+	}
+	// Should not contain sections with no data
+	if strings.Contains(rendered, "## Scope") {
+		t.Error("should not include empty Scope section")
 	}
 }

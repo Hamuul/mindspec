@@ -1,264 +1,89 @@
 package contextpack
 
 import (
-	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
-
-	"github.com/mindspec/mindspec/internal/workspace"
 )
 
-// Mode constants for context pack generation.
-const (
-	ModeSpec      = "spec"
-	ModePlan      = "plan"
-	ModeImplement = "implement"
-)
+// ExtractSection extracts the content under a markdown ## heading, collecting
+// lines until the next ## heading or EOF. Returns empty string if not found.
+func ExtractSection(content, heading string) string {
+	lines := strings.Split(content, "\n")
+	var collecting bool
+	var result []string
 
-// ProvenanceEntry records why a piece of content was included.
-type ProvenanceEntry struct {
-	Source  string
-	Section string
-	Reason  string
-}
-
-// ContextPack is the assembled context for a spec.
-type ContextPack struct {
-	SpecID      string
-	Mode        string
-	CommitSHA   string
-	GeneratedAt string
-	Goal        string
-	Domains     []string
-	Neighbors   []string
-	Sections    []PackSection
-	Provenance  []ProvenanceEntry
-}
-
-// PackSection represents a titled section within a context pack.
-type PackSection struct {
-	Heading string
-	Content string
-}
-
-// Build assembles a context pack for the given spec and mode.
-func Build(root, specID, mode string) (*ContextPack, error) {
-	specDir := workspace.SpecDir(root, specID)
-
-	// Parse spec
-	meta, err := ParseSpec(specDir)
-	if err != nil {
-		return nil, fmt.Errorf("parsing spec %q: %w", specID, err)
-	}
-
-	pack := &ContextPack{
-		SpecID:      specID,
-		Mode:        mode,
-		CommitSHA:   gitCommitSHA(root),
-		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
-		Goal:        meta.Goal,
-		Domains:     meta.Domains,
-	}
-
-	// Read domain docs for impacted domains
-	for _, domain := range meta.Domains {
-		doc, err := ReadDomainDocs(root, domain)
-		if err != nil {
-			return nil, fmt.Errorf("reading domain docs for %q: %w", domain, err)
+	for _, line := range lines {
+		if strings.HasPrefix(line, "## ") {
+			if collecting {
+				break
+			}
+			h := strings.TrimSpace(strings.TrimPrefix(line, "## "))
+			if strings.EqualFold(h, heading) {
+				collecting = true
+				continue
+			}
 		}
-		addDomainSections(pack, doc, mode, false)
+		if collecting {
+			result = append(result, line)
+		}
 	}
 
-	// Parse context map and resolve neighbors
-	cmPath := workspace.ContextMapPath(root)
-	rels, err := ParseContextMap(cmPath)
-	if err != nil {
-		// Context map is optional; log but don't fail
-		if !os.IsNotExist(err) {
-			return nil, fmt.Errorf("parsing context map: %w", err)
-		}
-	} else {
-		pack.Neighbors = ResolveNeighbors(rels, meta.Domains)
+	return strings.TrimSpace(strings.Join(result, "\n"))
+}
 
-		// For plan and implement modes, include neighbor interfaces
-		if mode == ModePlan || mode == ModeImplement {
-			for _, neighbor := range pack.Neighbors {
-				doc, err := ReadDomainDocs(root, neighbor)
-				if err != nil {
-					continue
+// ExtractFilePathsFromText scans text for references to source file paths.
+func ExtractFilePathsFromText(text string) []string {
+	prefixes := []string{"internal/", "cmd/", "pkg/"}
+	seen := map[string]bool{}
+	var paths []string
+
+	for _, line := range strings.Split(text, "\n") {
+		for _, prefix := range prefixes {
+			idx := strings.Index(line, prefix)
+			for idx >= 0 {
+				// Extract path: take chars until whitespace, backtick, paren, comma
+				end := idx
+				for end < len(line) {
+					c := line[end]
+					if c == ' ' || c == '\t' || c == '`' || c == ')' || c == '(' || c == ',' || c == ';' {
+						break
+					}
+					end++
 				}
-				if doc.Interfaces != "" {
-					pack.Sections = append(pack.Sections, PackSection{
-						Heading: fmt.Sprintf("Neighbor Domain: %s — Interfaces", neighbor),
-						Content: doc.Interfaces,
-					})
-					pack.Provenance = append(pack.Provenance, ProvenanceEntry{
-						Source:  doc.InterfacesPath,
-						Section: "Neighbor Interfaces",
-						Reason:  "1-hop neighbor via Context Map",
-					})
+				path := line[idx:end]
+				// Clean trailing punctuation
+				path = strings.TrimRight(path, ".:;,)")
+				if path != "" && !seen[path] {
+					seen[path] = true
+					paths = append(paths, path)
 				}
+				// Continue scanning the rest of the line
+				remaining := line[end:]
+				nextIdx := -1
+				for _, p := range prefixes {
+					if i := strings.Index(remaining, p); i >= 0 && (nextIdx < 0 || i < nextIdx) {
+						nextIdx = i
+					}
+				}
+				if nextIdx < 0 {
+					break
+				}
+				idx = end + nextIdx
 			}
 		}
 	}
 
-	// Scan and filter ADRs
-	adrs, err := ScanADRs(root)
+	return paths
+}
+
+// readFileContent reads a file and returns its content, or empty string on error.
+func readFileContent(path string) string {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("scanning ADRs: %w", err)
+		return ""
 	}
-
-	// Collect all relevant domains (impacted + neighbors for broader ADR coverage)
-	relevantDomains := make([]string, len(meta.Domains))
-	copy(relevantDomains, meta.Domains)
-
-	filtered := FilterADRs(adrs, relevantDomains)
-	for _, adr := range filtered {
-		pack.Sections = append(pack.Sections, PackSection{
-			Heading: fmt.Sprintf("ADR: %s", adr.ID),
-			Content: adr.Content,
-		})
-		pack.Provenance = append(pack.Provenance, ProvenanceEntry{
-			Source:  filepath.ToSlash(relPath(root, adr.Path)),
-			Section: adr.ID,
-			Reason:  fmt.Sprintf("Accepted ADR for domains: %s", strings.Join(adr.Domains, ", ")),
-		})
-	}
-
-	return pack, nil
-}
-
-// addDomainSections adds domain doc sections based on mode tier rules.
-func addDomainSections(pack *ContextPack, doc *DomainDoc, mode string, isNeighbor bool) {
-	domain := doc.Domain
-
-	// All modes: overview
-	if doc.Overview != "" {
-		pack.Sections = append(pack.Sections, PackSection{
-			Heading: fmt.Sprintf("Domain: %s — Overview", domain),
-			Content: doc.Overview,
-		})
-		pack.Provenance = append(pack.Provenance, ProvenanceEntry{
-			Source:  doc.OverviewPath,
-			Section: "Overview",
-			Reason:  "Impacted domain overview",
-		})
-	}
-
-	// Plan + Implement: architecture
-	if (mode == ModePlan || mode == ModeImplement) && doc.Architecture != "" {
-		pack.Sections = append(pack.Sections, PackSection{
-			Heading: fmt.Sprintf("Domain: %s — Architecture", domain),
-			Content: doc.Architecture,
-		})
-		pack.Provenance = append(pack.Provenance, ProvenanceEntry{
-			Source:  doc.ArchitecturePath,
-			Section: "Architecture",
-			Reason:  "Impacted domain architecture (plan/implement tier)",
-		})
-	}
-
-	// Implement only: interfaces + runbook
-	if mode == ModeImplement {
-		if doc.Interfaces != "" {
-			pack.Sections = append(pack.Sections, PackSection{
-				Heading: fmt.Sprintf("Domain: %s — Interfaces", domain),
-				Content: doc.Interfaces,
-			})
-			pack.Provenance = append(pack.Provenance, ProvenanceEntry{
-				Source:  doc.InterfacesPath,
-				Section: "Interfaces",
-				Reason:  "Impacted domain interfaces (implement tier)",
-			})
-		}
-		if doc.Runbook != "" {
-			pack.Sections = append(pack.Sections, PackSection{
-				Heading: fmt.Sprintf("Domain: %s — Runbook", domain),
-				Content: doc.Runbook,
-			})
-			pack.Provenance = append(pack.Provenance, ProvenanceEntry{
-				Source:  doc.RunbookPath,
-				Section: "Runbook",
-				Reason:  "Impacted domain runbook (implement tier)",
-			})
-		}
-	}
-}
-
-// Render produces the markdown content for the context pack.
-func (cp *ContextPack) Render() string {
-	var b strings.Builder
-
-	b.WriteString("# Context Pack\n\n")
-	b.WriteString(fmt.Sprintf("- **Spec**: %s\n", cp.SpecID))
-	b.WriteString(fmt.Sprintf("- **Mode**: %s\n", cp.Mode))
-	b.WriteString(fmt.Sprintf("- **Commit**: %s\n", cp.CommitSHA))
-	b.WriteString(fmt.Sprintf("- **Generated**: %s\n", cp.GeneratedAt))
-	b.WriteString("\n---\n\n")
-
-	// Goal
-	b.WriteString("## Goal\n\n")
-	b.WriteString(cp.Goal)
-	b.WriteString("\n\n")
-
-	// Impacted domains
-	b.WriteString("## Impacted Domains\n\n")
-	for _, d := range cp.Domains {
-		b.WriteString(fmt.Sprintf("- %s\n", d))
-	}
-	b.WriteString("\n")
-
-	if len(cp.Neighbors) > 0 {
-		b.WriteString("## 1-Hop Neighbors\n\n")
-		for _, n := range cp.Neighbors {
-			b.WriteString(fmt.Sprintf("- %s\n", n))
-		}
-		b.WriteString("\n")
-	}
-
-	// Content sections
-	for _, s := range cp.Sections {
-		b.WriteString(fmt.Sprintf("## %s\n\n", s.Heading))
-		b.WriteString(s.Content)
-		if !strings.HasSuffix(s.Content, "\n") {
-			b.WriteString("\n")
-		}
-		b.WriteString("\n")
-	}
-
-	// Provenance
-	b.WriteString("---\n\n")
-	b.WriteString("## Provenance\n\n")
-	b.WriteString("| Source | Section | Reason |\n")
-	b.WriteString("|:-------|:--------|:-------|\n")
-	for _, p := range cp.Provenance {
-		b.WriteString(fmt.Sprintf("| %s | %s | %s |\n", p.Source, p.Section, p.Reason))
-	}
-
-	return b.String()
-}
-
-// WriteToFile writes the rendered context pack to the spec directory.
-func (cp *ContextPack) WriteToFile(root, specID string) error {
-	outDir := workspace.SpecDir(root, specID)
-	if err := os.MkdirAll(outDir, 0o755); err != nil {
-		return fmt.Errorf("creating output dir: %w", err)
-	}
-	outPath := filepath.Join(outDir, "context-pack.md")
-	return os.WriteFile(outPath, []byte(cp.Render()), 0o644)
-}
-
-func gitCommitSHA(root string) string {
-	cmd := exec.Command("git", "rev-parse", "HEAD")
-	cmd.Dir = root
-	out, err := cmd.Output()
-	if err != nil {
-		return "unknown"
-	}
-	return strings.TrimSpace(string(out))
+	return string(data)
 }
 
 func relPath(root, p string) string {
