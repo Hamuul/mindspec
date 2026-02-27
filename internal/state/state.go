@@ -35,7 +35,6 @@ type State struct {
 	SpecBranch     string            `json:"specBranch,omitempty"`
 	ActiveMolecule string            `json:"activeMolecule,omitempty"`
 	StepMapping      map[string]string `json:"stepMapping,omitempty"`
-	NeedsClear       bool              `json:"needs_clear,omitempty"`       // Deprecated: replaced by session freshness fields. Removed in Bead 3.
 	SessionSource    string            `json:"sessionSource,omitempty"`
 	SessionStartedAt string            `json:"sessionStartedAt,omitempty"`
 	BeadClaimedAt    string            `json:"beadClaimedAt,omitempty"`
