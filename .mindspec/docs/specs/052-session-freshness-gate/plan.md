@@ -1,9 +1,13 @@
 ---
-approved_at: ""
-approved_by: ""
+approved_at: "2026-02-27T07:37:36Z"
+approved_by: user
+bead_ids:
+    - mindspec-mol-wrx3o.1
+    - mindspec-mol-wrx3o.2
+    - mindspec-mol-wrx3o.3
 last_updated: 2026-02-27T00:00:00Z
 spec_id: 052-session-freshness-gate
-status: Draft
+status: Approved
 version: 1
 ---
 
