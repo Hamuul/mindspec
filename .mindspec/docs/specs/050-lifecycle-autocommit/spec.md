@@ -15,6 +15,7 @@ step_mapping:
 
 
 
+
 # Spec 050-lifecycle-autocommit: Auto-commit spec artifacts at lifecycle boundaries
 
 ## Goal
