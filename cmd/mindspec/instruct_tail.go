@@ -25,13 +25,7 @@ func emitInstruct(root string) error {
 		return nil
 	}
 
-	// Build a State from mode-cache for instruct.BuildContext compatibility.
-	s := &state.State{
-		Mode:       mc.Mode,
-		ActiveSpec: mc.ActiveSpec,
-		ActiveBead: mc.ActiveBead,
-	}
-	ctx := instruct.BuildContext(root, s)
+	ctx := instruct.BuildContext(root, mc)
 
 	// Add worktree check when an active worktree is set.
 	if mc.ActiveWorktree != "" {

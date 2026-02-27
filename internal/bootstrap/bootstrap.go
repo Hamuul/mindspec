@@ -1,13 +1,11 @@
 package bootstrap
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/mindspec/mindspec/internal/templates"
 )
@@ -166,9 +164,7 @@ func manifest() []manifestItem {
 		{path: "AGENTS.md", content: starterAgentsMD, appendBlock: appendAgentsBlock},
 		{path: "CLAUDE.md", content: starterClaudeMD, appendBlock: appendClaudeBlock},
 		{path: ".github/copilot-instructions.md", content: starterCopilotInstructionsMD, appendBlock: appendCopilotBlock},
-		{path: ".mindspec/state.json", contentFunc: starterState},
-
-		// Gitignore: state.json is a local runtime cursor, not version-controlled
+		// Gitignore: session.json and mode-cache are local runtime files, not version-controlled
 		{path: ".gitignore", content: starterGitignore},
 
 		// Beads formula (required by spec-init)
@@ -197,20 +193,10 @@ func fileExists(path string) bool {
 	return err == nil && !info.IsDir()
 }
 
-func starterState() string {
-	s := map[string]string{
-		"mode":        "idle",
-		"activeSpec":  "",
-		"activeBead":  "",
-		"lastUpdated": time.Now().UTC().Format(time.RFC3339),
-	}
-	data, _ := json.MarshalIndent(s, "", "  ")
-	return string(data) + "\n"
-}
-
-// starterGitignore ensures state.json is gitignored in new projects.
-const starterGitignore = `# MindSpec local state (runtime cursor, not version-controlled)
-.mindspec/state.json
+// starterGitignore ensures session.json and mode-cache are gitignored in new projects.
+const starterGitignore = `# MindSpec local runtime files (not version-controlled)
+.mindspec/session.json
+.mindspec/mode-cache
 `
 
 // --- Starter file content ---

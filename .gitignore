@@ -1,7 +1,5 @@
-# Mindspec local state — state.json is a local runtime cursor (ADR-0015),
-# not version-controlled. It contains machine-local paths (activeWorktree)
-# and is derivable from molecules via `mindspec instruct`.
-.mindspec/state.json
+# MindSpec local runtime files (ADR-0015) — not version-controlled.
+# Mode and state are derived from molecules; these are transient caches.
 .mindspec/session.json
 .mindspec/mode-cache
 .mindspec/current-spec.json

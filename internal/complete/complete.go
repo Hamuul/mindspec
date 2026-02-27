@@ -189,7 +189,7 @@ func advanceState(root, specID string) (mode, nextBead string) {
 		return state.ModeIdle, ""
 	}
 
-	// Read step mapping from spec frontmatter (not state.json)
+	// Read step mapping from spec frontmatter
 	meta, err := ensureFullyBoundFn(root, specID)
 	if err != nil || meta == nil {
 		return state.ModeIdle, ""

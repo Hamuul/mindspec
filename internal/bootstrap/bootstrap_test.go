@@ -25,7 +25,6 @@ func TestRun_EmptyDir(t *testing.T) {
 	requiredFiles := []string{
 		"CLAUDE.md",
 		".github/copilot-instructions.md",
-		".mindspec/state.json",
 	}
 	for _, f := range requiredFiles {
 		p := filepath.Join(root, f)
@@ -161,28 +160,6 @@ func TestRun_PartialExists(t *testing.T) {
 	}
 	if !created["AGENTS.md"] {
 		t.Error("expected AGENTS.md to be created")
-	}
-}
-
-func TestRun_StateFileContent(t *testing.T) {
-	root := t.TempDir()
-
-	_, err := Run(root, false)
-	if err != nil {
-		t.Fatalf("Run() error: %v", err)
-	}
-
-	data, err := os.ReadFile(filepath.Join(root, ".mindspec/state.json"))
-	if err != nil {
-		t.Fatalf("reading state.json: %v", err)
-	}
-
-	content := string(data)
-	if !contains(content, `"mode": "idle"`) {
-		t.Error("state.json should contain mode=idle")
-	}
-	if !contains(content, `"activeSpec": ""`) {
-		t.Error("state.json should contain empty activeSpec")
 	}
 }
 

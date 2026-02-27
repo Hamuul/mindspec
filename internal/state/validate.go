@@ -17,8 +17,8 @@ type Warning struct {
 	Message string
 }
 
-// CrossValidate checks state.json against artifact state and returns warnings for any drift.
-func CrossValidate(root string, s *State) []Warning {
+// CrossValidate checks mode-cache against artifact state and returns warnings for any drift.
+func CrossValidate(root string, s *ModeCache) []Warning {
 	var warnings []Warning
 
 	switch s.Mode {
@@ -35,7 +35,7 @@ func CrossValidate(root string, s *State) []Warning {
 	return warnings
 }
 
-func validateSpecMode(root string, s *State) []Warning {
+func validateSpecMode(root string, s *ModeCache) []Warning {
 	var warnings []Warning
 
 	if s.ActiveSpec == "" {
@@ -77,7 +77,7 @@ func validateSpecMode(root string, s *State) []Warning {
 	return warnings
 }
 
-func validatePlanMode(root string, s *State) []Warning {
+func validatePlanMode(root string, s *ModeCache) []Warning {
 	var warnings []Warning
 
 	if s.ActiveSpec == "" {
@@ -107,7 +107,7 @@ func validatePlanMode(root string, s *State) []Warning {
 	return warnings
 }
 
-func validateImplementMode(root string, s *State) []Warning {
+func validateImplementMode(root string, s *ModeCache) []Warning {
 	var warnings []Warning
 
 	if s.ActiveSpec == "" {
@@ -145,7 +145,7 @@ func validateImplementMode(root string, s *State) []Warning {
 	return warnings
 }
 
-func validateReviewMode(root string, s *State) []Warning {
+func validateReviewMode(root string, s *ModeCache) []Warning {
 	var warnings []Warning
 
 	if s.ActiveSpec == "" {

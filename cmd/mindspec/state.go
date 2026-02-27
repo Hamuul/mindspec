@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/mindspec/mindspec/internal/resolve"
 	"github.com/mindspec/mindspec/internal/state"
@@ -138,7 +139,11 @@ var stateWriteSessionCmd = &cobra.Command{
 			return err
 		}
 
-		if err := state.WriteSession(root, source); err != nil {
+		sess := &state.Session{
+			SessionSource:    source,
+			SessionStartedAt: time.Now().UTC().Format(time.RFC3339),
+		}
+		if err := state.WriteSessionFile(root, sess); err != nil {
 			return fmt.Errorf("writing session metadata: %w", err)
 		}
 

@@ -14,7 +14,7 @@ var doctorCmd = &cobra.Command{
 	Short: "Check the health of the current workspace",
 	Long: `Validates project structure, documentation health, and Beads hygiene.
 
-Use --fix to auto-repair fixable issues (e.g. tracked state.json).`,
+Use --fix to auto-repair fixable issues (e.g. tracked runtime files).`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fix, _ := cmd.Flags().GetBool("fix")
 

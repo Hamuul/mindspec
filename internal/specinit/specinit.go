@@ -116,12 +116,6 @@ func Run(root, specID, title string) (*Result, error) {
 
 	// --- Phase 3: Molecule setup (beads) ---
 
-	s := &state.State{
-		Mode:           state.ModeSpec,
-		ActiveSpec:     specID,
-		ActiveWorktree: wtPath,
-		SpecBranch:     specBranch,
-	}
 	if err := preflightFn(root); err != nil {
 		return nil, fmt.Errorf("creating lifecycle molecule requires beads to be available: %w", err)
 	}
@@ -136,9 +130,6 @@ func Run(root, specID, title string) (*Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("pouring spec-lifecycle molecule: %w", err)
 	}
-
-	s.ActiveMolecule = molID
-	s.StepMapping = stepMap
 
 	// Rename the parent epic to follow [SPEC <id>] convention.
 	epicTitle := fmt.Sprintf("[SPEC %s] %s", specID, title)

@@ -16,13 +16,13 @@ if [ "${MINDSPEC_ALLOW_MAIN:-}" = "1" ]; then
   exit 0
 fi
 
-# Read state — if no state file, allow commit
-STATE_FILE=".mindspec/state.json"
-if [ ! -f "$STATE_FILE" ]; then
+# Read mode-cache — if no cache file, allow commit
+MODE_CACHE=".mindspec/mode-cache"
+if [ ! -f "$MODE_CACHE" ]; then
   exit 0
 fi
 
-MODE=$(cat "$STATE_FILE" 2>/dev/null | grep -o '"mode"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"mode"[[:space:]]*:[[:space:]]*"//;s/"$//')
+MODE=$(cat "$MODE_CACHE" 2>/dev/null | grep -o '"mode"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"mode"[[:space:]]*:[[:space:]]*"//;s/"$//')
 if [ -z "$MODE" ] || [ "$MODE" = "idle" ]; then
   exit 0
 fi
@@ -53,7 +53,7 @@ fi
 # Check if current branch is protected
 for p in $PROTECTED; do
   if [ "$BRANCH" = "$p" ]; then
-    WORKTREE=$(cat "$STATE_FILE" 2>/dev/null | grep -o '"activeWorktree"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"activeWorktree"[[:space:]]*:[[:space:]]*"//;s/"$//')
+    WORKTREE=$(cat "$MODE_CACHE" 2>/dev/null | grep -o '"activeWorktree"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"activeWorktree"[[:space:]]*:[[:space:]]*"//;s/"$//')
     echo "mindspec: commits on '$BRANCH' are blocked while mindspec is active (mode: $MODE)." >&2
     if [ -n "$WORKTREE" ]; then
       echo "  Switch to your worktree: cd $WORKTREE" >&2

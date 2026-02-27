@@ -280,17 +280,17 @@ func autoApprove(label, wtPath, specID string) {
 		return // A/B: no state to advance, rely on retry prompt
 	}
 
-	// Read MindSpec state
-	stateData, err := os.ReadFile(filepath.Join(wtPath, ".mindspec", "state.json"))
+	// Read MindSpec mode-cache
+	cacheData, err := os.ReadFile(filepath.Join(wtPath, ".mindspec", "mode-cache"))
 	if err != nil {
 		return
 	}
-	var state map[string]string
-	if err := json.Unmarshal(stateData, &state); err != nil {
+	var cache map[string]string
+	if err := json.Unmarshal(cacheData, &cache); err != nil {
 		return
 	}
 
-	mode := state["mode"]
+	mode := cache["mode"]
 	switch mode {
 	case "spec":
 		// Approve the spec: update frontmatter, advance to plan mode
@@ -298,7 +298,7 @@ func autoApprove(label, wtPath, specID string) {
 		if specPath != "" {
 			updateFrontmatterApproval(specPath)
 		}
-		writeState(wtPath, "plan", specID, "")
+		writeModeCache(wtPath, "plan", specID, "")
 
 	case "plan":
 		// Approve the plan: update frontmatter, advance to implement mode
@@ -306,7 +306,7 @@ func autoApprove(label, wtPath, specID string) {
 		if _, err := os.Stat(planPath); err == nil {
 			updateFrontmatterApproval(planPath)
 		}
-		writeState(wtPath, "implement", specID, "bench-impl")
+		writeModeCache(wtPath, "implement", specID, "bench-impl")
 	}
 }
 
@@ -320,17 +320,17 @@ func buildRetryPrompt(label, wtPath, specID string, attempt int) string {
 		return "Implementation is required. Write the code now and commit all changes."
 	}
 
-	// Session C: check MindSpec state and give workflow-appropriate prompt
-	stateData, err := os.ReadFile(filepath.Join(wtPath, ".mindspec", "state.json"))
+	// Session C: check MindSpec mode-cache and give workflow-appropriate prompt
+	cacheData, err := os.ReadFile(filepath.Join(wtPath, ".mindspec", "mode-cache"))
 	if err != nil {
 		return "Continue implementing. Write all remaining code and commit."
 	}
-	var state map[string]string
-	if err := json.Unmarshal(stateData, &state); err != nil {
+	var cache map[string]string
+	if err := json.Unmarshal(cacheData, &cache); err != nil {
 		return "Continue implementing. Write all remaining code and commit."
 	}
 
-	switch state["mode"] {
+	switch cache["mode"] {
 	case "plan":
 		specRel := findSpecRelPath(wtPath, specID)
 		planRel := strings.TrimSuffix(specRel, "/spec.md") + "/plan.md"
@@ -342,21 +342,9 @@ func buildRetryPrompt(label, wtPath, specID string, attempt int) string {
 	}
 }
 
-// prepareSessionC sets MindSpec state to spec mode so hooks emit spec-mode guidance.
+// prepareSessionC sets MindSpec mode-cache to spec mode so hooks emit spec-mode guidance.
 func prepareSessionC(wtPath, specID string) {
-	stateDir := filepath.Join(wtPath, ".mindspec")
-	os.MkdirAll(stateDir, 0755) //nolint:errcheck
-
-	state := map[string]string{
-		"mode":        "spec",
-		"activeSpec":  specID,
-		"activeBead":  "",
-		"lastUpdated": time.Now().UTC().Format(time.RFC3339),
-	}
-
-	data, _ := json.MarshalIndent(state, "", "  ")
-	data = append(data, '\n')
-	os.WriteFile(filepath.Join(stateDir, "state.json"), data, 0644) //nolint:errcheck
+	writeModeCache(wtPath, "spec", specID, "")
 }
 
 // updateFrontmatterApproval updates a markdown file's YAML frontmatter to set
@@ -406,21 +394,21 @@ func updateFrontmatterApproval(filePath string) {
 	os.WriteFile(filePath, []byte(content), 0644) //nolint:errcheck
 }
 
-// writeState writes a MindSpec state.json file.
-func writeState(wtPath, mode, specID, beadID string) {
+// writeModeCache writes a MindSpec mode-cache file.
+func writeModeCache(wtPath, mode, specID, beadID string) {
 	stateDir := filepath.Join(wtPath, ".mindspec")
 	os.MkdirAll(stateDir, 0755) //nolint:errcheck
 
-	state := map[string]string{
-		"mode":        mode,
-		"activeSpec":  specID,
-		"activeBead":  beadID,
-		"lastUpdated": time.Now().UTC().Format(time.RFC3339),
+	cache := map[string]string{
+		"mode":       mode,
+		"activeSpec": specID,
+		"activeBead": beadID,
+		"timestamp":  time.Now().UTC().Format(time.RFC3339),
 	}
 
-	data, _ := json.MarshalIndent(state, "", "  ")
+	data, _ := json.MarshalIndent(cache, "", "  ")
 	data = append(data, '\n')
-	os.WriteFile(filepath.Join(stateDir, "state.json"), data, 0644) //nolint:errcheck
+	os.WriteFile(filepath.Join(stateDir, "mode-cache"), data, 0644) //nolint:errcheck
 }
 
 // findSpecFile locates the spec.md for a given spec ID in the worktree.
