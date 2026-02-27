@@ -7,9 +7,12 @@ approved_at: ""
 approved_by: ""
 bead_ids: []
 adr_citations:
-  - ADR-0015
-  - ADR-0005
-  - ADR-0012
+  - id: ADR-0015
+    sections: [Architecture, Bead 1, Bead 2, Bead 4, Bead 5, Bead 6]
+  - id: ADR-0005
+    sections: [Architecture, Bead 6]
+  - id: ADR-0012
+    sections: [Architecture, Bead 2, Bead 3]
 ---
 
 # Plan: 053-drop-state-json
@@ -84,7 +87,7 @@ Written by `WriteSession()` (called by SessionStart hook) and bead claim in `nex
 - **Integration test**: Bead 6 includes a full lifecycle integration test that exercises `spec-init` → `approve spec` → `approve plan` → `next` → `complete` → `approve impl` without any state.json file existing. This test uses the existing `internal/resolve/integration_test.go` pattern.
 - **Regression**: `make test` must pass at every bead boundary. Existing tests are updated, not deleted — they verify the same behaviors against the new data sources.
 
-## Bead Dependency Graph
+## Dependency Graph
 
 ```
 Bead 1 (state package rewrite)
