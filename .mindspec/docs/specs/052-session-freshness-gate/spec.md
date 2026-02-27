@@ -1,8 +1,8 @@
 ---
-approved_at: ""
-approved_by: ""
+approved_at: "2026-02-27T07:35:10Z"
+approved_by: user
 molecule_id: mindspec-mol-6jbbv
-status: Draft
+status: Approved
 step_mapping:
     implement: mindspec-mol-wrx3o
     plan: mindspec-mol-0v8a9
@@ -12,6 +12,7 @@ step_mapping:
     spec-approve: mindspec-mol-0vyys
     spec-lifecycle: mindspec-mol-6jbbv
 ---
+
 
 # Spec 052-session-freshness-gate: Session Freshness Gate for Bead Starts
 
@@ -120,7 +121,7 @@ The fix is to invert the enforcement: instead of the *completion* path setting a
 
 ## Approval
 
-- **Status**: DRAFT
-- **Approved By**: -
-- **Approval Date**: -
-- **Notes**: -
+- **Status**: APPROVED
+- **Approved By**: user
+- **Approval Date**: 2026-02-27
+- **Notes**: Approved via mindspec approve spec
