@@ -47,3 +47,5 @@ beads/
 worktree-mindspec-u7mk/
 # bd worktree
 .worktrees/worktree-mindspec-mol-41m89.1/
+# bd worktree
+.worktrees/worktree-spec-050-lifecycle-autocommit/
