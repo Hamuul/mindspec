@@ -2,6 +2,8 @@
 # not version-controlled. It contains machine-local paths (activeWorktree)
 # and is derivable from molecules via `mindspec instruct`.
 .mindspec/state.json
+.mindspec/session.json
+.mindspec/mode-cache
 .mindspec/current-spec.json
 
 # Beads runtime artifacts are handled by .beads/.gitignore

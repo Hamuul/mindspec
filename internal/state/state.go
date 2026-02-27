@@ -26,7 +26,113 @@ const (
 // ValidModes lists all valid mode values.
 var ValidModes = []string{ModeIdle, ModeExplore, ModeSpec, ModePlan, ModeImplement, ModeReview}
 
+// Session holds transient per-session metadata persisted at .mindspec/session.json.
+type Session struct {
+	SessionSource    string `json:"sessionSource,omitempty"`
+	SessionStartedAt string `json:"sessionStartedAt,omitempty"`
+	BeadClaimedAt    string `json:"beadClaimedAt,omitempty"`
+}
+
+// ModeCache is a write-through cache for hook latency, persisted at .mindspec/mode-cache.
+// Lifecycle commands write this after mutating molecule state. Hooks read it
+// instead of calling bd mol show on every PreToolUse invocation.
+type ModeCache struct {
+	Mode           string `json:"mode"`
+	ActiveSpec     string `json:"activeSpec,omitempty"`
+	ActiveBead     string `json:"activeBead,omitempty"`
+	ActiveWorktree string `json:"activeWorktree,omitempty"`
+	SpecBranch     string `json:"specBranch,omitempty"`
+	Timestamp      string `json:"timestamp"`
+}
+
+// ReadSession loads the session from .mindspec/session.json under root.
+// Returns a zero Session (no error) if the file does not exist.
+func ReadSession(root string) (*Session, error) {
+	path := workspace.SessionPath(root)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &Session{}, nil
+		}
+		return nil, fmt.Errorf("reading session file: %w", err)
+	}
+
+	var s Session
+	if err := json.Unmarshal(data, &s); err != nil {
+		return nil, fmt.Errorf("parsing session file: %w", err)
+	}
+	return &s, nil
+}
+
+// WriteSessionFile persists the session to .mindspec/session.json under root.
+func WriteSessionFile(root string, s *Session) error {
+	dir := workspace.MindspecDir(root)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("creating .mindspec directory: %w", err)
+	}
+
+	data, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling session: %w", err)
+	}
+	data = append(data, '\n')
+
+	return os.WriteFile(workspace.SessionPath(root), data, 0644)
+}
+
+// ReadModeCache loads the mode cache from .mindspec/mode-cache under root.
+// Returns nil (no error) if the file does not exist.
+func ReadModeCache(root string) (*ModeCache, error) {
+	path := workspace.ModeCachePath(root)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("reading mode-cache: %w", err)
+	}
+
+	var mc ModeCache
+	if err := json.Unmarshal(data, &mc); err != nil {
+		return nil, fmt.Errorf("parsing mode-cache: %w", err)
+	}
+	return &mc, nil
+}
+
+// WriteModeCache persists the mode cache to .mindspec/mode-cache under root.
+func WriteModeCache(root string, mc *ModeCache) error {
+	dir := workspace.MindspecDir(root)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("creating .mindspec directory: %w", err)
+	}
+
+	mc.Timestamp = time.Now().UTC().Format(time.RFC3339)
+
+	data, err := json.MarshalIndent(mc, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling mode-cache: %w", err)
+	}
+	data = append(data, '\n')
+
+	return os.WriteFile(workspace.ModeCachePath(root), data, 0644)
+}
+
+// SpecBranch returns the canonical branch name for a spec.
+func SpecBranch(specID string) string { return "spec/" + specID }
+
+// SpecWorktreePath returns the canonical worktree path for a spec.
+func SpecWorktreePath(root, specID string) string {
+	return filepath.Join(root, ".worktrees", "worktree-spec-"+specID)
+}
+
+// BeadWorktreePath returns the canonical worktree path for a bead
+// nested under its spec's worktree.
+func BeadWorktreePath(specWorktree, beadID string) string {
+	return filepath.Join(specWorktree, ".worktrees", "worktree-"+beadID)
+}
+
 // State represents the MindSpec workflow state persisted at .mindspec/state.json.
+// Deprecated: will be removed in Bead 6. Use Session, ModeCache, and resolve.* instead.
 type State struct {
 	Mode             string            `json:"mode"`
 	ActiveSpec       string            `json:"activeSpec"`
@@ -42,9 +148,11 @@ type State struct {
 }
 
 // ErrNoState is returned when .mindspec/state.json does not exist.
+// Deprecated: will be removed in Bead 6.
 var ErrNoState = errors.New("no .mindspec/state.json found")
 
 // Read loads the state from .mindspec/state.json under root.
+// Deprecated: will be removed in Bead 6. Use ReadSession/ReadModeCache and resolve.* instead.
 func Read(root string) (*State, error) {
 	path := workspace.StatePath(root)
 	data, err := os.ReadFile(path)
@@ -63,9 +171,7 @@ func Read(root string) (*State, error) {
 }
 
 // Write persists the state to .mindspec/state.json under root.
-// Creates the .mindspec/ directory if it doesn't exist.
-// If root is inside a git worktree, also propagates state to the main
-// worktree so enforcement hooks (which read from main's CWD) stay current.
+// Deprecated: will be removed in Bead 6. Use WriteSessionFile/WriteModeCache instead.
 func Write(root string, s *State) error {
 	dir := workspace.MindspecDir(root)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -99,7 +205,7 @@ func Write(root string, s *State) error {
 }
 
 // WriteSession records session freshness metadata (source and timestamp).
-// Called by the SessionStart hook to track when a fresh session began.
+// Deprecated: will be removed in Bead 6. Use WriteSessionFile instead.
 func WriteSession(root, source string) error {
 	s, err := Read(root)
 	if err != nil {
@@ -160,13 +266,13 @@ func mainWorktreeRoot(root string) (string, bool) {
 }
 
 // SetMode validates inputs and writes a new state. Emits a trace event on transition.
+// Deprecated: will be removed in Bead 6. Use WriteModeCache instead.
 func SetMode(root, mode, spec, bead string) error {
 	return SetModeWithMetadata(root, mode, spec, bead, "", nil)
 }
 
 // SetModeWithMetadata validates inputs and writes a new state.
-// If molecule metadata is provided, it is written into state.
-// Otherwise, metadata is preserved across transitions for the same active spec.
+// Deprecated: will be removed in Bead 6. Use WriteModeCache instead.
 func SetModeWithMetadata(root, mode, spec, bead, moleculeID string, stepMapping map[string]string) error {
 	// Read previous state for trace event
 	prevMode := "none"
