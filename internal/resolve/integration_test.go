@@ -287,9 +287,9 @@ func TestCrossSpecSafety_ActivePredicate(t *testing.T) {
 
 // --- Compatibility / migration tests ---
 
-// TestLegacyRepo_FallbackToCursor verifies that a repo with only state.json
-// (no molecule bindings) still resolves via the cursor fallback.
-func TestLegacyRepo_FallbackToCursor(t *testing.T) {
+// TestLegacyRepo_NoFallback verifies that a repo with only state.json
+// (no molecule bindings) returns an error — state.json fallback was removed.
+func TestLegacyRepo_NoFallback(t *testing.T) {
 	root := t.TempDir()
 	os.MkdirAll(filepath.Join(root, ".mindspec"), 0755)
 	os.MkdirAll(filepath.Join(root, "docs", "specs"), 0755)
@@ -298,13 +298,13 @@ func TestLegacyRepo_FallbackToCursor(t *testing.T) {
 	stateJSON := `{"mode":"plan","activeSpec":"010-legacy","activeBead":"","lastUpdated":"2026-01-01T00:00:00Z"}`
 	os.WriteFile(filepath.Join(root, ".mindspec", "state.json"), []byte(stateJSON), 0644)
 
-	// No specs with molecule bindings → resolver finds no active specs → falls back to cursor
-	got, err := ResolveTarget(root, "")
-	if err != nil {
-		t.Fatalf("legacy fallback failed: %v", err)
+	// No specs with molecule bindings → resolver finds no active specs → error (no fallback)
+	_, err := ResolveTarget(root, "")
+	if err == nil {
+		t.Fatal("expected error when no molecule-bound specs exist")
 	}
-	if got != "010-legacy" {
-		t.Errorf("got %q, want %q", got, "010-legacy")
+	if !strings.Contains(err.Error(), "--spec") {
+		t.Errorf("error should suggest --spec flag, got: %v", err)
 	}
 }
 

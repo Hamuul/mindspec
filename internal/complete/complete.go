@@ -9,21 +9,23 @@ import (
 	"github.com/mindspec/mindspec/internal/bead"
 	"github.com/mindspec/mindspec/internal/gitops"
 	"github.com/mindspec/mindspec/internal/recording"
+	"github.com/mindspec/mindspec/internal/resolve"
+	"github.com/mindspec/mindspec/internal/specmeta"
 	"github.com/mindspec/mindspec/internal/state"
 )
 
 // Package-level function variables for testability.
 var (
-	readStateFn      = state.Read
-	writeStateFn     = state.Write
-	setModeFn        = state.SetMode
-	closeBeadFn      = bead.Close
-	worktreeListFn   = bead.WorktreeList
-	worktreeRemoveFn = bead.WorktreeRemove
-	runBDFn          = bead.RunBD
-	execCommandFn    = exec.Command
-	mergeBranchFn    = gitops.MergeBranch
-	deleteBranchFn   = gitops.DeleteBranch
+	closeBeadFn        = bead.Close
+	worktreeListFn     = bead.WorktreeList
+	worktreeRemoveFn   = bead.WorktreeRemove
+	runBDFn            = bead.RunBD
+	execCommandFn      = exec.Command
+	mergeBranchFn      = gitops.MergeBranch
+	deleteBranchFn     = gitops.DeleteBranch
+	resolveTargetFn    = resolve.ResolveTarget
+	resolveActiveBeadFn = resolve.ResolveActiveBead
+	ensureFullyBoundFn = specmeta.EnsureFullyBound
 )
 
 // Result summarizes what mindspec complete did.
@@ -38,18 +40,23 @@ type Result struct {
 
 // Run orchestrates bead completion: close bead, remove worktree, advance state.
 func Run(root, beadID string) (*Result, error) {
-	// 1. Read state → get activeBead if beadID empty
-	s, err := readStateFn(root)
+	// 1. Derive activeSpec from resolver, activeBead from arg or Beads query
+	specID, err := resolveTargetFn(root, "")
 	if err != nil {
-		return nil, fmt.Errorf("reading state: %w", err)
-	}
-	specID := s.ActiveSpec
-	if beadID == "" {
-		beadID = s.ActiveBead
+		return nil, fmt.Errorf("resolving active spec: %w", err)
 	}
 	if beadID == "" {
-		return nil, fmt.Errorf("no bead ID provided and no activeBead in state")
+		beadID, err = resolveActiveBeadFn(root, specID)
+		if err != nil {
+			return nil, fmt.Errorf("resolving active bead: %w", err)
+		}
 	}
+	if beadID == "" {
+		return nil, fmt.Errorf("no bead ID provided and no in-progress bead found for spec %s", specID)
+	}
+
+	// Derive spec branch and worktree paths from conventions
+	specBranch := state.SpecBranch(specID)
 
 	// 2. Find worktree matching bead
 	var wtName, wtPath string
@@ -85,8 +92,6 @@ func Run(root, beadID string) (*Result, error) {
 		_ = recording.EmitBeadMarker(root, specID, "complete", beadID)
 	}
 
-	// Note: parent status propagation is handled natively by beads molecules
-
 	result := &Result{
 		BeadID:     beadID,
 		BeadClosed: true,
@@ -94,16 +99,15 @@ func Run(root, beadID string) (*Result, error) {
 
 	// 4.7. Merge bead branch back to spec branch (ADR-0006).
 	beadBranch := "bead/" + beadID
-	if s.SpecBranch != "" && wtPath != "" {
-		if err := mergeBranchFn(wtPath, beadBranch, s.SpecBranch); err != nil {
-			fmt.Printf("Warning: could not merge %s → %s: %v\n", beadBranch, s.SpecBranch, err)
+	if wtPath != "" {
+		if err := mergeBranchFn(wtPath, beadBranch, specBranch); err != nil {
+			fmt.Printf("Warning: could not merge %s → %s: %v\n", beadBranch, specBranch, err)
 		}
 	}
 
 	// 5. Remove worktree (if found)
 	if wtName != "" {
 		if err := worktreeRemoveFn(wtName); err != nil {
-			// Non-fatal: worktree might already be removed
 			fmt.Printf("Warning: could not remove worktree %s: %v\n", wtName, err)
 		} else {
 			result.WorktreeRemoved = true
@@ -111,28 +115,8 @@ func Run(root, beadID string) (*Result, error) {
 	}
 
 	// 5.5. Delete the bead branch after merge + worktree removal (best-effort).
-	if s.SpecBranch != "" {
-		if err := deleteBranchFn(beadBranch); err != nil {
-			fmt.Printf("Warning: could not delete branch %s: %v\n", beadBranch, err)
-		}
-	}
-
-	// 5.7. Reset activeWorktree to spec worktree (so agent returns to spec context).
-	if s.SpecBranch != "" && s.ActiveWorktree != "" {
-		// Find the spec worktree (worktree-spec-<specID>).
-		specWtName := "worktree-spec-" + specID
-		entries2, listErr := worktreeListFn()
-		if listErr == nil {
-			for _, e := range entries2 {
-				if e.Name == specWtName || e.Branch == s.SpecBranch {
-					s.ActiveWorktree = e.Path
-					if writeErr := writeStateFn(root, s); writeErr != nil {
-						fmt.Printf("Warning: could not update activeWorktree: %v\n", writeErr)
-					}
-					break
-				}
-			}
-		}
+	if err := deleteBranchFn(beadBranch); err != nil {
+		fmt.Printf("Warning: could not delete branch %s: %v\n", beadBranch, err)
 	}
 
 	// 6. Advance state
@@ -141,26 +125,24 @@ func Run(root, beadID string) (*Result, error) {
 	result.NextBead = nextBead
 	result.NextSpec = specID
 
-	switch nextMode {
-	case state.ModeImplement:
-		if err := setModeFn(root, state.ModeImplement, specID, nextBead); err != nil {
-			return result, fmt.Errorf("advancing state to implement: %w", err)
-		}
-	case state.ModePlan:
-		if err := setModeFn(root, state.ModePlan, specID, ""); err != nil {
-			return result, fmt.Errorf("advancing state to plan: %w", err)
-		}
-	case state.ModeReview:
-		if err := setModeFn(root, state.ModeReview, specID, ""); err != nil {
-			return result, fmt.Errorf("advancing state to review: %w", err)
-		}
-	default:
-		// idle
+	// 6.5. Write mode-cache with next state
+	specWtPath := state.SpecWorktreePath(root, specID)
+	mc := &state.ModeCache{
+		Mode:       nextMode,
+		ActiveSpec: specID,
+		ActiveBead: nextBead,
+		SpecBranch: specBranch,
+	}
+	if nextMode == state.ModeIdle {
 		result.NextSpec = ""
-		s := &state.State{Mode: state.ModeIdle}
-		if err := state.Write(root, s); err != nil {
-			return result, fmt.Errorf("advancing state to idle: %w", err)
-		}
+		mc.ActiveSpec = ""
+		mc.SpecBranch = ""
+		mc.ActiveWorktree = ""
+	} else {
+		mc.ActiveWorktree = specWtPath
+	}
+	if err := state.WriteModeCache(root, mc); err != nil {
+		return result, fmt.Errorf("writing mode-cache: %w", err)
 	}
 
 	return result, nil
@@ -207,18 +189,16 @@ func advanceState(root, specID string) (mode, nextBead string) {
 		return state.ModeIdle, ""
 	}
 
-	// Read molecule and step mapping from state
-	s, err := readStateFn(root)
-	if err != nil {
+	// Read step mapping from spec frontmatter (not state.json)
+	meta, err := ensureFullyBoundFn(root, specID)
+	if err != nil || meta == nil {
 		return state.ModeIdle, ""
 	}
 
 	// Use the implement step ID (not the top-level molecule) as parent.
-	// Implementation beads are children of the implement step, not the molecule root.
-	implStepID := s.StepMapping["implement"]
+	implStepID := meta.StepMapping["implement"]
 	if implStepID == "" {
-		// Fallback to molecule ID for backwards compatibility.
-		implStepID = s.ActiveMolecule
+		implStepID = meta.MoleculeID
 	}
 	if implStepID == "" {
 		return state.ModeIdle, ""
