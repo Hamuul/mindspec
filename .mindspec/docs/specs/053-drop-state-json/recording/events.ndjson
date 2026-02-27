@@ -1,3 +1,4 @@
 {"ts":"2026-02-27T08:10:28.43035Z","event":"lifecycle.start","data":{"phase":"spec","spec_id":"053-drop-state-json"}}
 {"ts":"2026-02-27T08:16:24.132966Z","event":"lifecycle.phase","data":{"from":"spec","spec_id":"053-drop-state-json","to":"plan"}}
 {"ts":"2026-02-27T21:22:04.216722Z","event":"lifecycle.phase","data":{"from":"plan","spec_id":"053-drop-state-json","to":"plan-approved"}}
+{"ts":"2026-02-27T22:39:45.04187Z","event":"lifecycle.end","data":{"spec_id":"053-drop-state-json"}}
