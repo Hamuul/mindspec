@@ -132,6 +132,62 @@ func TestCommitCount(t *testing.T) {
 	}
 }
 
+func TestCommitAll_CleanTree(t *testing.T) {
+	dir := initGitRepo(t)
+
+	// Clean tree — should be a no-op
+	err := CommitAll(dir, "should not commit")
+	if err != nil {
+		t.Fatalf("unexpected error on clean tree: %v", err)
+	}
+
+	// Verify no new commit was created (still just the initial commit)
+	cmd := exec.Command("git", "-C", dir, "rev-list", "--count", "HEAD")
+	out, _ := cmd.Output()
+	if strings.TrimSpace(string(out)) != "1" {
+		t.Errorf("expected 1 commit, got %s", strings.TrimSpace(string(out)))
+	}
+}
+
+func TestCommitAll_DirtyTree(t *testing.T) {
+	dir := initGitRepo(t)
+
+	// Create an untracked file
+	os.WriteFile(filepath.Join(dir, "spec.md"), []byte("# Spec\n"), 0644)
+
+	err := CommitAll(dir, "chore: auto-commit spec")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify the commit happened
+	cmd := exec.Command("git", "-C", dir, "rev-list", "--count", "HEAD")
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("rev-list: %v", err)
+	}
+	if strings.TrimSpace(string(out)) != "2" {
+		t.Errorf("expected 2 commits (initial + auto), got %s", strings.TrimSpace(string(out)))
+	}
+
+	// Verify the commit message
+	cmd = exec.Command("git", "-C", dir, "log", "-1", "--format=%s")
+	out, err = cmd.Output()
+	if err != nil {
+		t.Fatalf("git log: %v", err)
+	}
+	if strings.TrimSpace(string(out)) != "chore: auto-commit spec" {
+		t.Errorf("unexpected commit message: %s", strings.TrimSpace(string(out)))
+	}
+
+	// Verify tree is clean after
+	cmd = exec.Command("git", "-C", dir, "status", "--porcelain")
+	out, _ = cmd.Output()
+	if strings.TrimSpace(string(out)) != "" {
+		t.Errorf("tree should be clean after CommitAll, got: %s", out)
+	}
+}
+
 func TestEnsureGitignoreEntry_ExistingFile(t *testing.T) {
 	root := t.TempDir()
 	gitignorePath := filepath.Join(root, ".gitignore")
