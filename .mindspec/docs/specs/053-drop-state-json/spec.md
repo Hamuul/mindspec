@@ -1,8 +1,8 @@
 ---
-approved_at: ""
-approved_by: ""
+approved_at: "2026-02-27T08:16:23Z"
+approved_by: user
 molecule_id: mindspec-mol-jpkyf
-status: Draft
+status: Approved
 step_mapping:
     implement: mindspec-mol-07lst
     plan: mindspec-mol-jchd7
@@ -12,6 +12,7 @@ step_mapping:
     spec-approve: mindspec-mol-469r9
     spec-lifecycle: mindspec-mol-jpkyf
 ---
+
 
 # Spec 053-drop-state-json: Eliminate state.json in Favor of Molecule-Derived State
 
@@ -122,7 +123,7 @@ The single-cursor `ActiveBead` field in `state.json` is the primary blocker for 
 
 ## Approval
 
-- **Status**: DRAFT
-- **Approved By**: -
-- **Approval Date**: -
-- **Notes**: -
+- **Status**: APPROVED
+- **Approved By**: user
+- **Approval Date**: 2026-02-27
+- **Notes**: Approved via mindspec approve spec
