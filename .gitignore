@@ -33,6 +33,7 @@ worktree-*/
 
 # Go
 bin/
+/mindspec
 *.exe
 
 # OS
@@ -49,5 +50,7 @@ worktree-mindspec-u7mk/
 .worktrees/worktree-mindspec-mol-41m89.1/
 # bd worktree
 .worktrees/worktree-spec-050-lifecycle-autocommit/
+# bd worktree
+.worktrees/worktree-mindspec-mol-a4bf4.1/
 # bd worktree
 .worktrees/worktree-spec-051-worktree-state-propagation/
