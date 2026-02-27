@@ -5,31 +5,30 @@ import (
 	"testing"
 
 	"github.com/mindspec/mindspec/internal/config"
-	"github.com/mindspec/mindspec/internal/state"
 )
 
 func stubGuard(t *testing.T) {
 	t.Helper()
-	origState := readStateFn
+	origState := readGuardStateFn
 	origConfig := loadConfigFn
 	origGetwd := getwdFn
 	t.Cleanup(func() {
-		readStateFn = origState
+		readGuardStateFn = origState
 		loadConfigFn = origConfig
 		getwdFn = origGetwd
 	})
 
 	loadConfigFn = func(root string) (*config.Config, error) { return config.DefaultConfig(), nil }
-	readStateFn = func(root string) (*state.State, error) {
-		return &state.State{Mode: state.ModeIdle}, nil
+	readGuardStateFn = func(root string) (*guardState, error) {
+		return &guardState{}, nil
 	}
 	getwdFn = func() (string, error) { return "/repo", nil }
 }
 
 func TestCheckCWD_NoWorktreeActive(t *testing.T) {
 	stubGuard(t)
-	readStateFn = func(root string) (*state.State, error) {
-		return &state.State{Mode: state.ModeImplement, ActiveWorktree: ""}, nil
+	readGuardStateFn = func(root string) (*guardState, error) {
+		return &guardState{ActiveWorktree: ""}, nil
 	}
 
 	if err := CheckCWD("/repo"); err != nil {
@@ -39,9 +38,8 @@ func TestCheckCWD_NoWorktreeActive(t *testing.T) {
 
 func TestCheckCWD_CWDMatchesWorktree(t *testing.T) {
 	stubGuard(t)
-	readStateFn = func(root string) (*state.State, error) {
-		return &state.State{
-			Mode:           state.ModeImplement,
+	readGuardStateFn = func(root string) (*guardState, error) {
+		return &guardState{
 			ActiveWorktree: "/repo/.worktrees/worktree-bead-abc",
 		}, nil
 	}
@@ -54,9 +52,8 @@ func TestCheckCWD_CWDMatchesWorktree(t *testing.T) {
 
 func TestCheckCWD_CWDIsMain(t *testing.T) {
 	stubGuard(t)
-	readStateFn = func(root string) (*state.State, error) {
-		return &state.State{
-			Mode:           state.ModeImplement,
+	readGuardStateFn = func(root string) (*guardState, error) {
+		return &guardState{
 			ActiveWorktree: "/repo/.worktrees/worktree-bead-abc",
 		}, nil
 	}
@@ -78,9 +75,8 @@ func TestCheckCWD_GuardsDisabled(t *testing.T) {
 		cfg.Enforcement.CLIGuards = false
 		return cfg, nil
 	}
-	readStateFn = func(root string) (*state.State, error) {
-		return &state.State{
-			Mode:           state.ModeImplement,
+	readGuardStateFn = func(root string) (*guardState, error) {
+		return &guardState{
 			ActiveWorktree: "/repo/.worktrees/worktree-bead-abc",
 		}, nil
 	}
@@ -93,9 +89,8 @@ func TestCheckCWD_GuardsDisabled(t *testing.T) {
 
 func TestCheckCWD_AllowsSpecWorktree(t *testing.T) {
 	stubGuard(t)
-	readStateFn = func(root string) (*state.State, error) {
-		return &state.State{
-			Mode:           state.ModeImplement,
+	readGuardStateFn = func(root string) (*guardState, error) {
+		return &guardState{
 			ActiveSpec:     "051-test",
 			ActiveWorktree: "/repo/.worktrees/worktree-spec-051-test/.worktrees/worktree-bead-abc",
 		}, nil
@@ -110,9 +105,8 @@ func TestCheckCWD_AllowsSpecWorktree(t *testing.T) {
 
 func TestIsMainCWD(t *testing.T) {
 	stubGuard(t)
-	readStateFn = func(root string) (*state.State, error) {
-		return &state.State{
-			Mode:           state.ModeImplement,
+	readGuardStateFn = func(root string) (*guardState, error) {
+		return &guardState{
 			ActiveWorktree: "/repo/.worktrees/worktree-bead-abc",
 		}, nil
 	}

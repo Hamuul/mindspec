@@ -156,17 +156,39 @@ func emitCopilot(r Result) int {
 	return 0
 }
 
-// ReadState loads the MindSpec state, returning nil (not error) if missing.
-func ReadState() *state.State {
+// ReadState constructs a HookState from mode-cache and session.json.
+// Falls back to molecule resolution if mode-cache is missing.
+// Returns nil (not error) if state cannot be determined.
+func ReadState() *HookState {
 	root, err := workspace.FindRoot(".")
 	if err != nil {
 		return nil
 	}
-	st, err := state.Read(root)
-	if err != nil {
+
+	hs := &HookState{}
+
+	// Read mode-cache for mode/worktree/spec
+	mc, err := state.ReadModeCache(root)
+	if err == nil && mc != nil {
+		hs.Mode = mc.Mode
+		hs.ActiveSpec = mc.ActiveSpec
+		hs.ActiveWorktree = mc.ActiveWorktree
+	}
+
+	// Read session.json for freshness fields
+	sess, err := state.ReadSession(root)
+	if err == nil {
+		hs.SessionSource = sess.SessionSource
+		hs.SessionStartedAt = sess.SessionStartedAt
+		hs.BeadClaimedAt = sess.BeadClaimedAt
+	}
+
+	// If mode-cache is missing, no useful state
+	if hs.Mode == "" && hs.SessionStartedAt == "" {
 		return nil
 	}
-	return st
+
+	return hs
 }
 
 // EnforcementEnabled checks whether agent_hooks enforcement is enabled.

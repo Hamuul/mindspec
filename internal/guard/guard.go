@@ -10,12 +10,32 @@ import (
 	"github.com/mindspec/mindspec/internal/state"
 )
 
+// guardState holds the subset of state that guards need.
+type guardState struct {
+	ActiveWorktree string
+	ActiveSpec     string
+}
+
 // Package-level function variables for testability.
 var (
-	readStateFn  = state.Read
-	loadConfigFn = config.Load
-	getwdFn      = os.Getwd
+	readGuardStateFn = defaultReadGuardState
+	loadConfigFn     = config.Load
+	getwdFn          = os.Getwd
 )
+
+func defaultReadGuardState(root string) (*guardState, error) {
+	mc, err := state.ReadModeCache(root)
+	if err != nil {
+		return nil, err
+	}
+	if mc == nil {
+		return &guardState{}, nil
+	}
+	return &guardState{
+		ActiveWorktree: mc.ActiveWorktree,
+		ActiveSpec:     mc.ActiveSpec,
+	}, nil
+}
 
 // CheckCWD verifies the current working directory matches the active worktree.
 // Returns an error if CWD is the main worktree when a worktree is active.
@@ -29,8 +49,8 @@ func CheckCWD(root string) error {
 		return nil
 	}
 
-	s, err := readStateFn(root)
-	if err != nil || s.ActiveWorktree == "" {
+	gs, err := readGuardStateFn(root)
+	if err != nil || gs.ActiveWorktree == "" {
 		return nil
 	}
 
@@ -41,7 +61,7 @@ func CheckCWD(root string) error {
 
 	// Normalize paths for comparison.
 	cwdAbs, _ := filepath.Abs(cwd)
-	wtAbs, _ := filepath.Abs(s.ActiveWorktree)
+	wtAbs, _ := filepath.Abs(gs.ActiveWorktree)
 
 	// If CWD is under the active worktree, it's fine.
 	if strings.HasPrefix(cwdAbs, wtAbs) {
@@ -50,8 +70,8 @@ func CheckCWD(root string) error {
 
 	// Also allow the spec worktree — lifecycle commands (complete, impl-approve)
 	// need to run there after all beads are done.
-	if s.ActiveSpec != "" {
-		specWtName := "worktree-spec-" + s.ActiveSpec
+	if gs.ActiveSpec != "" {
+		specWtName := "worktree-spec-" + gs.ActiveSpec
 		specWtAbs, _ := filepath.Abs(filepath.Join(root, cfg.WorktreeRoot, specWtName))
 		if strings.HasPrefix(cwdAbs, specWtAbs) {
 			return nil
@@ -61,7 +81,7 @@ func CheckCWD(root string) error {
 	// If CWD is under the main repo root (not the worktree), block.
 	rootAbs, _ := filepath.Abs(root)
 	if strings.HasPrefix(cwdAbs, rootAbs) {
-		return fmt.Errorf("mindspec: CWD is the main worktree. Switch to:\n  cd %s", s.ActiveWorktree)
+		return fmt.Errorf("mindspec: CWD is the main worktree. Switch to:\n  cd %s", gs.ActiveWorktree)
 	}
 
 	return nil
@@ -72,11 +92,11 @@ func IsMainCWD(root string) bool {
 	return CheckCWD(root) != nil
 }
 
-// ActiveWorktreePath returns the active worktree path from state, or empty string.
+// ActiveWorktreePath returns the active worktree path from mode-cache, or empty string.
 func ActiveWorktreePath(root string) string {
-	s, err := readStateFn(root)
+	gs, err := readGuardStateFn(root)
 	if err != nil {
 		return ""
 	}
-	return s.ActiveWorktree
+	return gs.ActiveWorktree
 }
