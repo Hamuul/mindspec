@@ -1,18 +1,35 @@
 ---
-status: Draft
-spec_id: 053-drop-state-json
-version: 1
-last_updated: "2026-02-27"
-approved_at: ""
-approved_by: ""
-bead_ids: []
 adr_citations:
-  - id: ADR-0015
-    sections: [Architecture, Bead 1, Bead 2, Bead 4, Bead 5, Bead 6]
-  - id: ADR-0005
-    sections: [Architecture, Bead 6]
-  - id: ADR-0012
-    sections: [Architecture, Bead 2, Bead 3]
+    - id: ADR-0015
+      sections:
+        - Architecture
+        - Bead 1
+        - Bead 2
+        - Bead 4
+        - Bead 5
+        - Bead 6
+    - id: ADR-0005
+      sections:
+        - Architecture
+        - Bead 6
+    - id: ADR-0012
+      sections:
+        - Architecture
+        - Bead 2
+        - Bead 3
+approved_at: "2026-02-27T21:22:02Z"
+approved_by: user
+bead_ids:
+    - mindspec-mol-07lst.1
+    - mindspec-mol-07lst.2
+    - mindspec-mol-07lst.3
+    - mindspec-mol-07lst.4
+    - mindspec-mol-07lst.5
+    - mindspec-mol-07lst.6
+last_updated: "2026-02-27"
+spec_id: 053-drop-state-json
+status: Approved
+version: 1
 ---
 
 # Plan: 053-drop-state-json
