@@ -1,1 +1,2 @@
 {"ts":"2026-02-27T08:10:28.43035Z","event":"lifecycle.start","data":{"phase":"spec","spec_id":"053-drop-state-json"}}
+{"ts":"2026-02-27T08:16:24.132966Z","event":"lifecycle.phase","data":{"from":"spec","spec_id":"053-drop-state-json","to":"plan"}}
