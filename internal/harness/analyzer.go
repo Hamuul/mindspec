@@ -12,10 +12,10 @@ type TurnClass string
 
 const (
 	ClassForward     TurnClass = "forward"      // Productive work advancing the task
-	ClassCorrection  TurnClass = "correction"    // Fixing a recent mistake (same file within 2 turns)
-	ClassRecovery    TurnClass = "recovery"      // Recovering from a hook block
-	ClassWrongAction TurnClass = "wrong_action"  // Violated a workflow rule and was NOT blocked
-	ClassOverhead    TurnClass = "overhead"       // Read/search without subsequent write
+	ClassCorrection  TurnClass = "correction"   // Fixing a recent mistake (same file within 2 turns)
+	ClassRecovery    TurnClass = "recovery"     // Recovering from a hook block
+	ClassWrongAction TurnClass = "wrong_action" // Violated a workflow rule and was NOT blocked
+	ClassOverhead    TurnClass = "overhead"     // Read/search without subsequent write
 )
 
 // TurnSummary describes a single agent turn.
@@ -412,4 +412,3 @@ func extractMentionedCommands(content string) []string {
 	}
 	return commands
 }
-

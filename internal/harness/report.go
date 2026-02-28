@@ -9,16 +9,16 @@ import (
 
 // Report summarizes the analysis of an agent session.
 type Report struct {
-	SessionName          string                  `json:"session_name"`
-	AgentName            string                  `json:"agent_name"`
-	TotalTurns           int                     `json:"total_turns"`
-	TotalDuration        time.Duration           `json:"-"`
-	TotalDurationMS      int64                   `json:"total_duration_ms"`
-	TurnsByClass         map[TurnClass]int        `json:"turns_by_class"`
-	TurnSummaries        []TurnSummary           `json:"-"` // omit from JSON (too verbose)
-	WrongActions         []WrongActionResult     `json:"wrong_actions"`
-	PlanFidelityScore    float64                 `json:"plan_fidelity_score"`
-	ForwardTurnRatio     float64                 `json:"forward_turn_ratio"`
+	SessionName       string              `json:"session_name"`
+	AgentName         string              `json:"agent_name"`
+	TotalTurns        int                 `json:"total_turns"`
+	TotalDuration     time.Duration       `json:"-"`
+	TotalDurationMS   int64               `json:"total_duration_ms"`
+	TurnsByClass      map[TurnClass]int   `json:"turns_by_class"`
+	TurnSummaries     []TurnSummary       `json:"-"` // omit from JSON (too verbose)
+	WrongActions      []WrongActionResult `json:"wrong_actions"`
+	PlanFidelityScore float64             `json:"plan_fidelity_score"`
+	ForwardTurnRatio  float64             `json:"forward_turn_ratio"`
 }
 
 // NewReport creates a report from analysis results.

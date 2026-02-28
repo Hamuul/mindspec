@@ -146,7 +146,7 @@ func (s *Sandbox) Commit(msg string) {
 	mustRun(s.t, s.Root, "git", "commit", "--allow-empty", "-m", msg)
 }
 
-func mustRun(t *testing.T, dir string, name string, args ...string) string {
+func mustRun(t *testing.T, dir string, name string, args ...string) string { //nolint:unparam // name kept for call-site clarity
 	t.Helper()
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir

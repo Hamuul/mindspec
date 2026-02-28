@@ -9,13 +9,13 @@ import (
 
 // Scenario defines a behavioral test scenario for an agent session.
 type Scenario struct {
-	Name        string                                  // scenario identifier (e.g. "single_bead")
-	Description string                                  // human-readable description
-	Setup       func(sandbox *Sandbox) error            // prepares sandbox state before agent runs
-	Prompt      string                                  // the prompt given to the agent
+	Name        string                                                     // scenario identifier (e.g. "single_bead")
+	Description string                                                     // human-readable description
+	Setup       func(sandbox *Sandbox) error                               // prepares sandbox state before agent runs
+	Prompt      string                                                     // the prompt given to the agent
 	Assertions  func(t *testing.T, sandbox *Sandbox, events []ActionEvent) // post-run assertions
-	MaxTurns    int                                     // turn budget (0 = unlimited)
-	Model       string                                  // model override (e.g. "haiku")
+	MaxTurns    int                                                        // turn budget (0 = unlimited)
+	Model       string                                                     // model override (e.g. "haiku")
 }
 
 // AllScenarios returns all defined behavior scenarios.
@@ -358,7 +358,7 @@ func mustJSON(v interface{}) string {
 	return string(data)
 }
 
-func assertCommandRan(t *testing.T, events []ActionEvent, command string, argSubstr ...string) {
+func assertCommandRan(t *testing.T, events []ActionEvent, command string, argSubstr ...string) { //nolint:unparam // command kept for call-site clarity
 	t.Helper()
 	for _, e := range events {
 		if e.Command != command {

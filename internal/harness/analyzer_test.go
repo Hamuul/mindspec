@@ -157,7 +157,7 @@ func TestAnalyzer_WrongAction_ForceBypass(t *testing.T) {
 func TestAnalyzer_WrongAction_BlockedEventsSkipped(t *testing.T) {
 	events := []ActionEvent{
 		{Phase: "spec", ActionType: "tool_invoke", ToolName: "Write",
-			Args: map[string]string{"file_path": "internal/foo.go"},
+			Args:    map[string]string{"file_path": "internal/foo.go"},
 			Blocked: true, BlockReason: "code edits blocked"},
 	}
 
