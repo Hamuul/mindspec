@@ -12,6 +12,7 @@ type Report struct {
 	SessionName       string              `json:"session_name"`
 	AgentName         string              `json:"agent_name"`
 	TotalTurns        int                 `json:"total_turns"`
+	TotalEvents       int                 `json:"total_events"`
 	TotalDuration     time.Duration       `json:"-"`
 	TotalDurationMS   int64               `json:"total_duration_ms"`
 	TurnsByClass      map[TurnClass]int   `json:"turns_by_class"`
@@ -25,8 +26,10 @@ type Report struct {
 func NewReport(name, agentName string, summaries []TurnSummary, wrongActions []WrongActionResult, fidelity float64) *Report {
 	byClass := make(map[TurnClass]int)
 	var totalDuration time.Duration
+	totalEvents := 0
 	for _, s := range summaries {
 		byClass[s.Class]++
+		totalEvents += len(s.Events)
 		for _, e := range s.Events {
 			totalDuration += e.Duration()
 		}
@@ -42,6 +45,7 @@ func NewReport(name, agentName string, summaries []TurnSummary, wrongActions []W
 		SessionName:       name,
 		AgentName:         agentName,
 		TotalTurns:        total,
+		TotalEvents:       totalEvents,
 		TotalDuration:     totalDuration,
 		TotalDurationMS:   totalDuration.Milliseconds(),
 		TurnsByClass:      byClass,
@@ -58,7 +62,7 @@ func (r *Report) FormatText() string {
 
 	fmt.Fprintf(&b, "=== Session Report: %s ===\n", r.SessionName)
 	fmt.Fprintf(&b, "Agent: %s\n", r.AgentName)
-	fmt.Fprintf(&b, "Total turns: %d\n", r.TotalTurns)
+	fmt.Fprintf(&b, "Turns: %d (estimated)  Events: %d\n", r.TotalTurns, r.TotalEvents)
 	fmt.Fprintf(&b, "Duration: %s\n", r.TotalDuration.Round(time.Millisecond))
 	fmt.Fprintf(&b, "Forward ratio: %.1f%%\n", r.ForwardTurnRatio*100)
 	fmt.Fprintf(&b, "Plan fidelity: %.1f%%\n", r.PlanFidelityScore*100)

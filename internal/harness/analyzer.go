@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // TurnClass categorizes an agent turn.
@@ -141,7 +142,12 @@ func NewAnalyzer() *Analyzer {
 }
 
 // Classify groups events by turn and classifies each turn.
+// If events have Turn=0 (shims don't know API turns), turns are estimated
+// from timestamp gaps: a gap > 2s between consecutive events signals a new turn.
 func (a *Analyzer) Classify(events []ActionEvent) []TurnSummary {
+	// Assign turn numbers if not already set by the event source.
+	assignTurns(events)
+
 	log := NewEventLog(events)
 	byTurn := log.ByTurn()
 
@@ -176,6 +182,33 @@ func (a *Analyzer) Classify(events []ActionEvent) []TurnSummary {
 	}
 
 	return summaries
+}
+
+// assignTurns estimates API turn numbers from event timestamps when the Turn
+// field is unset (all zeros). Commands executed within 2 seconds of each other
+// are grouped into the same turn (the LLM typically takes 2+ seconds between
+// turns for thinking).
+func assignTurns(events []ActionEvent) {
+	if len(events) == 0 {
+		return
+	}
+	// If any event already has a non-zero turn, assume turns are pre-assigned.
+	for _, e := range events {
+		if e.Turn != 0 {
+			return
+		}
+	}
+
+	const turnGap = 2 * time.Second
+	turn := 1
+	events[0].Turn = turn
+	for i := 1; i < len(events); i++ {
+		gap := events[i].Timestamp.Sub(events[i-1].Timestamp)
+		if gap > turnGap {
+			turn++
+		}
+		events[i].Turn = turn
+	}
 }
 
 func (a *Analyzer) classifyTurn(turn int, events []ActionEvent, writtenFiles map[int]map[string]bool) (TurnClass, string) {
