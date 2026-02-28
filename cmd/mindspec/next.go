@@ -54,9 +54,9 @@ team lead spawns fresh agents per bead. Accepts an optional positional bead ID.`
 		if cur, readErr := state.Read(root); readErr == nil && cur.SessionStartedAt != "" {
 			stale := false
 			reason := ""
-			if cur.SessionSource == "resume" {
+			if cur.SessionSource == "resume" || cur.SessionSource == "compact" {
 				stale = true
-				reason = "session was resumed (not fresh)"
+				reason = "session was " + cur.SessionSource + " (not fresh)"
 			} else if cur.BeadClaimedAt != "" && cur.BeadClaimedAt >= cur.SessionStartedAt {
 				stale = true
 				reason = "a bead was already claimed in this session"
