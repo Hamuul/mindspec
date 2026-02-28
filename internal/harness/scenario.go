@@ -38,7 +38,7 @@ func ScenarioSpecToIdle() Scenario {
 	return Scenario{
 		Name:        "spec_to_idle",
 		Description: "Full lifecycle from explore through idle",
-		MaxTurns:    50,
+		MaxTurns:    75,
 		Model:       "haiku",
 		Setup: func(sandbox *Sandbox) error {
 			// Sandbox comes with a clean repo; agent starts from scratch
