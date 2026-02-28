@@ -1,15 +1,32 @@
 ---
-status: Draft
-spec_id: "055-lifecycle-test-suite"
-version: "1"
-last_updated: "2026-02-28"
 adr_citations:
-  - id: ADR-0006
-    sections: ["Bead 1", "Bead 3", "Bead 5"]
-  - id: ADR-0019
-    sections: ["Bead 1", "Bead 4", "Bead 5"]
-  - id: ADR-0020
-    sections: ["Bead 1", "Bead 3"]
+    - id: ADR-0006
+      sections:
+        - Bead 1
+        - Bead 3
+        - Bead 5
+    - id: ADR-0019
+      sections:
+        - Bead 1
+        - Bead 4
+        - Bead 5
+    - id: ADR-0020
+      sections:
+        - Bead 1
+        - Bead 3
+approved_at: "2026-02-28T17:26:47Z"
+approved_by: user
+bead_ids:
+    - mindspec-eo0u.1
+    - mindspec-eo0u.2
+    - mindspec-eo0u.3
+    - mindspec-eo0u.4
+    - mindspec-eo0u.5
+    - mindspec-eo0u.6
+last_updated: "2026-02-28"
+spec_id: 055-lifecycle-test-suite
+status: Approved
+version: "1"
 ---
 
 # Plan: 055-lifecycle-test-suite
