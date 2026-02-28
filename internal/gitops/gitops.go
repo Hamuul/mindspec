@@ -184,6 +184,16 @@ func CommitCount(workdir, base, head string) (int, error) {
 	return count, nil
 }
 
+// CommitLog returns a short oneline log of commits between base and head.
+func CommitLog(workdir, base, head string) (string, error) {
+	cmd := execCommand("git", "-C", workdir, "log", "--oneline", base+".."+head)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("commit log %s..%s: %w", base, head, err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 // PRStatus returns the status of a PR by URL (e.g. "open", "merged", "closed").
 func PRStatus(prURL string) (string, error) {
 	if _, err := exec.LookPath("gh"); err != nil {
