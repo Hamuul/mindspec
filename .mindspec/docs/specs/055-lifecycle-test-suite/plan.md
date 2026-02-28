@@ -32,9 +32,9 @@ Three test tiers, each independently runnable:
 
 2. **Deterministic scenario tests** (`internal/lifecycle/*_test.go`): Create real git repos in `t.TempDir()`, run actual `mindspec` Go functions (not CLI), assert state after each transition. No LLM. Run via `make test`.
 
-3. **LLM behavior tests** (`internal/harness/scenario_test.go`): Create sandbox repos, run Claude API sessions, assert command history via recording shim. Expensive, slow. Run via `make bench-llm`, skipped without `ANTHROPIC_API_KEY`.
+3. **LLM behavior tests** (`internal/harness/scenario_test.go`): Create sandbox repos, run a coding agent via the `Agent` interface, assert command history via recording shim. Expensive, slow. Run via `make bench-llm`. The coding agent is abstracted behind `internal/harness/agent.go` so Claude Code, Copilot, and Codex can be swapped without changing scenarios or assertions.
 
-Shared infrastructure: `internal/harness/sandbox.go` (repo builder) used by tiers 2 and 3.
+Shared infrastructure: `internal/harness/sandbox.go` (repo builder) and `internal/harness/agent.go` (coding agent abstraction) used by tiers 2 and 3.
 
 ## Provenance
 
@@ -44,7 +44,7 @@ Shared infrastructure: `internal/harness/sandbox.go` (repo builder) used by tier
 | Happy path deterministic test | Bead 3 |
 | Alternative flow deterministic tests (abandon, interrupt, resume) | Bead 3 |
 | Hook enforcement matrix | Bead 4 |
-| `internal/harness` package with event/recorder/sandbox/session/analyzer/report | Beads 2, 5, 6 |
+| `internal/harness` package with event/recorder/sandbox/agent/session/analyzer/report | Beads 2, 5, 6 |
 | Recording shim captures commands | Bead 2 |
 | Turn classification (forward/correction/recovery/wrong_action/overhead) | Bead 5 |
 | Wrong-action detection | Bead 5 |
@@ -82,23 +82,41 @@ Write the canonical lifecycle state machine reference document.
 
 None
 
-## Bead 2: Harness Foundation — Event Schema, Recording Shim, Sandbox
+## Bead 2: Harness Foundation — Event Schema, Recording Shim, Sandbox, Agent Interface
 
-Build the core infrastructure for the behavioral test harness.
+Build the core infrastructure for the behavioral test harness, including the coding agent abstraction.
 
 **Steps**
 
 1. Create `internal/harness/event.go` — `ActionEvent` struct with Timestamp, Turn, Phase, ActionType, ToolName, Command, Args, CWD, ExitCode, Blocked, BlockReason, Duration. Add `ParseEvents(path string) ([]ActionEvent, error)` to read JSONL logs. Add `EventLog` type for append/query operations.
 2. Create `internal/harness/recorder.go` — functions to generate shim shell scripts for `mindspec`, `git`, `bd` that log to JSONL before delegating. `InstallShims(binDir, logPath string) error` writes the scripts; `ShimEnv(binDir string) []string` returns PATH-prepended env vars.
 3. Create `internal/harness/sandbox.go` — `Sandbox` struct holding repo path, shim bin dir, log path. `NewSandbox(t *testing.T) *Sandbox` creates a fresh git repo with `.mindspec/`, config.yaml, initial commit, and recording shims installed. `Sandbox.Run(args ...string) (string, error)` executes mindspec commands in the sandbox. `Sandbox.ReadEvents() []ActionEvent` reads the log.
-4. Write unit tests: `event_test.go` (JSONL parsing round-trip), `recorder_test.go` (shim script generation and invocation), `sandbox_test.go` (repo creation with correct structure).
-5. Verify existing `internal/bench/collector.go` and `internal/bench/report.go` still compile and their tests pass (no modifications to these files).
+4. Create `internal/harness/agent.go` — `Agent` interface abstracting the coding agent:
+   ```go
+   type Agent interface {
+       // Run executes an agent session in the sandbox with the given prompt.
+       // Returns when the agent finishes or maxTurns is reached.
+       Run(ctx context.Context, sandbox *Sandbox, prompt string, opts RunOpts) (*SessionResult, error)
+       // Name returns the agent identifier (e.g. "claude-code", "copilot", "codex").
+       Name() string
+   }
+
+   type RunOpts struct {
+       MaxTurns int
+       Model    string   // model override (e.g. "haiku", "sonnet")
+       Env      []string // additional env vars
+   }
+   ```
+   Implement `ClaudeCodeAgent` as the first concrete implementation. It shells out to `claude --print` (or `claude -p`) which uses the user's existing Claude Code auth — no separate `ANTHROPIC_API_KEY` needed. The agent runs in the sandbox directory with recording shims in PATH. Agent selection via `BENCH_AGENT` env var (default: `claude-code`).
+5. Write unit tests: `event_test.go` (JSONL parsing round-trip), `recorder_test.go` (shim script generation and invocation), `sandbox_test.go` (repo creation with correct structure), `agent_test.go` (interface contract test with a mock agent).
+6. Verify existing `internal/bench/collector.go` and `internal/bench/report.go` still compile and their tests pass (no modifications to these files).
 
 **Verification**
 
 - [ ] `go test ./internal/harness/ -run TestEvent` passes — JSONL round-trip works
 - [ ] `go test ./internal/harness/ -run TestRecorder` passes — shim captures command, args, CWD, exit code
 - [ ] `go test ./internal/harness/ -run TestSandbox` passes — sandbox has .mindspec/, .git/, shims in PATH
+- [ ] `go test ./internal/harness/ -run TestAgent` passes — mock agent satisfies interface, ClaudeCodeAgent constructs correct CLI invocation
 - [ ] `go test ./internal/bench/...` passes — existing bench tests unaffected
 - [ ] `make test` passes
 
@@ -179,28 +197,29 @@ Build the behavioral analysis layer that interprets recorded events.
 
 Bead 2
 
-## Bead 6: LLM Session Runner and Behavior Scenarios
+## Bead 6: Session Runner and Behavior Scenarios
 
-Build the Claude API session runner and implement all 9 behavior scenarios.
+Wire the Agent interface into scenario execution and implement all 9 behavior scenarios.
 
 **Steps**
 
-1. Create `internal/harness/session.go` — `RunSession(scenario Scenario, sandbox *Sandbox) (*SessionResult, error)`. Uses the Anthropic Go SDK (or `claude` CLI) to run a conversation. Passes scenario.Prompt as user message. Collects tool use events via Claude Code's OTLP or via recording shim logs. Respects MaxTurns budget. Model from `BENCH_MODEL` env var (default: haiku).
+1. Create `internal/harness/session.go` — `RunSession(ctx context.Context, agent Agent, scenario Scenario, sandbox *Sandbox) (*SessionResult, error)`. Calls `agent.Run()` with the scenario prompt, collects events from the recording shim log, respects MaxTurns via RunOpts. `SessionResult` includes raw events, agent output, and timing.
 2. Create `internal/harness/scenario.go` — `Scenario` struct with Name, Description, Setup, Prompt, Assertions, MaxTurns, Model. Implement all 9 scenarios with their Setup functions (prepare sandbox state) and Assertion functions (check events + sandbox).
 3. Implement happy path scenarios: `spec_to_idle` (full lifecycle, 50+ turn budget), `single_bead` (pre-approved plan, 15 turn budget), `multi_bead_deps` (3 beads with deps, 30 turn budget).
 4. Implement alternative flow scenarios: `abandon_spec` (explore + dismiss, 10 turn budget), `interrupt_for_bug` (mid-bead interrupt, 25 turn budget), `resume_after_crash` (pick up existing state, 15 turn budget).
 5. Implement enforcement scenarios: `hook_blocks_code_in_spec` (write code attempt gets blocked, 10 turns), `hook_blocks_main_commit` (CWD enforcement, 10 turns), `hook_blocks_stale_next` (freshness gate, 5 turns).
-6. Create `internal/harness/scenario_test.go` — `TestLLM_*` functions that skip without `ANTHROPIC_API_KEY`. Each test creates a sandbox, runs the scenario, runs the analyzer, asserts zero wrong-actions (or expected wrong-actions for enforcement tests) and all scenario-specific assertions pass.
+6. Create `internal/harness/scenario_test.go` — `TestLLM_*` functions. Skip gate: test checks `claude --version` succeeds (i.e. Claude Code is installed and authed) rather than checking for an API key env var. Each test creates a sandbox, resolves the agent via `BENCH_AGENT` env var (default: `claude-code`), runs the scenario, runs the analyzer, asserts zero wrong-actions (or expected wrong-actions for enforcement tests) and all scenario-specific assertions pass.
 7. Add `bench-llm` target to Makefile: `go test ./internal/harness/ -v -run TestLLM -timeout 600s`.
 
 **Verification**
 
-- [ ] `go test ./internal/harness/ -run TestLLM_SingleBead` passes with Claude Haiku — agent calls mindspec next, works in worktree, calls mindspec complete
+- [ ] `go test ./internal/harness/ -run TestLLM_SingleBead` passes with Claude Code (Haiku model) — agent calls mindspec next, works in worktree, calls mindspec complete
 - [ ] `go test ./internal/harness/ -run TestLLM_HookBlocksCodeInSpec` passes — agent gets blocked, recovers, no code files created
 - [ ] `go test ./internal/harness/ -run TestLLM_AbandonSpec` passes — agent dismisses cleanly, mode=idle
 - [ ] `make bench-llm` runs all LLM scenarios and produces per-turn report
-- [ ] `make test` passes (LLM tests skipped without API key)
+- [ ] `make test` passes (LLM tests skipped when `claude` CLI not available)
 - [ ] All existing tests unaffected
+- [ ] Swapping `BENCH_AGENT=copilot` or `BENCH_AGENT=codex` compiles (implementations can be stubs initially, but the interface is proven by ClaudeCodeAgent)
 
 **Depends on**
 

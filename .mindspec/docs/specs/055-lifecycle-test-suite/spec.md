@@ -62,7 +62,9 @@ The existing bench's token/cost reporting is useful but orthogonal. This spec re
 - `internal/harness/event.go` — structured action event schema
 - `internal/harness/recorder.go` — command recording shim (wraps mindspec/git/bd, logs invocations)
 - `internal/harness/sandbox.go` — fresh repo builder with recording shim installed
-- `internal/harness/session.go` — Claude API session runner with turn-level event capture
+- `internal/harness/agent.go` — `Agent` interface abstracting the coding agent (Claude Code, Copilot, Codex)
+- `internal/harness/agent_claude.go` — Claude Code implementation using `claude` CLI (uses existing auth)
+- `internal/harness/session.go` — session runner using Agent interface, with turn-level event capture
 - `internal/harness/analyzer.go` — turn classification, wrong-action detection, plan fidelity scoring
 - `internal/harness/scenario.go` — scenario definitions (happy path, interrupt, abandon, etc.)
 - `internal/harness/scenario_test.go` — LLM behavior test cases
@@ -198,7 +200,7 @@ type Assertion struct {
 - [ ] LLM scenario `single_bead` passes: agent calls `mindspec next`, works in correct worktree, calls `mindspec complete`, does not commit to main (`go test ./internal/harness/ -run TestLLM_SingleBead`)
 - [ ] LLM scenario `hook_blocks_code_in_spec` passes: agent gets blocked, recovers, produces spec not code
 - [ ] Report output includes per-turn breakdown with classification, total wrong-actions, plan-fidelity score
-- [ ] `make test` runs deterministic tests; `make bench-llm` runs LLM tests (skipped without ANTHROPIC_API_KEY)
+- [ ] `make test` runs deterministic tests; `make bench-llm` runs LLM tests (skipped when `claude` CLI not available)
 - [ ] Existing `internal/bench/collector.go` and `internal/bench/report.go` preserved and functional
 - [ ] All existing tests pass (`make test` green)
 
