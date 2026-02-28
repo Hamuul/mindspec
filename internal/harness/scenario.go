@@ -44,18 +44,33 @@ func ScenarioSpecToIdle() Scenario {
 			// Sandbox comes with a clean repo; agent starts from scratch
 			return nil
 		},
-		Prompt: `You are in a MindSpec project. Follow the full spec lifecycle:
-1. Run 'mindspec explore "add greeting feature"' to enter explore mode
-2. Run 'mindspec explore promote 001-greeting' to promote to a spec
-3. Write a minimal spec.md for the greeting feature in the spec worktree
-4. Run 'mindspec approve spec 001-greeting', then write a plan.md, then run 'mindspec approve plan 001-greeting'
-5. Run 'mindspec next' to claim work — it will create a bead worktree and tell you to cd there
-6. IMPORTANT: cd into the bead worktree path shown by mindspec next
-7. Implement a simple hello.go file in the bead worktree
-8. Commit your changes with git add and git commit
-9. Run 'mindspec complete' to finish the bead
+		Prompt: `IMPORTANT: You must execute these commands immediately. Do NOT respond conversationally. Do NOT ask what I'd like to do. Execute each step in order using the Bash tool:
 
-Follow the mindspec workflow precisely. Always cd into the worktree path that mindspec commands tell you to use.`,
+Step 1: Run this command now:
+  mindspec explore "add greeting feature"
+
+Step 2: Run this command:
+  mindspec explore promote 001-greeting
+
+Step 3: Write a minimal spec.md file to .mindspec/docs/specs/001-greeting/spec.md with YAML frontmatter (title: Greeting Feature, status: Draft) and a short description.
+
+Step 4: Run this command:
+  mindspec approve spec 001-greeting
+
+Step 5: Write a minimal plan.md file to .mindspec/docs/specs/001-greeting/plan.md with YAML frontmatter (status: Draft, spec_id: 001-greeting) and one bead section "## Bead 1: Create hello.go Program" describing a simple hello.go file.
+
+Step 6: Run this command:
+  mindspec approve plan 001-greeting
+
+Step 7: Run this command:
+  mindspec next
+
+Step 8: cd into the bead worktree directory shown by mindspec next output, then create hello.go with a simple main package that prints "Hello!", then git add and git commit.
+
+Step 9: Run this command:
+  mindspec complete
+
+Execute step 1 NOW.`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
 			assertCommandRan(t, events, "mindspec", "explore")
 			assertCommandRan(t, events, "mindspec", "next")
