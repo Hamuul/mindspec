@@ -49,7 +49,7 @@ When the bead is done:
 1. Run verification steps and capture evidence
 2. Update documentation (doc-sync)
 3. Run `mindspec complete` — closes the bead, removes the worktree, and advances state automatically
-4. Milestone commit (include `.mindspec/state.json` and `.beads/` changes)
+4. Milestone commit (include `.beads/` changes)
 
 ## Next Action
 

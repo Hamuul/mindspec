@@ -3,3 +3,4 @@
 {"ts":"2026-02-27T07:37:37.231772Z","event":"lifecycle.phase","data":{"from":"plan","spec_id":"052-session-freshness-gate","to":"plan-approved"}}
 {"ts":"2026-02-27T07:37:51.774607Z","event":"lifecycle.bead.start","data":{"bead_id":"mindspec-mol-wrx3o.1","spec_id":"052-session-freshness-gate"}}
 {"ts":"2026-02-27T07:46:01.677977Z","event":"lifecycle.end","data":{"spec_id":"052-session-freshness-gate"}}
+{"ts":"2026-02-27T10:00:38.747869Z","event":"lifecycle.end","data":{"spec_id":"052-session-freshness-gate"}}

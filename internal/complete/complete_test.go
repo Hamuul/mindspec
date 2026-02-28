@@ -10,60 +10,63 @@ import (
 	"testing"
 
 	"github.com/mindspec/mindspec/internal/bead"
+	"github.com/mindspec/mindspec/internal/specmeta"
 	"github.com/mindspec/mindspec/internal/state"
 )
 
 // saveAndRestore saves all function variables and returns a restore function.
 func saveAndRestore(t *testing.T) {
 	t.Helper()
-	origReadState := readStateFn
-	origSetMode := setModeFn
 	origClose := closeBeadFn
 	origWtList := worktreeListFn
 	origWtRemove := worktreeRemoveFn
 	origRunBD := runBDFn
 	origExec := execCommandFn
+	origMerge := mergeBranchFn
+	origDelete := deleteBranchFn
+	origResolveTarget := resolveTargetFn
+	origResolveActiveBead := resolveActiveBeadFn
+	origEnsureFullyBound := ensureFullyBoundFn
 
 	t.Cleanup(func() {
-		readStateFn = origReadState
-		setModeFn = origSetMode
 		closeBeadFn = origClose
 		worktreeListFn = origWtList
 		worktreeRemoveFn = origWtRemove
 		runBDFn = origRunBD
 		execCommandFn = origExec
+		mergeBranchFn = origMerge
+		deleteBranchFn = origDelete
+		resolveTargetFn = origResolveTarget
+		resolveActiveBeadFn = origResolveActiveBead
+		ensureFullyBoundFn = origEnsureFullyBound
 	})
+
+	// Default stubs
+	mergeBranchFn = func(repoPath, src, dst string) error { return nil }
+	deleteBranchFn = func(branch string) error { return nil }
+	resolveTargetFn = func(root, flag string) (string, error) { return "", fmt.Errorf("no active specs") }
+	resolveActiveBeadFn = func(root, specID string) (string, error) { return "", fmt.Errorf("no active bead") }
+	ensureFullyBoundFn = func(root, specID string) (*specmeta.Meta, error) { return nil, fmt.Errorf("no meta") }
 }
 
-// setupTempRoot creates a temp dir with state containing a molecule ID.
-func setupTempRoot(t *testing.T, specID, molParentID string) string {
+// setupTempRoot creates a temp dir with .mindspec/.
+func setupTempRoot(t *testing.T) string {
 	t.Helper()
 	tmp := t.TempDir()
-
-	// Create .mindspec/
 	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
-
-	// Create spec dir
-	specDir := filepath.Join(tmp, "docs", "specs", specID)
-	os.MkdirAll(specDir, 0755)
-
 	return tmp
 }
 
 func TestRun_HappyPath(t *testing.T) {
 	saveAndRestore(t)
 
-	root := setupTempRoot(t, "008-test", "mol-parent-1")
+	root := setupTempRoot(t)
 
-	// Write initial state with molecule
-	state.Write(root, &state.State{
-		Mode:           state.ModeImplement,
-		ActiveSpec:     "008-test",
-		ActiveBead:     "bead-1",
-		ActiveMolecule: "mol-parent-1",
-	})
-
-	readStateFn = state.Read // use real state (written above)
+	resolveTargetFn = func(r, flag string) (string, error) { return "008-test", nil }
+	resolveActiveBeadFn = func(r, specID string) (string, error) { return "bead-1", nil }
+	ensureFullyBoundFn = func(r, specID string) (*specmeta.Meta, error) {
+		return &specmeta.Meta{MoleculeID: "mol-parent-1"}, nil
+	}
 
 	worktreeListFn = func() ([]bead.WorktreeListEntry, error) {
 		return []bead.WorktreeListEntry{
@@ -123,27 +126,26 @@ func TestRun_HappyPath(t *testing.T) {
 		t.Errorf("NextBead: got %q, want %q", result.NextBead, "bead-2")
 	}
 
-	// Verify state was updated
-	s, _ := state.Read(root)
-	if s.Mode != state.ModeImplement {
-		t.Errorf("state mode: got %q, want %q", s.Mode, state.ModeImplement)
+	// Verify mode-cache was written
+	mc, err := state.ReadModeCache(root)
+	if err != nil {
+		t.Fatalf("reading mode-cache: %v", err)
 	}
-	if s.ActiveBead != "bead-2" {
-		t.Errorf("state activeBead: got %q, want %q", s.ActiveBead, "bead-2")
+	if mc.Mode != state.ModeImplement {
+		t.Errorf("mode-cache mode: got %q, want %q", mc.Mode, state.ModeImplement)
+	}
+	if mc.ActiveBead != "bead-2" {
+		t.Errorf("mode-cache activeBead: got %q, want %q", mc.ActiveBead, "bead-2")
 	}
 }
 
 func TestRun_DirtyTreeRefuses(t *testing.T) {
 	saveAndRestore(t)
 
-	root := setupTempRoot(t, "008-test", "mol-parent-1")
-	state.Write(root, &state.State{
-		Mode:       state.ModeImplement,
-		ActiveSpec: "008-test",
-		ActiveBead: "bead-1",
-	})
+	root := setupTempRoot(t)
 
-	readStateFn = state.Read
+	resolveTargetFn = func(r, flag string) (string, error) { return "008-test", nil }
+	resolveActiveBeadFn = func(r, specID string) (string, error) { return "bead-1", nil }
 
 	worktreeListFn = func() ([]bead.WorktreeListEntry, error) {
 		return []bead.WorktreeListEntry{
@@ -168,14 +170,13 @@ func TestRun_DirtyTreeRefuses(t *testing.T) {
 func TestRun_DefaultsToActiveBead(t *testing.T) {
 	saveAndRestore(t)
 
-	root := setupTempRoot(t, "008-test", "mol-parent-1")
-	state.Write(root, &state.State{
-		Mode:       state.ModeImplement,
-		ActiveSpec: "008-test",
-		ActiveBead: "bead-from-state",
-	})
+	root := setupTempRoot(t)
 
-	readStateFn = state.Read
+	resolveTargetFn = func(r, flag string) (string, error) { return "008-test", nil }
+	resolveActiveBeadFn = func(r, specID string) (string, error) { return "bead-from-resolver", nil }
+	ensureFullyBoundFn = func(r, specID string) (*specmeta.Meta, error) {
+		return &specmeta.Meta{MoleculeID: "mol-parent-1"}, nil
+	}
 
 	worktreeListFn = func() ([]bead.WorktreeListEntry, error) {
 		return nil, nil // no worktrees
@@ -197,22 +198,20 @@ func TestRun_DefaultsToActiveBead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if closedID != "bead-from-state" {
-		t.Errorf("closed ID: got %q, want %q", closedID, "bead-from-state")
+	if closedID != "bead-from-resolver" {
+		t.Errorf("closed ID: got %q, want %q", closedID, "bead-from-resolver")
 	}
 }
 
 func TestRun_NoWorktree(t *testing.T) {
 	saveAndRestore(t)
 
-	root := setupTempRoot(t, "008-test", "mol-parent-1")
-	state.Write(root, &state.State{
-		Mode:       state.ModeImplement,
-		ActiveSpec: "008-test",
-		ActiveBead: "bead-1",
-	})
+	root := setupTempRoot(t)
 
-	readStateFn = state.Read
+	resolveTargetFn = func(r, flag string) (string, error) { return "008-test", nil }
+	ensureFullyBoundFn = func(r, specID string) (*specmeta.Meta, error) {
+		return &specmeta.Meta{MoleculeID: "mol-parent-1"}, nil
+	}
 
 	// No worktrees at all
 	worktreeListFn = func() ([]bead.WorktreeListEntry, error) {
@@ -246,14 +245,13 @@ func TestRun_NoWorktree(t *testing.T) {
 func TestAdvanceState_NextReady(t *testing.T) {
 	saveAndRestore(t)
 
-	root := setupTempRoot(t, "test-spec", "mol-123")
-	state.Write(root, &state.State{
-		Mode:           state.ModeImplement,
-		ActiveSpec:     "test-spec",
-		ActiveBead:     "bead-1",
-		ActiveMolecule: "mol-123",
-	})
-	readStateFn = state.Read
+	root := setupTempRoot(t)
+
+	ensureFullyBoundFn = func(r, specID string) (*specmeta.Meta, error) {
+		return &specmeta.Meta{
+			MoleculeID: "mol-123",
+		}, nil
+	}
 
 	runBDFn = func(args ...string) ([]byte, error) {
 		if len(args) > 0 && args[0] == "ready" {
@@ -277,14 +275,13 @@ func TestAdvanceState_NextReady(t *testing.T) {
 func TestAdvanceState_BlockedChildren(t *testing.T) {
 	saveAndRestore(t)
 
-	root := setupTempRoot(t, "test-spec", "mol-123")
-	state.Write(root, &state.State{
-		Mode:           state.ModeImplement,
-		ActiveSpec:     "test-spec",
-		ActiveBead:     "bead-1",
-		ActiveMolecule: "mol-123",
-	})
-	readStateFn = state.Read
+	root := setupTempRoot(t)
+
+	ensureFullyBoundFn = func(r, specID string) (*specmeta.Meta, error) {
+		return &specmeta.Meta{
+			MoleculeID: "mol-123",
+		}, nil
+	}
 
 	runBDFn = func(args ...string) ([]byte, error) {
 		if len(args) > 0 && args[0] == "ready" {
@@ -315,14 +312,13 @@ func TestAdvanceState_BlockedChildren(t *testing.T) {
 func TestAdvanceState_AllDone(t *testing.T) {
 	saveAndRestore(t)
 
-	root := setupTempRoot(t, "test-spec", "mol-123")
-	state.Write(root, &state.State{
-		Mode:           state.ModeImplement,
-		ActiveSpec:     "test-spec",
-		ActiveBead:     "bead-1",
-		ActiveMolecule: "mol-123",
-	})
-	readStateFn = state.Read
+	root := setupTempRoot(t)
+
+	ensureFullyBoundFn = func(r, specID string) (*specmeta.Meta, error) {
+		return &specmeta.Meta{
+			MoleculeID: "mol-123",
+		}, nil
+	}
 
 	runBDFn = func(args ...string) ([]byte, error) {
 		return json.Marshal([]bead.BeadInfo{}) // nothing ready, nothing open
@@ -340,17 +336,16 @@ func TestAdvanceState_AllDone(t *testing.T) {
 func TestAdvanceState_UsesImplementStepFromMapping(t *testing.T) {
 	saveAndRestore(t)
 
-	root := setupTempRoot(t, "test-spec", "mol-123")
-	state.Write(root, &state.State{
-		Mode:           state.ModeImplement,
-		ActiveSpec:     "test-spec",
-		ActiveBead:     "bead-1",
-		ActiveMolecule: "mol-123",
-		StepMapping: map[string]string{
-			"implement": "mol-123.implement",
-		},
-	})
-	readStateFn = state.Read
+	root := setupTempRoot(t)
+
+	ensureFullyBoundFn = func(r, specID string) (*specmeta.Meta, error) {
+		return &specmeta.Meta{
+			MoleculeID: "mol-123",
+			StepMapping: map[string]string{
+				"implement": "mol-123.implement",
+			},
+		}, nil
+	}
 
 	var readyParent string
 	runBDFn = func(args ...string) ([]byte, error) {
@@ -385,17 +380,14 @@ func TestAdvanceState_UsesImplementStepFromMapping(t *testing.T) {
 func TestAdvanceState_NoMolecule(t *testing.T) {
 	saveAndRestore(t)
 
-	tmp := t.TempDir()
-	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
-	// State without molecule
-	state.Write(tmp, &state.State{
-		Mode:       state.ModeImplement,
-		ActiveSpec: "test",
-		ActiveBead: "bead-1",
-	})
-	readStateFn = state.Read
+	root := setupTempRoot(t)
 
-	mode, nextBead := advanceState(tmp, "test")
+	// No meta returned
+	ensureFullyBoundFn = func(r, specID string) (*specmeta.Meta, error) {
+		return nil, fmt.Errorf("no meta")
+	}
+
+	mode, nextBead := advanceState(root, "test")
 	if mode != state.ModeIdle {
 		t.Errorf("mode: got %q, want %q", mode, state.ModeIdle)
 	}
@@ -407,14 +399,10 @@ func TestAdvanceState_NoMolecule(t *testing.T) {
 func TestRun_NoBead(t *testing.T) {
 	saveAndRestore(t)
 
-	root := setupTempRoot(t, "008-test", "mol-1")
-	state.Write(root, &state.State{
-		Mode:       state.ModeIdle,
-		ActiveSpec: "",
-		ActiveBead: "",
-	})
+	root := setupTempRoot(t)
 
-	readStateFn = state.Read
+	resolveTargetFn = func(r, flag string) (string, error) { return "008-test", nil }
+	resolveActiveBeadFn = func(r, specID string) (string, error) { return "", nil }
 
 	_, err := Run(root, "")
 	if err == nil {
@@ -428,15 +416,13 @@ func TestRun_NoBead(t *testing.T) {
 func TestRun_AdvancesToImplementWhenNextBeadReady(t *testing.T) {
 	saveAndRestore(t)
 
-	root := setupTempRoot(t, "008-test", "mol-parent-1")
-	state.Write(root, &state.State{
-		Mode:           state.ModeImplement,
-		ActiveSpec:     "008-test",
-		ActiveBead:     "bead-1",
-		ActiveMolecule: "mol-parent-1",
-	})
-	readStateFn = state.Read
-	writeStateFn = state.Write
+	root := setupTempRoot(t)
+
+	resolveTargetFn = func(r, flag string) (string, error) { return "008-test", nil }
+	resolveActiveBeadFn = func(r, specID string) (string, error) { return "bead-1", nil }
+	ensureFullyBoundFn = func(r, specID string) (*specmeta.Meta, error) {
+		return &specmeta.Meta{MoleculeID: "mol-parent-1"}, nil
+	}
 
 	worktreeListFn = func() ([]bead.WorktreeListEntry, error) { return nil, nil }
 	execCommandFn = func(name string, args ...string) *exec.Cmd {
@@ -470,15 +456,13 @@ func TestRun_AdvancesToImplementWhenNextBeadReady(t *testing.T) {
 func TestRun_AdvancesToReviewWhenNoMoreBeads(t *testing.T) {
 	saveAndRestore(t)
 
-	root := setupTempRoot(t, "008-test", "mol-parent-1")
-	state.Write(root, &state.State{
-		Mode:           state.ModeImplement,
-		ActiveSpec:     "008-test",
-		ActiveBead:     "bead-1",
-		ActiveMolecule: "mol-parent-1",
-	})
-	readStateFn = state.Read
-	writeStateFn = state.Write
+	root := setupTempRoot(t)
+
+	resolveTargetFn = func(r, flag string) (string, error) { return "008-test", nil }
+	resolveActiveBeadFn = func(r, specID string) (string, error) { return "bead-1", nil }
+	ensureFullyBoundFn = func(r, specID string) (*specmeta.Meta, error) {
+		return &specmeta.Meta{MoleculeID: "mol-parent-1"}, nil
+	}
 
 	worktreeListFn = func() ([]bead.WorktreeListEntry, error) { return nil, nil }
 	execCommandFn = func(name string, args ...string) *exec.Cmd {

@@ -287,56 +287,20 @@ func TestCrossSpecSafety_ActivePredicate(t *testing.T) {
 
 // --- Compatibility / migration tests ---
 
-// TestLegacyRepo_FallbackToCursor verifies that a repo with only state.json
-// (no molecule bindings) still resolves via the cursor fallback.
-func TestLegacyRepo_FallbackToCursor(t *testing.T) {
+// TestLegacyRepo_NoFallback verifies that a repo with no molecule bindings
+// returns an error — there is no state.json fallback.
+func TestLegacyRepo_NoFallback(t *testing.T) {
 	root := t.TempDir()
 	os.MkdirAll(filepath.Join(root, ".mindspec"), 0755)
 	os.MkdirAll(filepath.Join(root, "docs", "specs"), 0755)
 
-	// Legacy state.json with no molecule info
-	stateJSON := `{"mode":"plan","activeSpec":"010-legacy","activeBead":"","lastUpdated":"2026-01-01T00:00:00Z"}`
-	os.WriteFile(filepath.Join(root, ".mindspec", "state.json"), []byte(stateJSON), 0644)
-
-	// No specs with molecule bindings → resolver finds no active specs → falls back to cursor
-	got, err := ResolveTarget(root, "")
-	if err != nil {
-		t.Fatalf("legacy fallback failed: %v", err)
+	// No specs with molecule bindings → resolver finds no active specs → error
+	_, err := ResolveTarget(root, "")
+	if err == nil {
+		t.Fatal("expected error when no molecule-bound specs exist")
 	}
-	if got != "010-legacy" {
-		t.Errorf("got %q, want %q", got, "010-legacy")
-	}
-}
-
-// TestLegacyRepo_StateReadStillWorks verifies that the standard state.Read
-// works on repos without molecule bindings.
-func TestLegacyRepo_StateReadStillWorks(t *testing.T) {
-	root := t.TempDir()
-	os.MkdirAll(filepath.Join(root, ".mindspec"), 0755)
-
-	// Write via state package
-	s := &state.State{
-		Mode:       state.ModeImplement,
-		ActiveSpec: "005-next",
-		ActiveBead: "bead-old",
-	}
-	if err := state.Write(root, s); err != nil {
-		t.Fatalf("Write failed: %v", err)
-	}
-
-	// Read back
-	got, err := state.Read(root)
-	if err != nil {
-		t.Fatalf("Read failed: %v", err)
-	}
-	if got.Mode != state.ModeImplement {
-		t.Errorf("mode: got %q, want %q", got.Mode, state.ModeImplement)
-	}
-	if got.ActiveSpec != "005-next" {
-		t.Errorf("activeSpec: got %q, want %q", got.ActiveSpec, "005-next")
-	}
-	if got.ActiveBead != "bead-old" {
-		t.Errorf("activeBead: got %q, want %q", got.ActiveBead, "bead-old")
+	if !strings.Contains(err.Error(), "--spec") {
+		t.Errorf("error should suggest --spec flag, got: %v", err)
 	}
 }
 
@@ -613,71 +577,67 @@ func TestFormatActiveList_Ordering(t *testing.T) {
 	}
 }
 
-// --- State cursor tests ---
+// --- Mode-cache cursor tests ---
 
-// TestStateCursor_WritesNonCanonical verifies that state.json writes update
+// TestModeCacheCursor_WritesNonCanonical verifies that mode-cache writes update
 // cursor fields (mode, activeSpec, activeBead) but these are not treated as
-// lifecycle truth — they're convenience fields.
-func TestStateCursor_WritesNonCanonical(t *testing.T) {
+// lifecycle truth — they're convenience fields for hook performance.
+func TestModeCacheCursor_WritesNonCanonical(t *testing.T) {
 	root := t.TempDir()
 	os.MkdirAll(filepath.Join(root, ".mindspec"), 0755)
-	os.MkdirAll(filepath.Join(root, "docs", "specs", "038-test"), 0755)
-	os.WriteFile(
-		filepath.Join(root, "docs", "specs", "038-test", "spec.md"),
-		[]byte("# Spec 038\n\n## Approval\n\n- **Status**: APPROVED\n"),
-		0644,
-	)
 
-	// Write state cursor
-	if err := state.SetMode(root, state.ModeImplement, "038-test", "bead-1"); err != nil {
-		t.Fatalf("SetMode failed: %v", err)
+	// Write mode-cache cursor
+	mc := &state.ModeCache{
+		Mode:       state.ModeImplement,
+		ActiveSpec: "038-test",
+		ActiveBead: "bead-1",
+	}
+	if err := state.WriteModeCache(root, mc); err != nil {
+		t.Fatalf("WriteModeCache failed: %v", err)
 	}
 
 	// Read cursor back
-	s, err := state.Read(root)
+	got, err := state.ReadModeCache(root)
 	if err != nil {
-		t.Fatalf("Read failed: %v", err)
+		t.Fatalf("ReadModeCache failed: %v", err)
 	}
 
-	if s.Mode != state.ModeImplement {
-		t.Errorf("cursor mode: got %q, want %q", s.Mode, state.ModeImplement)
+	if got.Mode != state.ModeImplement {
+		t.Errorf("cursor mode: got %q, want %q", got.Mode, state.ModeImplement)
 	}
-	if s.ActiveSpec != "038-test" {
-		t.Errorf("cursor activeSpec: got %q, want %q", s.ActiveSpec, "038-test")
+	if got.ActiveSpec != "038-test" {
+		t.Errorf("cursor activeSpec: got %q, want %q", got.ActiveSpec, "038-test")
 	}
-	if s.ActiveBead != "bead-1" {
-		t.Errorf("cursor activeBead: got %q, want %q", s.ActiveBead, "bead-1")
+	if got.ActiveBead != "bead-1" {
+		t.Errorf("cursor activeBead: got %q, want %q", got.ActiveBead, "bead-1")
 	}
-
-	// The cursor's mode is NOT the canonical source of truth.
-	// Canonical mode is derived from molecule step statuses.
-	// We verify the cursor can differ from derived mode without error.
-	// (The cursor might say "implement" while the molecule is actually in "plan")
 }
 
-// TestStateCursor_UpdatedOnNext verifies that state cursor updates when
-// claiming new work, without affecting molecule-derived mode.
-func TestStateCursor_UpdatedOnNext(t *testing.T) {
+// TestModeCacheCursor_UpdatedOnNext verifies that mode-cache cursor updates when
+// claiming new work.
+func TestModeCacheCursor_UpdatedOnNext(t *testing.T) {
 	root := t.TempDir()
 	os.MkdirAll(filepath.Join(root, ".mindspec"), 0755)
-	os.MkdirAll(filepath.Join(root, "docs", "specs", "038-test"), 0755)
-	os.WriteFile(
-		filepath.Join(root, "docs", "specs", "038-test", "spec.md"),
-		[]byte("# Spec 038\n\n## Approval\n\n- **Status**: APPROVED\n"),
-		0644,
-	)
 
-	// Initial state: working on bead-1
-	state.SetMode(root, state.ModeImplement, "038-test", "bead-1")
+	// Initial cache: working on bead-1
+	state.WriteModeCache(root, &state.ModeCache{
+		Mode:       state.ModeImplement,
+		ActiveSpec: "038-test",
+		ActiveBead: "bead-1",
+	})
 
 	// Simulate "next" claiming bead-2 — cursor should update
-	state.SetMode(root, state.ModeImplement, "038-test", "bead-2")
+	state.WriteModeCache(root, &state.ModeCache{
+		Mode:       state.ModeImplement,
+		ActiveSpec: "038-test",
+		ActiveBead: "bead-2",
+	})
 
-	s, err := state.Read(root)
+	got, err := state.ReadModeCache(root)
 	if err != nil {
-		t.Fatalf("Read failed: %v", err)
+		t.Fatalf("ReadModeCache failed: %v", err)
 	}
-	if s.ActiveBead != "bead-2" {
-		t.Errorf("cursor activeBead: got %q, want %q", s.ActiveBead, "bead-2")
+	if got.ActiveBead != "bead-2" {
+		t.Errorf("cursor activeBead: got %q, want %q", got.ActiveBead, "bead-2")
 	}
 }

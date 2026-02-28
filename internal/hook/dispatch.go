@@ -6,8 +6,19 @@ import (
 	"github.com/mindspec/mindspec/internal/state"
 )
 
+// HookState holds the subset of workflow state that hooks need.
+// Constructed from mode-cache + session.json.
+type HookState struct {
+	Mode             string
+	ActiveSpec       string
+	ActiveWorktree   string
+	SessionSource    string
+	SessionStartedAt string
+	BeadClaimedAt    string
+}
+
 // Run dispatches to the named hook and returns its result.
-func Run(name string, inp *Input, st *state.State, enforce bool) Result {
+func Run(name string, inp *Input, st *HookState, enforce bool) Result {
 	switch name {
 	case "plan-gate-exit":
 		return PlanGateExit(inp, st)
@@ -26,10 +37,8 @@ func Run(name string, inp *Input, st *state.State, enforce bool) Result {
 	}
 }
 
-// Stub implementations — replaced in Beads 2 and 3.
-
 // PlanGateExit blocks ExitPlanMode when in plan mode.
-func PlanGateExit(_ *Input, st *state.State) Result {
+func PlanGateExit(_ *Input, st *HookState) Result {
 	if st == nil {
 		return Result{Action: Pass}
 	}
@@ -43,7 +52,7 @@ func PlanGateExit(_ *Input, st *state.State) Result {
 }
 
 // PlanGateEnter injects additionalContext when entering plan mode.
-func PlanGateEnter(_ *Input, st *state.State) Result {
+func PlanGateEnter(_ *Input, st *HookState) Result {
 	if st == nil {
 		return Result{Action: Pass}
 	}
@@ -57,7 +66,7 @@ func PlanGateEnter(_ *Input, st *state.State) Result {
 }
 
 // WorktreeFile blocks file writes outside the active worktree.
-func WorktreeFile(inp *Input, st *state.State, enforce bool) Result {
+func WorktreeFile(inp *Input, st *HookState, enforce bool) Result {
 	if st == nil || st.ActiveWorktree == "" || !enforce {
 		return Result{Action: Pass}
 	}
@@ -81,7 +90,7 @@ func WorktreeFile(inp *Input, st *state.State, enforce bool) Result {
 }
 
 // WorktreeBash blocks bash commands outside the active worktree.
-func WorktreeBash(inp *Input, st *state.State, enforce bool) Result {
+func WorktreeBash(inp *Input, st *HookState, enforce bool) Result {
 	if st == nil || st.ActiveWorktree == "" || !enforce {
 		return Result{Action: Pass}
 	}
@@ -111,7 +120,7 @@ func WorktreeBash(inp *Input, st *state.State, enforce bool) Result {
 // SessionFreshnessGate blocks `mindspec next` when the session is not fresh.
 // A session is fresh if SessionSource is "startup" or "clear" and no bead
 // has been claimed since the last session start.
-func SessionFreshnessGate(inp *Input, st *state.State) Result {
+func SessionFreshnessGate(inp *Input, st *HookState) Result {
 	if st == nil || st.SessionStartedAt == "" {
 		// No session metadata — non-Claude-Code environment, skip gate.
 		return Result{Action: Pass}
@@ -142,7 +151,7 @@ func SessionFreshnessGate(inp *Input, st *state.State) Result {
 // WorkflowGuard is the universal state-aware guard.
 // It checks the current mode and the target file/command, then responds with
 // graduated enforcement: hard blocks for clear violations, warnings for grey areas.
-func WorkflowGuard(inp *Input, st *state.State, enforce bool) Result {
+func WorkflowGuard(inp *Input, st *HookState, enforce bool) Result {
 	if st == nil || !enforce {
 		return Result{Action: Pass}
 	}

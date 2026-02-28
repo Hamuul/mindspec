@@ -41,32 +41,32 @@ type JSONOutput struct {
 	Warnings     []string `json:"warnings"`
 }
 
-// BuildContext creates a rendering context from state and project root.
-func BuildContext(root string, s *state.State) *Context {
+// BuildContext creates a rendering context from mode-cache and project root.
+func BuildContext(root string, mc *state.ModeCache) *Context {
 	ctx := &Context{
-		Mode:       s.Mode,
-		ActiveSpec: s.ActiveSpec,
-		ActiveBead: s.ActiveBead,
+		Mode:       mc.Mode,
+		ActiveSpec: mc.ActiveSpec,
+		ActiveBead: mc.ActiveBead,
 	}
 
 	// Load spec goal if we have an active spec
-	if s.ActiveSpec != "" {
-		ctx.SpecGoal = readSpecGoal(root, s.ActiveSpec)
+	if mc.ActiveSpec != "" {
+		ctx.SpecGoal = readSpecGoal(root, mc.ActiveSpec)
 	}
 
 	// Check plan approval status in plan mode
-	if s.Mode == state.ModePlan && s.ActiveSpec != "" {
-		ctx.PlanApproved = isPlanApproved(root, s.ActiveSpec)
+	if mc.Mode == state.ModePlan && mc.ActiveSpec != "" {
+		ctx.PlanApproved = isPlanApproved(root, mc.ActiveSpec)
 	}
 
 	// List available specs for idle and explore modes
-	if s.Mode == state.ModeIdle || s.Mode == state.ModeExplore {
+	if mc.Mode == state.ModeIdle || mc.Mode == state.ModeExplore {
 		ctx.AvailableSpecs = listSpecs(root)
 	}
 
 	// Build bead primer for implement mode with active bead (session recovery)
-	if s.Mode == state.ModeImplement && s.ActiveBead != "" && s.ActiveSpec != "" {
-		primer, err := contextpack.BuildBeadPrimer(root, s.ActiveSpec, s.ActiveBead)
+	if mc.Mode == state.ModeImplement && mc.ActiveBead != "" && mc.ActiveSpec != "" {
+		primer, err := contextpack.BuildBeadPrimer(root, mc.ActiveSpec, mc.ActiveBead)
 		if err == nil {
 			ctx.BeadPrimer = contextpack.RenderBeadPrimer(primer)
 		}
@@ -79,7 +79,7 @@ func BuildContext(root string, s *state.State) *Context {
 	}
 
 	// Run cross-validation and collect warnings
-	warnings := state.CrossValidate(root, s)
+	warnings := state.CrossValidate(root, mc)
 	for _, w := range warnings {
 		ctx.Warnings = append(ctx.Warnings, fmt.Sprintf("[%s] %s", w.Field, w.Message))
 	}

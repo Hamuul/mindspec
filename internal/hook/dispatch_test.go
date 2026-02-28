@@ -18,7 +18,7 @@ func TestPlanGateExit_NilState(t *testing.T) {
 
 func TestPlanGateExit_PlanMode(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: state.ModePlan}
+	st := &HookState{Mode: state.ModePlan}
 	r := PlanGateExit(&Input{}, st)
 	if r.Action != Block {
 		t.Error("plan mode should block ExitPlanMode")
@@ -31,7 +31,7 @@ func TestPlanGateExit_PlanMode(t *testing.T) {
 func TestPlanGateExit_OtherMode(t *testing.T) {
 	t.Parallel()
 	for _, mode := range []string{state.ModeIdle, state.ModeSpec, state.ModeImplement, state.ModeReview} {
-		st := &state.State{Mode: mode}
+		st := &HookState{Mode: mode}
 		r := PlanGateExit(&Input{}, st)
 		if r.Action != Pass {
 			t.Errorf("mode %q should pass, got action %d", mode, r.Action)
@@ -51,7 +51,7 @@ func TestPlanGateEnter_NilState(t *testing.T) {
 
 func TestPlanGateEnter_PlanMode(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: state.ModePlan}
+	st := &HookState{Mode: state.ModePlan}
 	r := PlanGateEnter(&Input{}, st)
 	if r.Action != Warn {
 		t.Error("plan mode should warn on EnterPlanMode")
@@ -60,7 +60,7 @@ func TestPlanGateEnter_PlanMode(t *testing.T) {
 
 func TestPlanGateEnter_OtherMode(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: state.ModeIdle}
+	st := &HookState{Mode: state.ModeIdle}
 	r := PlanGateEnter(&Input{}, st)
 	if r.Action != Pass {
 		t.Error("idle mode should pass")
@@ -79,7 +79,7 @@ func TestWorktreeFile_NilState(t *testing.T) {
 
 func TestWorktreeFile_NoWorktree(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: state.ModeImplement}
+	st := &HookState{Mode: state.ModeImplement}
 	r := WorktreeFile(&Input{FilePath: "/some/file.go"}, st, true)
 	if r.Action != Pass {
 		t.Error("no active worktree should pass")
@@ -88,7 +88,7 @@ func TestWorktreeFile_NoWorktree(t *testing.T) {
 
 func TestWorktreeFile_EnforcementDisabled(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: state.ModeImplement, ActiveWorktree: "/wt"}
+	st := &HookState{Mode: state.ModeImplement, ActiveWorktree: "/wt"}
 	r := WorktreeFile(&Input{FilePath: "/outside/file.go"}, st, false)
 	if r.Action != Pass {
 		t.Error("enforcement disabled should pass")
@@ -97,7 +97,7 @@ func TestWorktreeFile_EnforcementDisabled(t *testing.T) {
 
 func TestWorktreeFile_InsideWorktree(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: state.ModeImplement, ActiveWorktree: "/project/.worktrees/wt1"}
+	st := &HookState{Mode: state.ModeImplement, ActiveWorktree: "/project/.worktrees/wt1"}
 	r := WorktreeFile(&Input{FilePath: "/project/.worktrees/wt1/internal/foo.go"}, st, true)
 	if r.Action != Pass {
 		t.Error("file inside worktree should pass")
@@ -106,7 +106,7 @@ func TestWorktreeFile_InsideWorktree(t *testing.T) {
 
 func TestWorktreeFile_OutsideWorktree(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: state.ModeImplement, ActiveWorktree: "/project/.worktrees/wt1"}
+	st := &HookState{Mode: state.ModeImplement, ActiveWorktree: "/project/.worktrees/wt1"}
 	r := WorktreeFile(&Input{FilePath: "/totally/different/path.go"}, st, true)
 	if r.Action != Block {
 		t.Error("file outside worktree should block")
@@ -115,7 +115,7 @@ func TestWorktreeFile_OutsideWorktree(t *testing.T) {
 
 func TestWorktreeFile_EmptyFilePath(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: state.ModeImplement, ActiveWorktree: "/wt"}
+	st := &HookState{Mode: state.ModeImplement, ActiveWorktree: "/wt"}
 	r := WorktreeFile(&Input{}, st, true)
 	if r.Action != Pass {
 		t.Error("empty file path should pass")
@@ -134,7 +134,7 @@ func TestWorktreeBash_NilState(t *testing.T) {
 
 func TestWorktreeBash_AllowedCommand(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: state.ModeImplement, ActiveWorktree: "/wt"}
+	st := &HookState{Mode: state.ModeImplement, ActiveWorktree: "/wt"}
 	for _, cmd := range []string{"cd /wt", "mindspec instruct", "git status", "make build", "go test ./...", "bd ready"} {
 		r := WorktreeBash(&Input{Command: cmd}, st, true)
 		if r.Action != Pass {
@@ -145,7 +145,7 @@ func TestWorktreeBash_AllowedCommand(t *testing.T) {
 
 func TestWorktreeBash_EnvPrefixStrip(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: state.ModeImplement, ActiveWorktree: "/wt"}
+	st := &HookState{Mode: state.ModeImplement, ActiveWorktree: "/wt"}
 	r := WorktreeBash(&Input{Command: "MINDSPEC_ALLOW_MAIN=1 git commit"}, st, true)
 	if r.Action != Pass {
 		t.Error("env-prefixed allowed command should pass after stripping")
@@ -160,7 +160,7 @@ func TestWorktreeBash_AllowsSpecWorktree(t *testing.T) {
 	getCwd = func() (string, error) {
 		return "/repo/.worktrees/worktree-spec-051-test", nil
 	}
-	st := &state.State{
+	st := &HookState{
 		Mode:           state.ModeImplement,
 		ActiveSpec:     "051-test",
 		ActiveWorktree: "/repo/.worktrees/worktree-spec-051-test/.worktrees/worktree-bead-abc",
@@ -183,7 +183,7 @@ func TestSessionFreshnessGate_NilState(t *testing.T) {
 
 func TestSessionFreshnessGate_NoSessionData(t *testing.T) {
 	t.Parallel()
-	st := &state.State{}
+	st := &HookState{}
 	r := SessionFreshnessGate(&Input{Command: "mindspec next"}, st)
 	if r.Action != Pass {
 		t.Error("missing sessionStartedAt should skip gate")
@@ -192,7 +192,7 @@ func TestSessionFreshnessGate_NoSessionData(t *testing.T) {
 
 func TestSessionFreshnessGate_FreshStartup(t *testing.T) {
 	t.Parallel()
-	st := &state.State{
+	st := &HookState{
 		SessionSource:    "startup",
 		SessionStartedAt: "2026-02-27T00:00:00Z",
 	}
@@ -204,7 +204,7 @@ func TestSessionFreshnessGate_FreshStartup(t *testing.T) {
 
 func TestSessionFreshnessGate_FreshClear(t *testing.T) {
 	t.Parallel()
-	st := &state.State{
+	st := &HookState{
 		SessionSource:    "clear",
 		SessionStartedAt: "2026-02-27T00:05:00Z",
 		BeadClaimedAt:    "2026-02-27T00:01:00Z", // claimed before clear
@@ -217,7 +217,7 @@ func TestSessionFreshnessGate_FreshClear(t *testing.T) {
 
 func TestSessionFreshnessGate_StaleSession(t *testing.T) {
 	t.Parallel()
-	st := &state.State{
+	st := &HookState{
 		SessionSource:    "startup",
 		SessionStartedAt: "2026-02-27T00:00:00Z",
 		BeadClaimedAt:    "2026-02-27T00:01:00Z", // claimed after session start
@@ -230,7 +230,7 @@ func TestSessionFreshnessGate_StaleSession(t *testing.T) {
 
 func TestSessionFreshnessGate_ResumedSession(t *testing.T) {
 	t.Parallel()
-	st := &state.State{
+	st := &HookState{
 		SessionSource:    "resume",
 		SessionStartedAt: "2026-02-27T00:00:00Z",
 	}
@@ -242,7 +242,7 @@ func TestSessionFreshnessGate_ResumedSession(t *testing.T) {
 
 func TestSessionFreshnessGate_CompactedSession(t *testing.T) {
 	t.Parallel()
-	st := &state.State{
+	st := &HookState{
 		SessionSource:    "compact",
 		SessionStartedAt: "2026-02-27T00:00:00Z",
 	}
@@ -254,7 +254,7 @@ func TestSessionFreshnessGate_CompactedSession(t *testing.T) {
 
 func TestSessionFreshnessGate_ForceBypass(t *testing.T) {
 	t.Parallel()
-	st := &state.State{
+	st := &HookState{
 		SessionSource:    "resume",
 		SessionStartedAt: "2026-02-27T00:00:00Z",
 	}
@@ -266,7 +266,7 @@ func TestSessionFreshnessGate_ForceBypass(t *testing.T) {
 
 func TestSessionFreshnessGate_DifferentCommand(t *testing.T) {
 	t.Parallel()
-	st := &state.State{
+	st := &HookState{
 		SessionSource:    "resume",
 		SessionStartedAt: "2026-02-27T00:00:00Z",
 	}
@@ -288,7 +288,7 @@ func TestWorkflowGuard_NilState(t *testing.T) {
 
 func TestWorkflowGuard_EnforcementDisabled(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: state.ModeIdle}
+	st := &HookState{Mode: state.ModeIdle}
 	r := WorkflowGuard(&Input{FilePath: "internal/foo.go"}, st, false)
 	if r.Action != Pass {
 		t.Error("enforcement disabled should pass")
@@ -297,7 +297,7 @@ func TestWorkflowGuard_EnforcementDisabled(t *testing.T) {
 
 func TestWorkflowGuard_Idle_CodeFile(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: state.ModeIdle}
+	st := &HookState{Mode: state.ModeIdle}
 	r := WorkflowGuard(&Input{FilePath: "internal/foo.go"}, st, true)
 	if r.Action != Warn {
 		t.Errorf("idle mode code edit should warn, got %d", r.Action)
@@ -306,7 +306,7 @@ func TestWorkflowGuard_Idle_CodeFile(t *testing.T) {
 
 func TestWorkflowGuard_Idle_DocFile(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: state.ModeIdle}
+	st := &HookState{Mode: state.ModeIdle}
 	r := WorkflowGuard(&Input{FilePath: ".mindspec/docs/specs/001/spec.md"}, st, true)
 	if r.Action != Warn {
 		t.Errorf("idle mode doc edit should still warn, got %d", r.Action)
@@ -315,7 +315,7 @@ func TestWorkflowGuard_Idle_DocFile(t *testing.T) {
 
 func TestWorkflowGuard_Idle_EmptyMode(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: ""}
+	st := &HookState{Mode: ""}
 	r := WorkflowGuard(&Input{FilePath: "internal/foo.go"}, st, true)
 	if r.Action != Warn {
 		t.Errorf("empty mode should warn like idle, got %d", r.Action)
@@ -324,7 +324,7 @@ func TestWorkflowGuard_Idle_EmptyMode(t *testing.T) {
 
 func TestWorkflowGuard_Explore(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: state.ModeExplore}
+	st := &HookState{Mode: state.ModeExplore}
 	r := WorkflowGuard(&Input{FilePath: "internal/foo.go"}, st, true)
 	if r.Action != Warn {
 		t.Errorf("explore mode should warn, got %d", r.Action)
@@ -333,7 +333,7 @@ func TestWorkflowGuard_Explore(t *testing.T) {
 
 func TestWorkflowGuard_Spec_CodeEdit(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: state.ModeSpec}
+	st := &HookState{Mode: state.ModeSpec}
 	r := WorkflowGuard(&Input{FilePath: "internal/foo.go"}, st, true)
 	if r.Action != Block {
 		t.Errorf("spec mode code edit should block, got %d", r.Action)
@@ -342,7 +342,7 @@ func TestWorkflowGuard_Spec_CodeEdit(t *testing.T) {
 
 func TestWorkflowGuard_Spec_DocEdit(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: state.ModeSpec}
+	st := &HookState{Mode: state.ModeSpec}
 	r := WorkflowGuard(&Input{FilePath: ".mindspec/docs/specs/049/spec.md"}, st, true)
 	if r.Action != Pass {
 		t.Errorf("spec mode doc edit should pass, got %d", r.Action)
@@ -351,7 +351,7 @@ func TestWorkflowGuard_Spec_DocEdit(t *testing.T) {
 
 func TestWorkflowGuard_Spec_MarkdownFile(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: state.ModeSpec}
+	st := &HookState{Mode: state.ModeSpec}
 	r := WorkflowGuard(&Input{FilePath: "GLOSSARY.md"}, st, true)
 	if r.Action != Pass {
 		t.Errorf("spec mode markdown file should pass, got %d", r.Action)
@@ -360,7 +360,7 @@ func TestWorkflowGuard_Spec_MarkdownFile(t *testing.T) {
 
 func TestWorkflowGuard_Plan_CodeEdit(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: state.ModePlan}
+	st := &HookState{Mode: state.ModePlan}
 	r := WorkflowGuard(&Input{FilePath: "cmd/main.go"}, st, true)
 	if r.Action != Block {
 		t.Errorf("plan mode code edit should block, got %d", r.Action)
@@ -369,7 +369,7 @@ func TestWorkflowGuard_Plan_CodeEdit(t *testing.T) {
 
 func TestWorkflowGuard_Plan_DocEdit(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: state.ModePlan}
+	st := &HookState{Mode: state.ModePlan}
 	r := WorkflowGuard(&Input{FilePath: ".mindspec/docs/specs/049/plan.md"}, st, true)
 	if r.Action != Pass {
 		t.Errorf("plan mode doc edit should pass, got %d", r.Action)
@@ -378,7 +378,7 @@ func TestWorkflowGuard_Plan_DocEdit(t *testing.T) {
 
 func TestWorkflowGuard_Implement(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: state.ModeImplement}
+	st := &HookState{Mode: state.ModeImplement}
 	r := WorkflowGuard(&Input{FilePath: "internal/foo.go"}, st, true)
 	if r.Action != Pass {
 		t.Errorf("implement mode should pass, got %d", r.Action)
@@ -387,7 +387,7 @@ func TestWorkflowGuard_Implement(t *testing.T) {
 
 func TestWorkflowGuard_Review(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: state.ModeReview}
+	st := &HookState{Mode: state.ModeReview}
 	r := WorkflowGuard(&Input{FilePath: "internal/foo.go"}, st, true)
 	if r.Action != Warn {
 		t.Errorf("review mode should warn, got %d", r.Action)
@@ -470,7 +470,7 @@ func TestHasPathPrefix(t *testing.T) {
 
 func TestWorkflowGuard_IdleWarning_ContainsEscapeHatch(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: state.ModeIdle}
+	st := &HookState{Mode: state.ModeIdle}
 	r := WorkflowGuard(&Input{FilePath: "internal/foo.go"}, st, true)
 	for _, phrase := range []string{
 		"/ms-spec-init",
@@ -488,7 +488,7 @@ func TestWorkflowGuard_IdleWarning_ContainsEscapeHatch(t *testing.T) {
 
 func TestWorkflowGuard_ExploreWarning_ContainsPromote(t *testing.T) {
 	t.Parallel()
-	st := &state.State{Mode: state.ModeExplore}
+	st := &HookState{Mode: state.ModeExplore}
 	r := WorkflowGuard(&Input{FilePath: "internal/foo.go"}, st, true)
 	if !contains(r.Message, "/ms-explore promote") {
 		t.Error("explore warning should mention /ms-explore promote")

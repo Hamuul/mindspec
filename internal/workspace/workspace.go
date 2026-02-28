@@ -84,9 +84,14 @@ func MindspecDir(root string) string {
 	return filepath.Join(root, ".mindspec")
 }
 
-// StatePath returns the path to .mindspec/state.json under root.
-func StatePath(root string) string {
-	return filepath.Join(root, ".mindspec", "state.json")
+// SessionPath returns the path to .mindspec/session.json under root.
+func SessionPath(root string) string {
+	return filepath.Join(root, ".mindspec", "session.json")
+}
+
+// ModeCachePath returns the path to .mindspec/mode-cache under root.
+func ModeCachePath(root string) string {
+	return filepath.Join(root, ".mindspec", "mode-cache")
 }
 
 func exists(path string) bool {

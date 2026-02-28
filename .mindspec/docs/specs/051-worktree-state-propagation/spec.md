@@ -15,6 +15,7 @@ step_mapping:
 
 
 
+
 # Spec 051-worktree-state-propagation: Propagate state to bead worktrees and fix lifecycle command routing
 
 ## Goal

@@ -51,13 +51,13 @@ team lead spawns fresh agents per bead. Accepts an optional positional bead ID.`
 		}
 
 		// Step 0: Session freshness gate
-		if cur, readErr := state.Read(root); readErr == nil && cur.SessionStartedAt != "" {
+		if sess, readErr := state.ReadSession(root); readErr == nil && sess.SessionStartedAt != "" {
 			stale := false
 			reason := ""
-			if cur.SessionSource == "resume" || cur.SessionSource == "compact" {
+			if sess.SessionSource == "resume" || sess.SessionSource == "compact" {
 				stale = true
-				reason = "session was " + cur.SessionSource + " (not fresh)"
-			} else if cur.BeadClaimedAt != "" && cur.BeadClaimedAt >= cur.SessionStartedAt {
+				reason = "session was " + sess.SessionSource + " (not fresh)"
+			} else if sess.BeadClaimedAt != "" && sess.BeadClaimedAt >= sess.SessionStartedAt {
 				stale = true
 				reason = "a bead was already claimed in this session"
 			}
@@ -158,9 +158,9 @@ team lead spawns fresh agents per bead. Accepts an optional positional bead ID.`
 		}
 
 		// Step 5.1: Record bead claim time for session freshness gate
-		if cur, readErr := state.Read(root); readErr == nil {
-			cur.BeadClaimedAt = time.Now().UTC().Format(time.RFC3339)
-			_ = state.Write(root, cur)
+		if sess, readErr := state.ReadSession(root); readErr == nil {
+			sess.BeadClaimedAt = time.Now().UTC().Format(time.RFC3339)
+			_ = state.WriteSessionFile(root, sess)
 		}
 
 		// Step 5.5: Create or reuse worktree
@@ -181,24 +181,18 @@ team lead spawns fresh agents per bead. Accepts an optional positional bead ID.`
 
 		// Note: parent status propagation handled natively by beads molecules
 
-		// Step 7: Update state (cursor)
-		if boundMeta != nil && resolved.SpecID == specFlag {
-			err = state.SetModeWithMetadata(root, resolved.Mode, resolved.SpecID, selected.ID, boundMeta.MoleculeID, boundMeta.StepMapping)
-		} else {
-			err = state.SetMode(root, resolved.Mode, resolved.SpecID, selected.ID)
+		// Step 7: Write mode-cache
+		mc := &state.ModeCache{
+			Mode:       resolved.Mode,
+			ActiveSpec: resolved.SpecID,
+			ActiveBead: selected.ID,
+			SpecBranch: state.SpecBranch(resolved.SpecID),
 		}
-		if err != nil {
-			return fmt.Errorf("updating state: %w", err)
-		}
-
-		// Update activeWorktree if a bead worktree was created.
 		if wtErr == nil && wtPath != "" {
-			if curState, readErr := state.Read(root); readErr == nil {
-				curState.ActiveWorktree = wtPath
-				if writeErr := state.Write(root, curState); writeErr != nil {
-					fmt.Fprintf(os.Stderr, "warning: could not update activeWorktree in state: %v\n", writeErr)
-				}
-			}
+			mc.ActiveWorktree = wtPath
+		}
+		if err := state.WriteModeCache(root, mc); err != nil {
+			return fmt.Errorf("writing mode-cache: %w", err)
 		}
 
 		fmt.Printf("State updated: mode=%s, spec=%s, bead=%s\n", resolved.Mode, resolved.SpecID, selected.ID)

@@ -51,47 +51,55 @@ If multiple active specs exist, the command fails with a list of candidates.`,
 		// Resolve target spec (ADR-0015 targeting rules)
 		specID, resolveErr := resolve.ResolveTarget(root, specFlag)
 
-		// Build state from resolver or fall back to state.json
-		var s *state.State
+		// Build mode-cache for instruct.BuildContext
+		var mc *state.ModeCache
 		if resolveErr != nil {
 			// If ambiguous, surface the error directly
 			if _, ok := resolveErr.(*resolve.ErrAmbiguousTarget); ok {
 				return resolveErr
 			}
-			// Other errors: fall back to state.json
-			s, err = state.Read(root)
-			if err != nil {
-				if err == state.ErrNoState {
-					return handleNoState(root, format)
-				}
-				return err
+			// Other errors: fall back to mode-cache
+			cached, mcErr := state.ReadModeCache(root)
+			if mcErr != nil || cached == nil {
+				return handleNoState(root, format)
 			}
+			mc = cached
 		} else {
 			// Derive mode from molecule
 			mode, modeErr := resolve.ResolveMode(root, specID)
+			cached, _ := state.ReadModeCache(root)
 			if modeErr != nil {
-				// Fallback: read mode from state.json but use resolved specID
-				s, _ = state.Read(root)
-				if s == nil {
-					s = &state.State{Mode: state.ModeIdle}
+				// Fallback: use mode-cache mode but resolved specID
+				if cached != nil {
+					mc = &state.ModeCache{
+						Mode:       cached.Mode,
+						ActiveSpec: specID,
+						ActiveBead: cached.ActiveBead,
+					}
+				} else {
+					mc = &state.ModeCache{
+						Mode:       state.ModeIdle,
+						ActiveSpec: specID,
+					}
 				}
-				s.ActiveSpec = specID
 			} else {
-				// Read existing state for bead info, overlay derived values
-				s, _ = state.Read(root)
-				if s == nil {
-					s = &state.State{}
+				activeBead := ""
+				if cached != nil {
+					activeBead = cached.ActiveBead
 				}
-				s.Mode = mode
-				s.ActiveSpec = specID
+				mc = &state.ModeCache{
+					Mode:       mode,
+					ActiveSpec: specID,
+					ActiveBead: activeBead,
+				}
 			}
 		}
 
-		ctx := instruct.BuildContext(root, s)
+		ctx := instruct.BuildContext(root, mc)
 
 		// Add worktree check when an active worktree is set.
-		if s.ActiveWorktree != "" {
-			if warning := instruct.CheckWorktree(s.ActiveWorktree); warning != "" {
+		if mc.ActiveWorktree != "" {
+			if warning := instruct.CheckWorktree(mc.ActiveWorktree); warning != "" {
 				ctx.Warnings = append(ctx.Warnings, "[worktree] "+warning)
 			}
 		}
@@ -110,25 +118,24 @@ If multiple active specs exist, the command fails with a list of candidates.`,
 			return err
 		}
 		trace.Emit(trace.NewEvent("instruct.render").
-			WithSpec(s.ActiveSpec).
+			WithSpec(mc.ActiveSpec).
 			WithTokens(trace.EstimateTokens(output)).
 			WithData(map[string]any{
 				"tokens_total": trace.EstimateTokens(output),
-				"mode":         s.Mode,
-				"template":     s.Mode + ".md",
+				"mode":         mc.Mode,
+				"template":     mc.Mode + ".md",
 			}))
 		fmt.Print(output)
 		return nil
 	},
 }
 
-// handleNoState provides a graceful fallback when state.json is missing.
+// handleNoState provides a graceful fallback when no state exists.
 func handleNoState(root, format string) error {
-	// Fall back to idle mode with a warning
-	s := &state.State{Mode: state.ModeIdle}
-	ctx := instruct.BuildContext(root, s)
+	mc := &state.ModeCache{Mode: state.ModeIdle}
+	ctx := instruct.BuildContext(root, mc)
 	ctx.Warnings = append(ctx.Warnings,
-		"[state] No .mindspec/state.json found. Run `mindspec state set --mode=<mode> --spec=<id>` to initialize.",
+		"[state] No active state found. Run `mindspec spec-init` to start a new spec.",
 	)
 
 	if format == "json" {
