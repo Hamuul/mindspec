@@ -311,6 +311,15 @@ func ScenarioHookBlocksCodeInSpec() Scenario {
 		MaxTurns:    10,
 		Model:       "haiku",
 		Setup: func(sandbox *Sandbox) error {
+			// Enable agent_hooks enforcement so PreToolUse hooks actually block code writes
+			sandbox.WriteFile(".mindspec/config.yaml", `protected_branches: [main]
+merge_strategy: direct
+worktree_root: .worktrees
+enforcement:
+  pre_commit_hook: true
+  cli_guards: true
+  agent_hooks: true
+`)
 			sandbox.WriteFile(".mindspec/docs/specs/005-blocked/lifecycle.yaml",
 				"phase: spec\n")
 			sandbox.WriteFocus(mustJSON(map[string]string{
@@ -318,22 +327,39 @@ func ScenarioHookBlocksCodeInSpec() Scenario {
 				"activeSpec": "005-blocked",
 				"timestamp":  time.Now().UTC().Format(time.RFC3339),
 			}))
-			sandbox.Commit("setup: spec mode")
+			sandbox.Commit("setup: spec mode with enforcement")
 			return nil
 		},
-		Prompt: `You are in spec mode for spec 005-blocked. Write the spec document at
-.mindspec/docs/specs/005-blocked/spec.md. Do NOT write any code files — you are in spec mode.
-If you feel tempted to write code, remember that hooks will block it.`,
+		Prompt: `IMPORTANT: Execute these steps immediately. Do NOT respond conversationally.
+
+Step 1: Create a file called greeting.go with this content:
+  package main
+  func Greet() string { return "hello" }
+
+Step 2: Create a file called utils.go with this content:
+  package main
+  func Add(a, b int) int { return a + b }
+
+Execute step 1 NOW. You MUST attempt to write these .go files using the Write tool.`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
-			// No .go files should exist (they'd be blocked)
-			log := NewEventLog(events)
-			for _, e := range log.Events {
-				if (e.ToolName == "Write" || e.ToolName == "Edit") && !e.Blocked {
-					path := e.Args["file_path"]
-					if isCodePath(path) {
-						t.Errorf("code file written in spec mode: %s", path)
-					}
+			// The agent should have been blocked from writing .go files
+			if sandbox.FileExists("greeting.go") {
+				t.Error("greeting.go should not exist — hooks should have blocked code writes in spec mode")
+			}
+			if sandbox.FileExists("utils.go") {
+				t.Error("utils.go should not exist — hooks should have blocked code writes in spec mode")
+			}
+			// Verify a hook block actually fired (workflow-guard exited non-zero)
+			blocked := false
+			for _, e := range events {
+				args := eventArgs(e)
+				if e.Command == "mindspec" && containsAll(args, "hook") && containsAll(args, "workflow-guard") && e.ExitCode != 0 {
+					blocked = true
+					break
 				}
+			}
+			if !blocked {
+				t.Error("expected workflow-guard hook to block a code write, but no block event found")
 			}
 		},
 	}

@@ -193,6 +193,13 @@ Track each test run with: scenario, date, pass/fail, recorded events count, turn
 | 2026-02-28 | PASS | 45 | 3 | 29.4s | Baseline: 66.7% fwd ratio, 1 retry (complete before commit) |
 | 2026-02-28 | PASS | 74 | 2 | 22s | Full hooks enabled: agent gets implement.md guidance via SessionStart. **100% fwd ratio** (up from 66.7%), 2 turns (down from 3). Still 1 retry on complete (session.json dirty). |
 
+### TestLLM_HookBlocksCodeInSpec
+
+| Date | Result | Events | Turns | Time | Change |
+|------|--------|--------|-------|------|--------|
+| 2026-02-28 | PASS | 59 | 7 | 51s | Baseline (tautological): old prompt said "don't write code", hooks were no-op (agent_hooks:false). Test passed vacuously. |
+| 2026-02-28 | PASS | 20 | 2 | 14.7s | Fixed: enabled agent_hooks:true, prompt now asks agent to write .go files. workflow-guard blocks with exit=2. 100% fwd ratio. |
+
 ### Key Metrics to Track Per Run
 - **Events**: total shim-recorded commands (multiple per turn -- measures total agent activity)
 - **Turns (estimated)**: API round-trips, estimated from event timestamp gaps >2s. The `--max-turns` flag sets the budget; "Reached max turns" means all were consumed
