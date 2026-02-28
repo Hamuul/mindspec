@@ -289,6 +289,8 @@ func verifyImplContent(root, specBranch, specID string) error {
 	}
 
 	// Check 3: bead branches are ancestors of spec branch.
+	// If not, auto-merge them into the spec branch via the spec worktree.
+	specWtPath := filepath.Join(root, ".worktrees", "worktree-spec-"+specID)
 	for _, bid := range beadIDs {
 		beadBranch := "bead/" + bid
 		if !branchExistsFn(beadBranch) {
@@ -299,7 +301,11 @@ func verifyImplContent(root, specBranch, specID string) error {
 			return fmt.Errorf("checking ancestry of %s: %w", beadBranch, err)
 		}
 		if !isAnc {
-			return fmt.Errorf("bead branch %s has commits not merged into spec branch %s — run `git merge %s` on the spec branch first", beadBranch, specBranch, beadBranch)
+			// Auto-merge the bead branch into the spec branch.
+			if err := mergeBranchFn(specWtPath, beadBranch, specBranch); err != nil {
+				return fmt.Errorf("merging bead branch %s into spec branch %s: %w", beadBranch, specBranch, err)
+			}
+			fmt.Printf("Merged bead branch %s → %s\n", beadBranch, specBranch)
 		}
 	}
 

@@ -517,7 +517,66 @@ func TestVerifyImplContent_OpenBeads(t *testing.T) {
 	}
 }
 
-func TestVerifyImplContent_BeadBranchNotMerged(t *testing.T) {
+func TestVerifyImplContent_BeadBranchAutoMerged(t *testing.T) {
+	tmp := t.TempDir()
+	writeBoundSpec(t, tmp, "010-test")
+	writePlanWithBeads(t, tmp, "010-test", []string{"bead-aaa"})
+	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
+
+	state.WriteModeCache(tmp, &state.ModeCache{
+		Mode:       state.ModeReview,
+		ActiveSpec: "010-test",
+		SpecBranch: "spec/010-test",
+	})
+
+	saveAndRestore(t)
+
+	implRunBDFn = func(args ...string) ([]byte, error) {
+		payload := []map[string]string{{"status": "closed"}}
+		return json.Marshal(payload)
+	}
+	implRunBDCombinedFn = func(args ...string) ([]byte, error) { return []byte("ok"), nil }
+	commitCountFn = func(workdir, base, head string) (int, error) { return 5, nil }
+	branchExistsFn = func(name string) bool { return name == "bead/bead-aaa" }
+
+	isAncestorFn = func(workdir, ancestor, descendant string) (bool, error) { return false, nil }
+
+	type mergeCall struct{ source, target string }
+	var merges []mergeCall
+	mergeBranchFn = func(workdir, source, target string) error {
+		merges = append(merges, mergeCall{source, target})
+		return nil
+	}
+	deleteBranchFn = func(name string) error { return nil }
+	worktreeRemoveFn = func(name string) error { return nil }
+	loadConfigFn = func(root string) (*config.Config, error) {
+		cfg := config.DefaultConfig()
+		cfg.MergeStrategy = "direct"
+		return cfg, nil
+	}
+	diffStatFn = func(workdir, base, head string) (string, error) { return "1 file changed", nil }
+
+	result, err := ApproveImpl(tmp, "010-test")
+	if err != nil {
+		t.Fatalf("expected auto-merge to succeed, got error: %v", err)
+	}
+
+	// First merge should be bead→spec (auto-merge), second is spec→main
+	if len(merges) < 1 {
+		t.Fatal("expected at least one merge call")
+	}
+	if merges[0].source != "bead/bead-aaa" {
+		t.Errorf("expected first merge source bead/bead-aaa, got %q", merges[0].source)
+	}
+	if merges[0].target != "spec/010-test" {
+		t.Errorf("expected first merge target spec/010-test, got %q", merges[0].target)
+	}
+	if result.MergeStrategy != "direct" {
+		t.Errorf("MergeStrategy: got %q, want %q", result.MergeStrategy, "direct")
+	}
+}
+
+func TestVerifyImplContent_BeadBranchMergeFails(t *testing.T) {
 	tmp := t.TempDir()
 	writeBoundSpec(t, tmp, "010-test")
 	writePlanWithBeads(t, tmp, "010-test", []string{"bead-aaa"})
@@ -539,13 +598,16 @@ func TestVerifyImplContent_BeadBranchNotMerged(t *testing.T) {
 	commitCountFn = func(workdir, base, head string) (int, error) { return 5, nil }
 	branchExistsFn = func(name string) bool { return name == "bead/bead-aaa" }
 	isAncestorFn = func(workdir, ancestor, descendant string) (bool, error) { return false, nil }
+	mergeBranchFn = func(workdir, source, target string) error {
+		return fmt.Errorf("merge conflict")
+	}
 
 	_, err := ApproveImpl(tmp, "010-test")
 	if err == nil {
-		t.Fatal("expected error when bead branch is not merged into spec branch")
+		t.Fatal("expected error when auto-merge fails")
 	}
-	if !strings.Contains(err.Error(), "bead/bead-aaa") || !strings.Contains(err.Error(), "not merged") {
-		t.Errorf("error should mention unmerged bead branch: %v", err)
+	if !strings.Contains(err.Error(), "merging bead branch") {
+		t.Errorf("error should mention merge failure: %v", err)
 	}
 }
 
