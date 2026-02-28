@@ -47,13 +47,15 @@ func ScenarioSpecToIdle() Scenario {
 		Prompt: `You are in a MindSpec project. Follow the full spec lifecycle:
 1. Run 'mindspec explore "add greeting feature"' to enter explore mode
 2. Run 'mindspec explore promote 001-greeting' to promote to a spec
-3. Write a minimal spec.md for the greeting feature
-4. Approve the spec, then write a plan, then approve the plan
-5. Run 'mindspec next' to claim work
-6. Implement a simple hello.go file
-7. Run 'mindspec complete' to finish
+3. Write a minimal spec.md for the greeting feature in the spec worktree
+4. Run 'mindspec approve spec 001-greeting', then write a plan.md, then run 'mindspec approve plan 001-greeting'
+5. Run 'mindspec next' to claim work — it will create a bead worktree and tell you to cd there
+6. IMPORTANT: cd into the bead worktree path shown by mindspec next
+7. Implement a simple hello.go file in the bead worktree
+8. Commit your changes with git add and git commit
+9. Run 'mindspec complete' to finish the bead
 
-Follow the mindspec workflow precisely.`,
+Follow the mindspec workflow precisely. Always cd into the worktree path that mindspec commands tell you to use.`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
 			assertCommandRan(t, events, "mindspec", "explore")
 			assertCommandRan(t, events, "mindspec", "next")

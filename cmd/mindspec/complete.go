@@ -28,9 +28,15 @@ Use --spec to specify the target spec (used for state cursor update).`,
 			return err
 		}
 
-		// CWD guard: must run from the bead worktree, not main.
-		if err := guard.CheckCWD(root); err != nil {
-			return err
+		// CWD guard: prefer running from the bead worktree.
+		// If we're in main but an active worktree exists, auto-chdir there.
+		if guard.IsMainCWD(root) {
+			if wtPath := guard.ActiveWorktreePath(root); wtPath != "" {
+				if err := os.Chdir(wtPath); err != nil {
+					return fmt.Errorf("could not switch to active worktree %s: %w", wtPath, err)
+				}
+				fmt.Fprintf(os.Stderr, "note: switched to worktree %s\n", wtPath)
+			}
 		}
 
 		if err := bead.Preflight(root); err != nil {
