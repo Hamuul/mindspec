@@ -30,6 +30,7 @@ No ADRs are relevant to this change. The work is scoped entirely to the test har
 **Verification**
 - [ ] TESTING.md contains "Test Design Principles" section
 - [ ] Section covers: deterministic setup, minimal prompts, two categories, fix surface rule
+- [ ] `go test ./internal/harness/ -short -v` passes (no compilation errors from doc-only change)
 
 **Depends on**
 None
