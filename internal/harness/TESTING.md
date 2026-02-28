@@ -42,6 +42,54 @@ env -u CLAUDECODE go test ./internal/harness/ -v -run TestLLM_SingleBead -timeou
 4. **Timeout** -- SpecToIdle needs 15min timeout; simpler tests need 10min
 5. **Don't run multiple LLM tests in parallel** -- they share dolt server slots and can interfere
 
+## Test Design Principles
+
+Every LLM test must follow these rules. Violating them produces tautological tests that validate prompt adherence instead of product quality.
+
+### 1. Deterministic Setup
+
+`Setup()` must create **all** required infrastructure before the agent runs. The agent should never need to bootstrap its own environment. This includes:
+
+- **Config**: `.mindspec/config.yaml` with appropriate `agent_hooks` setting
+- **Hooks**: `setupClaudeForSandbox()` installs CLAUDE.md, `.claude/settings.json`, slash commands
+- **State files**: `.mindspec/focus`, `.mindspec/session.json`, lifecycle.yaml
+- **Beads**: Real beads via `sandbox.CreateBead()` / `sandbox.ClaimBead()`
+- **Specs/plans**: Pre-written and pre-approved if the scenario starts mid-lifecycle
+- **Worktrees**: Created if the scenario starts in a worktree context
+- **Git state**: Clean working tree, committed setup files
+
+The agent's first action should be executing the task, not setting up infrastructure.
+
+### 2. Minimal Prompts
+
+Prompts describe the **task**, not the **workflow**. The agent must discover how to use mindspec from its own guidance layer (CLAUDE.md, instruct templates, CLI error messages, hooks).
+
+**Good prompt**: "Add a greeting feature that prints Hello."
+**Bad prompt**: "Run `mindspec explore`, then `mindspec explore promote`, then write spec.md, then run `mindspec approve spec`..."
+
+The only workflow information allowed in a prompt is the end-state: "Run `mindspec complete` when done" is acceptable because it names the finish line, not the path to get there.
+
+Imperative Haiku framing ("Do NOT respond conversationally", "Execute NOW") is acceptable — it's agent infrastructure to prevent conversational mode, not workflow guidance.
+
+### 3. Two Prompt Categories
+
+**Workflow tests** (e.g., SingleBead, SpecToIdle, AbandonSpec):
+- Prompt = task description only
+- Agent discovers workflow from mindspec guidance
+- Assertions verify the agent reached the correct end state
+- When a workflow test fails, fix mindspec's guidance — never the test prompt (Fix Surface Rule)
+
+**Enforcement tests** (e.g., HookBlocksCodeInSpec, HookBlocksMainCommit):
+- Prompt = instruction to attempt the forbidden action ("Write greeting.go")
+- Setup must enable enforcement (`agent_hooks: true`)
+- Assertions verify the hook blocked the action (non-zero exit code) AND the forbidden outcome didn't occur (file doesn't exist, commit didn't land)
+
+### 4. Fix Surface Rule
+
+When an LLM test fails due to agent behavior, the fix MUST go into mindspec's own guidance (instruct templates, CLAUDE.md, CLI error messages) — NEVER into the test prompt. Putting workflow hints in the prompt makes the test a tautology instead of testing the product.
+
+**Example**: If the agent doesn't know to commit before running `mindspec complete`, the fix goes into the implement.md instruct template ("commit your changes before completing"), not into the test prompt.
+
 ## Available Test Scenarios
 
 | Test | MaxTurns | Complexity | What It Tests |
@@ -120,10 +168,6 @@ command "mindspec" with arg "complete" was not found in events   <-- FAIL
 | **Hook blocks tool call** | PreToolUse hook rejects Write/Edit/Bash | settings.json hook config |
 | **Max turns exhausted** | Agent runs out of turns before finishing | MaxTurns budget, prompt efficiency |
 | **Worktree issues** | git worktree creation fails or wrong path | `internal/next/`, sandbox git setup |
-
-### Fix Surface Rule
-
-**When an LLM test fails due to agent behavior, the fix MUST go into mindspec's own guidance** (instruct templates, CLAUDE.md, CLI error messages) — **NEVER into the test prompt**. Test prompts describe the task only ("implement this bead"), not workflow instructions the agent should already have. Putting workflow hints in the prompt makes the test a tautology instead of testing the product.
 
 ### Common Fixes by Category
 
@@ -276,13 +320,12 @@ sandbox.BranchExists(branch) bool                        // Check branch exists
 
 Haiku in `claude -p` mode tends to be conversational unless strongly directed. Rules:
 
-1. **Start with "IMPORTANT: Execute these commands immediately"**
-2. **Say "Do NOT respond conversationally"**
-3. **Number every step explicitly**
-4. **End with "Execute step 1 NOW"**
-5. **Task description goes in the prompt; workflow guidance comes from hooks/CLAUDE.md** -- don't duplicate workflow instructions in the prompt (see Fix Surface Rule)
-6. **Be specific about file paths and exact command syntax**
-7. **Include "cd into the worktree" as an explicit step** -- Haiku won't infer this
+1. **Say "Do NOT respond conversationally"** -- prevents Haiku from greeting instead of executing
+2. **Describe the task, not the workflow** -- "add a greeting feature", not "run mindspec explore"
+3. **Be specific about what to build** -- "create greeting.go with a Greet(name) function"
+4. **End-state instructions are OK** -- "run `mindspec complete` when done" names the finish line
+5. **Do NOT prescribe intermediate commands** -- the agent must discover `mindspec explore`, `mindspec approve`, `mindspec next` from CLAUDE.md and instruct templates
+6. **Enforcement tests are the exception** -- prompts SHOULD instruct the agent to attempt the forbidden action ("write greeting.go") to test that hooks block it
 
 ## Known Issues & Workarounds
 
