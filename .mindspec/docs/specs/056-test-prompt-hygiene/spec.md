@@ -1,7 +1,7 @@
 ---
-status: Draft
-approved_at: ""
-approved_by: ""
+approved_at: "2026-02-28T23:28:01Z"
+approved_by: user
+status: Approved
 ---
 # Spec 056-test-prompt-hygiene: LLM Test Prompt Hygiene
 
@@ -70,7 +70,7 @@ None — approach is clear from prior exploration.
 
 ## Approval
 
-- **Status**: DRAFT
-- **Approved By**: -
-- **Approval Date**: -
-- **Notes**: -
+- **Status**: APPROVED
+- **Approved By**: user
+- **Approval Date**: 2026-02-28
+- **Notes**: Approved via mindspec approve spec
