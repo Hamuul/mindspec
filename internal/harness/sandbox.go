@@ -308,32 +308,20 @@ func (s *Sandbox) runBD(args ...string) (string, error) {
 	return string(out), err
 }
 
-// setupClaudeForSandbox installs CLAUDE.md, slash commands, and a minimal
-// settings.json with only the SessionStart hook. We skip PreToolUse hooks
-// because the sandbox lacks worktree structure and enforcement would block
-// all tool calls.
+// setupClaudeForSandbox installs CLAUDE.md and slash commands but strips all
+// hooks from settings.json. We skip:
+//   - PreToolUse hooks: sandbox lacks worktree structure, enforcement would block tool calls
+//   - SessionStart hook: `mindspec instruct` in idle mode tells the agent to "greet the user"
+//     which overrides the scenario prompt in LLM tests
 func setupClaudeForSandbox(root string) error {
 	// Use setup.RunClaude for CLAUDE.md and slash commands
 	if _, err := setup.RunClaude(root, false); err != nil {
 		return err
 	}
 
-	// Overwrite settings.json with only SessionStart hook (no PreToolUse)
+	// Overwrite settings.json with no hooks — agent gets context from CLAUDE.md only
 	settingsContent := `{
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "mindspec instruct 2>/dev/null || true",
-            "statusMessage": "Loading mode guidance..."
-          }
-        ]
-      }
-    ]
-  }
+  "hooks": {}
 }
 `
 	settingsPath := filepath.Join(root, ".claude", "settings.json")
