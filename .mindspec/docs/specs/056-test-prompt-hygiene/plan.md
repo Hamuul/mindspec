@@ -1,8 +1,14 @@
 ---
-status: Draft
-spec_id: 056-test-prompt-hygiene
-version: 1
+approved_at: "2026-02-28T23:29:01Z"
+approved_by: user
+bead_ids:
+    - mindspec-3er9.1
+    - mindspec-3er9.2
+    - mindspec-3er9.3
 last_updated: "2026-02-28"
+spec_id: 056-test-prompt-hygiene
+status: Approved
+version: 1
 ---
 
 # Plan: LLM Test Prompt Hygiene
