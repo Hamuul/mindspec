@@ -153,6 +153,9 @@ Track each test run with: scenario, date, pass/fail, recorded events count, turn
 | 2026-02-28 | FAIL | ~15 | 15 | ~120s | Added .gitignore: fake bead IDs don't exist |
 | 2026-02-28 | PASS | ~20 | 15 | ~90s | Real beads (CreateBead/ClaimBead): **first pass** |
 | 2026-02-28 | 3/3 PASS | ~20 | 15 | ~90s | Reliability confirmed with -count=3 |
+| 2026-02-28 | PASS | 45 | 2 | 19.6s | Re-baseline: 2 turns, 100% forward ratio, 1 retry on complete (no commit yet) |
+| 2026-02-28 | PASS | 34 | 2 | 15.5s | Added "commit before completing" to prompt — eliminated retry, -24% events |
+| 2026-02-28 | 5/5 PASS | 34 | 12-16s | Reliability: 34 events, 2 turns, 100% fwd ratio, 0 retries across all 5 runs |
 
 ### TestLLM_SpecToIdle
 
