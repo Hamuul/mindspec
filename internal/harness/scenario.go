@@ -270,7 +270,6 @@ Complete the Process function (make it return "processed") and run 'mindspec com
 	}
 }
 
-
 // --- Helpers ---
 
 func mustJSON(v interface{}) string {
