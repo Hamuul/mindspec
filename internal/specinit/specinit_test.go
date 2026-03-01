@@ -9,6 +9,7 @@ import (
 
 	"github.com/mindspec/mindspec/internal/config"
 	"github.com/mindspec/mindspec/internal/state"
+	"github.com/mindspec/mindspec/internal/workspace"
 )
 
 func mockSuccess(t *testing.T, testRoot string) {
@@ -79,7 +80,7 @@ func TestRunCreatesSpecFromTemplate(t *testing.T) {
 	}
 
 	// Spec files are written to the worktree, not to root (ADR-0006).
-	specPath := filepath.Join(result.WorktreePath, "docs", "specs", "010-my-feature", "spec.md")
+	specPath := filepath.Join(workspace.SpecDir(result.WorktreePath, "010-my-feature"), "spec.md")
 	data, err := os.ReadFile(specPath)
 	if err != nil {
 		t.Fatalf("spec.md not created: %v", err)
@@ -101,7 +102,7 @@ func TestRunWithExplicitTitle(t *testing.T) {
 	}
 
 	// Spec files are written to the worktree (ADR-0006).
-	specPath := filepath.Join(result.WorktreePath, "docs", "specs", "011-custom", "spec.md")
+	specPath := filepath.Join(workspace.SpecDir(result.WorktreePath, "011-custom"), "spec.md")
 	data, err := os.ReadFile(specPath)
 	if err != nil {
 		t.Fatalf("spec.md not created: %v", err)
@@ -121,7 +122,7 @@ func TestRunErrorsOnExistingDirectory(t *testing.T) {
 	cfg := config.DefaultConfig()
 	wtName := "worktree-spec-010-exists"
 	wtPath := cfg.WorktreePath(root, wtName)
-	specDir := filepath.Join(wtPath, "docs", "specs", "010-exists")
+	specDir := workspace.SpecDir(wtPath, "010-exists")
 	os.MkdirAll(specDir, 0755)
 
 	_, err := Run(root, "010-exists", "")
@@ -229,7 +230,7 @@ func TestRunCreatesLifecycle(t *testing.T) {
 	}
 
 	// Verify lifecycle.yaml was created in the worktree spec dir.
-	specDir := filepath.Join(result.WorktreePath, "docs", "specs", "014-lifecycle-test")
+	specDir := workspace.SpecDir(result.WorktreePath, "014-lifecycle-test")
 	lc, err := state.ReadLifecycle(specDir)
 	if err != nil {
 		t.Fatalf("ReadLifecycle() error: %v", err)
@@ -257,7 +258,7 @@ func TestRunContinuesWhenBeadsUnavailable(t *testing.T) {
 	}
 
 	// lifecycle.yaml should still be created, but with empty epic_id.
-	specDir := filepath.Join(result.WorktreePath, "docs", "specs", "013-no-beads")
+	specDir := workspace.SpecDir(result.WorktreePath, "013-no-beads")
 	lc, err := state.ReadLifecycle(specDir)
 	if err != nil {
 		t.Fatalf("ReadLifecycle() error: %v", err)

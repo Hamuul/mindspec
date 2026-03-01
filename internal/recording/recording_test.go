@@ -377,17 +377,17 @@ func TestPathHelpers(t *testing.T) {
 	specID := "027-spec-recording"
 
 	recDir := RecordingDir(root, specID)
-	if recDir != "/project/docs/specs/027-spec-recording/recording" {
+	if recDir != "/project/.mindspec/docs/specs/027-spec-recording/recording" {
 		t.Errorf("RecordingDir = %q", recDir)
 	}
 
 	manifest := ManifestPath(root, specID)
-	if manifest != "/project/docs/specs/027-spec-recording/recording/manifest.json" {
+	if manifest != "/project/.mindspec/docs/specs/027-spec-recording/recording/manifest.json" {
 		t.Errorf("ManifestPath = %q", manifest)
 	}
 
 	events := EventsPath(root, specID)
-	if events != "/project/docs/specs/027-spec-recording/recording/events.ndjson" {
+	if events != "/project/.mindspec/docs/specs/027-spec-recording/recording/events.ndjson" {
 		t.Errorf("EventsPath = %q", events)
 	}
 }
