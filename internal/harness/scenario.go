@@ -1208,8 +1208,9 @@ No ADRs are relevant to this spec.
 ## Bead 1: Implement greeting
 
 **Steps**
-1. Create greeting.go with Greet function
-2. Create greeting_test.go with tests
+1. Create greeting.go with exported Greet function
+2. Implement default greeting for empty name input
+3. Create greeting_test.go with table-driven tests
 
 **Verification**
 - [ ] `+"`go test ./...`"+` passes
