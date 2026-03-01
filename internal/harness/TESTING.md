@@ -405,3 +405,12 @@ Haiku in `claude -p` mode tends to be conversational unless strongly directed. R
 ### mindspec instruct Idle Template
 **Problem**: The idle template contains "Greet the user" / "Ask what they'd like to work on" which could override scenario prompts.
 **Status**: SessionStart hook now runs in the sandbox (full hooks enabled). Scenarios starting in idle mode (SpecToIdle, AbandonSpec) use imperative prompts ("Execute these commands immediately. Do NOT respond conversationally.") which override the idle template greeting via `claude -p` mode. If a scenario fails due to idle template interference, fix the idle template itself (product improvement).
+
+### Focus File Deadlock (mindspec-wpqg)
+**Problem**: When multiple specs are active and one is in plan/spec mode, the agent hits a deadlock: (1) Edit on `.mindspec/focus` is blocked by workflow guard (plan mode blocks "code" edits), (2) `mindspec state set` via Bash is blocked by worktree-bash hook (CWD is main, not the active worktree). The agent cannot change spec context without fragile workarounds (writing focus from a different allowed worktree).
+**Status**: Product bug filed as mindspec-wpqg (P1). Not currently testable in LLM harness because sandbox has `agent_hooks: false` (enforcement hooks are no-op). Fix should go into hook logic: whitelist `mindspec state` in worktree-bash allowlist, and/or whitelist `.mindspec/focus` in workflow guard.
+**Related scenarios**: `TestLLM_MultipleActiveSpecs` tests the CLI `--spec` flag disambiguation (non-enforcement). Full enforcement testing requires `agent_hooks: true` scenarios.
+
+### Worktree CWD Sensitivity (mindspec-nh4f)
+**Problem**: Running `git worktree add` from inside an existing worktree creates the new worktree relative to CWD (e.g. `.worktrees/spec-044/.worktrees/new/`). Agent must use absolute paths or run from project root.
+**Status**: Product bug filed as mindspec-nh4f (P3). `mindspec next` should use absolute paths for worktree creation.
