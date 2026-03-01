@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/mindspec/mindspec/internal/hooks"
 )
 
 // Scenario defines a behavioral test scenario for an agent session.
@@ -1292,6 +1294,11 @@ func main() {
 			// Create pre-existing bugs in beads
 			sandbox.CreateBead("Division by zero in calculator.go", "bug", "")
 			sandbox.CreateBead("Missing input validation in parser", "bug", "")
+
+			// Install pre-commit hook to enforce branch protection in idle mode
+			if err := hooks.InstallPreCommit(sandbox.Root); err != nil {
+				return fmt.Errorf("installing pre-commit hook: %w", err)
+			}
 
 			// Use real GitHub remote so gh pr create works
 			ghURL := fmt.Sprintf("https://github.com/%s.git", bugfixBranchRemote)

@@ -1,6 +1,7 @@
 # MindSpec — No Active Work
 
 You are not currently working on any spec or bead.
+{{- if .BranchProtection}}
 
 ## Branch Protection
 
@@ -19,6 +20,7 @@ When asked to fix a bug, add a feature, or make any code change:
 Work is NOT complete until the PR is created. Always finish all 5 steps.
 
 For spec-driven work, use `mindspec spec-init` instead (it creates the branch automatically).
+{{- end}}
 
 ## Available Actions
 
