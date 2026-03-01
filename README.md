@@ -126,8 +126,7 @@ your-project/
 │       ├── core/               # USAGE.md, MODES.md, ARCHITECTURE.md, etc.
 │       ├── adr/                # Architecture Decision Records
 │       ├── domains/            # Bounded context documentation
-│       ├── specs/              # Versioned specifications and plans
-│       └── user/               # Guides (claude-code, codex, copilot, agentmind)
+│       └── specs/              # Versioned specifications and plans
 ├── .beads/                     # Beads work graph (committed)
 ├── .claude/                    # Claude Code config (created by mindspec setup claude)
 │   ├── settings.json           # Hooks (SessionStart, PreToolUse gates)
