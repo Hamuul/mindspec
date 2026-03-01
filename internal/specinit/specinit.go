@@ -162,9 +162,9 @@ func Run(root, specID, title string) (*Result, error) {
 		fmt.Fprintf(os.Stderr, "warning: could not write focus to worktree: %v\n", err)
 	}
 
-	// Install pre-commit hook (best-effort, ensures Layer 1 enforcement).
-	if err := hooks.InstallPreCommit(root); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not install pre-commit hook: %v\n", err)
+	// Install git hooks (best-effort, ensures Layer 1 enforcement).
+	if err := hooks.InstallAll(root); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not install git hooks: %v\n", err)
 	}
 
 	// Start recording in the worktree (best-effort).

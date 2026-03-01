@@ -10,8 +10,8 @@ You are not currently working on any spec or bead.
 
 When asked to fix a bug, add a feature, or make any code change:
 
-1. **FIRST**: `git checkout -b fix/<description>` — you cannot edit files until you are on a branch
-2. Make your changes on the branch
+1. **FIRST**: `git worktree add ../fix-<description> -b fix/<description>` then `cd ../fix-<description>`
+2. Make your changes in the worktree
 3. `git add <files>` + `git commit -m "<message>"`
 4. `git push -u origin <branch-name>`
 5. `gh pr create` — open a pull request

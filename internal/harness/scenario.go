@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/mindspec/mindspec/internal/hooks"
 )
 
 // Scenario defines a behavioral test scenario for an agent session.
@@ -1299,6 +1301,11 @@ func main() {
 
 			// Push main to the remote (force to reset any stale state from prior runs)
 			mustRun(sandbox.t, sandbox.Root, "git", "push", "--force", "origin", "main")
+
+			// Install git hooks (pre-commit + post-checkout enforcement)
+			if err := hooks.InstallAll(sandbox.Root); err != nil {
+				return fmt.Errorf("installing hooks: %w", err)
+			}
 
 			return nil
 		},
