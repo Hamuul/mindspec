@@ -1,18 +1,28 @@
 ---
-status: Draft
-spec_id: "057-worktree-aware-resolution"
-version: 1
-last_updated: "2026-03-01"
-approved_at: ""
-approved_by: ""
-bead_ids: []
 adr_citations:
-  - id: ADR-0006
-    sections: ["Branch topology", "Worktree lifecycle"]
-  - id: ADR-0019
-    sections: ["Enforcement layers"]
-  - id: ADR-0022
-    sections: ["Spec artifact resolution", "ActiveSpecs worktree-aware"]
+    - id: ADR-0006
+      sections:
+        - Branch topology
+        - Worktree lifecycle
+    - id: ADR-0019
+      sections:
+        - Enforcement layers
+    - id: ADR-0022
+      sections:
+        - Spec artifact resolution
+        - ActiveSpecs worktree-aware
+approved_at: "2026-03-01T10:20:14Z"
+approved_by: user
+bead_ids:
+    - mindspec-tf0g.1
+    - mindspec-tf0g.2
+    - mindspec-tf0g.3
+    - mindspec-tf0g.4
+    - mindspec-tf0g.5
+last_updated: "2026-03-01"
+spec_id: 057-worktree-aware-resolution
+status: Approved
+version: 1
 ---
 
 # Plan: 057-worktree-aware-resolution
