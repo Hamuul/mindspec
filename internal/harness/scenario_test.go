@@ -144,3 +144,55 @@ func TestLLM_ResumeAfterCrash(t *testing.T) {
 		t.Errorf("unexpected wrong actions: %d", len(report.WrongActions))
 	}
 }
+
+// --- Slash command scenarios ---
+
+func TestLLM_SpecInit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping LLM test in short mode")
+	}
+	report, _ := runScenario(t, ScenarioSpecInit())
+	if len(report.WrongActions) > 0 {
+		t.Errorf("unexpected wrong actions: %d", len(report.WrongActions))
+	}
+}
+
+func TestLLM_SpecApprove(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping LLM test in short mode")
+	}
+	report, _ := runScenario(t, ScenarioSpecApprove())
+	if len(report.WrongActions) > 0 {
+		t.Errorf("unexpected wrong actions: %d", len(report.WrongActions))
+	}
+}
+
+func TestLLM_PlanApprove(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping LLM test in short mode")
+	}
+	report, _ := runScenario(t, ScenarioPlanApprove())
+	if len(report.WrongActions) > 0 {
+		t.Errorf("unexpected wrong actions: %d", len(report.WrongActions))
+	}
+}
+
+func TestLLM_ImplApprove(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping LLM test in short mode")
+	}
+	report, _ := runScenario(t, ScenarioImplApprove())
+	if len(report.WrongActions) > 0 {
+		t.Errorf("unexpected wrong actions: %d", len(report.WrongActions))
+	}
+}
+
+func TestLLM_SpecStatus(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping LLM test in short mode")
+	}
+	report, _ := runScenario(t, ScenarioSpecStatus())
+	if len(report.WrongActions) > 0 {
+		t.Errorf("unexpected wrong actions: %d", len(report.WrongActions))
+	}
+}

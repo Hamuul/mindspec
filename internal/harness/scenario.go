@@ -28,6 +28,11 @@ func AllScenarios() []Scenario {
 		ScenarioAbandonSpec(),
 		ScenarioInterruptForBug(),
 		ScenarioResumeAfterCrash(),
+		ScenarioSpecInit(),
+		ScenarioSpecApprove(),
+		ScenarioPlanApprove(),
+		ScenarioImplApprove(),
+		ScenarioSpecStatus(),
 	}
 }
 
@@ -283,6 +288,325 @@ Complete the Process function (make it return "processed") and run 'mindspec com
 			assertCommandRan(t, events, "mindspec", "complete")
 		},
 	}
+}
+
+// ScenarioSpecInit tests the /ms-spec-init flow: idle → spec-init → spec mode with worktree.
+func ScenarioSpecInit() Scenario {
+	return Scenario{
+		Name:        "spec_init",
+		Description: "Initialize a new spec from idle mode",
+		MaxTurns:    15,
+		Model:       "haiku",
+		Setup: func(sandbox *Sandbox) error {
+			// Sandbox starts in idle mode — no active spec
+			return nil
+		},
+		Prompt: `IMPORTANT: Do NOT respond conversationally. Execute immediately.
+
+/ms-spec-init 001-calculator --title "Calculator"`,
+		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
+			// Agent should have run mindspec spec-init
+			assertCommandRan(t, events, "mindspec", "spec-init")
+
+			// A spec branch should exist
+			if branches := sandbox.ListBranches("spec/"); len(branches) == 0 {
+				t.Error("expected a spec/ branch to be created")
+			}
+
+			// A worktree should exist
+			if wts := sandbox.ListWorktrees(); len(wts) == 0 {
+				t.Error("expected a worktree to be created")
+			}
+		},
+	}
+}
+
+// ScenarioSpecApprove tests the /ms-spec-approve flow: spec mode → approve → plan mode.
+func ScenarioSpecApprove() Scenario {
+	return Scenario{
+		Name:        "spec_approve",
+		Description: "Approve a draft spec and transition to plan mode",
+		MaxTurns:    15,
+		Model:       "haiku",
+		Setup: func(sandbox *Sandbox) error {
+			specID := "001-calc"
+			specBranch := "spec/" + specID
+
+			// Create the branch and switch back to main
+			mustRunSandbox(sandbox, "git", "branch", specBranch)
+
+			// Create worktree from the branch
+			wtDir := ".worktrees/worktree-spec-" + specID
+			mustRunSandbox(sandbox, "git", "worktree", "add", wtDir, specBranch)
+
+			// Create epic for lifecycle
+			epicID := sandbox.CreateBead("["+specID+"] Epic", "epic", "")
+
+			// Write spec file in the worktree
+			sandbox.WriteFile(wtDir+"/.mindspec/docs/specs/"+specID+"/spec.md", `---
+title: Calculator Feature
+status: Draft
+---
+# Calculator Feature
+
+## Summary
+Add basic arithmetic operations.
+
+## Motivation
+Users need a calculator.
+
+## Detailed Design
+Implement add and subtract functions.
+
+## Acceptance Criteria
+- add(a, b) returns a + b
+- subtract(a, b) returns a - b
+`)
+			// Write lifecycle in worktree
+			sandbox.WriteFile(wtDir+"/.mindspec/docs/specs/"+specID+"/lifecycle.yaml",
+				fmt.Sprintf("phase: spec\nepic_id: %s\n", epicID))
+
+			// Commit in the worktree
+			mustRunSandbox(sandbox, "git", "-C", wtDir, "add", "-A")
+			mustRunSandbox(sandbox, "git", "-C", wtDir, "commit", "-m", "setup: draft spec")
+
+			// Set focus to spec mode (in main repo)
+			sandbox.WriteFocus(mustJSON(map[string]string{
+				"mode":           "spec",
+				"activeSpec":     specID,
+				"specBranch":     specBranch,
+				"activeWorktree": wtDir,
+				"timestamp":      time.Now().UTC().Format(time.RFC3339),
+			}))
+			sandbox.Commit("setup: spec mode focus")
+			return nil
+		},
+		Prompt: `IMPORTANT: Do NOT respond conversationally. Execute immediately.
+
+/ms-spec-approve`,
+		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
+			// Agent should have run mindspec approve spec
+			assertCommandRan(t, events, "mindspec", "approve")
+			assertCommandContains(t, events, "mindspec", "spec")
+		},
+	}
+}
+
+// ScenarioPlanApprove tests the /ms-plan-approve flow: plan mode → approve → implement mode.
+func ScenarioPlanApprove() Scenario {
+	return Scenario{
+		Name:        "plan_approve",
+		Description: "Approve a plan and transition to implement mode",
+		MaxTurns:    20,
+		Model:       "haiku",
+		Setup: func(sandbox *Sandbox) error {
+			specID := "001-planner"
+			specBranch := "spec/" + specID
+
+			// Create epic
+			epicID := sandbox.CreateBead("["+specID+"] Epic", "epic", "")
+
+			// Create spec branch and worktree (stay on main)
+			mustRunSandbox(sandbox, "git", "branch", specBranch)
+			wtDir := ".worktrees/worktree-spec-" + specID
+			mustRunSandbox(sandbox, "git", "worktree", "add", wtDir, specBranch)
+
+			// Write approved spec
+			sandbox.WriteFile(wtDir+"/.mindspec/docs/specs/"+specID+"/spec.md", `---
+title: Planner Feature
+status: Approved
+---
+# Planner Feature
+
+## Summary
+Add a planning feature.
+
+## Acceptance Criteria
+- plan() returns a plan string
+`)
+			// Write draft plan with bead sections
+			sandbox.WriteFile(wtDir+"/.mindspec/docs/specs/"+specID+"/plan.md", `---
+status: Draft
+spec_id: 001-planner
+---
+# Plan
+
+## Bead 1: Core planner
+Create planner.go with a Plan() function.
+
+## Bead 2: Tests
+Create planner_test.go with tests.
+Depends on: Bead 1
+`)
+			// Write lifecycle in plan phase
+			sandbox.WriteFile(wtDir+"/.mindspec/docs/specs/"+specID+"/lifecycle.yaml",
+				fmt.Sprintf("phase: plan\nepic_id: %s\n", epicID))
+
+			// Set focus to plan mode
+			sandbox.WriteFocus(mustJSON(map[string]string{
+				"mode":           "plan",
+				"activeSpec":     specID,
+				"specBranch":     specBranch,
+				"activeWorktree": wtDir,
+				"timestamp":      time.Now().UTC().Format(time.RFC3339),
+			}))
+
+			// Commit in worktree
+			mustRunSandbox(sandbox, "git", "-C", wtDir, "add", "-A")
+			mustRunSandbox(sandbox, "git", "-C", wtDir, "commit", "-m", "setup: draft plan")
+
+			// Commit focus in main
+			sandbox.Commit("setup: plan mode focus")
+			return nil
+		},
+		Prompt: `IMPORTANT: Do NOT respond conversationally. Execute immediately.
+
+/ms-plan-approve`,
+		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
+			// Agent should have run mindspec approve plan
+			assertCommandRan(t, events, "mindspec", "approve")
+
+			// Agent should have run mindspec next (per /ms-plan-approve flow)
+			assertCommandRan(t, events, "mindspec", "next")
+		},
+	}
+}
+
+// ScenarioImplApprove tests the /ms-impl-approve flow: review mode → approve impl → idle.
+func ScenarioImplApprove() Scenario {
+	return Scenario{
+		Name:        "impl_approve",
+		Description: "Approve implementation and transition to idle",
+		MaxTurns:    15,
+		Model:       "haiku",
+		Setup: func(sandbox *Sandbox) error {
+			specID := "001-done"
+			specBranch := "spec/" + specID
+
+			// Create epic + bead (already closed)
+			epicID := sandbox.CreateBead("["+specID+"] Epic", "epic", "")
+			beadID := sandbox.CreateBead("["+specID+"] Implement feature", "task", epicID)
+			sandbox.ClaimBead(beadID)
+			// Close the bead
+			sandbox.runBDMust("close", beadID)
+
+			// Create spec branch with implementation content
+			mustRunSandbox(sandbox, "git", "checkout", "-b", specBranch)
+
+			// Write spec files
+			sandbox.WriteFile(".mindspec/docs/specs/"+specID+"/spec.md", `---
+title: Done Feature
+status: Approved
+---
+# Done Feature
+A completed feature.
+`)
+			sandbox.WriteFile(".mindspec/docs/specs/"+specID+"/plan.md", fmt.Sprintf(`---
+status: Approved
+spec_id: %s
+bead_ids:
+- %s
+---
+# Plan
+## Bead 1: Implement feature
+Create done.go.
+`, specID, beadID))
+			sandbox.WriteFile(".mindspec/docs/specs/"+specID+"/lifecycle.yaml",
+				fmt.Sprintf("phase: review\nepic_id: %s\n", epicID))
+
+			// Write actual implementation file
+			sandbox.WriteFile("done.go", `package main
+
+func Done() string { return "done" }
+`)
+			sandbox.Commit("impl: implement feature")
+
+			// Switch back to main for the merge target
+			mustRunSandbox(sandbox, "git", "checkout", "main")
+
+			// Set focus to review mode
+			sandbox.WriteFocus(mustJSON(map[string]string{
+				"mode":       "review",
+				"activeSpec": specID,
+				"specBranch": specBranch,
+				"timestamp":  time.Now().UTC().Format(time.RFC3339),
+			}))
+			sandbox.Commit("setup: review mode focus")
+			return nil
+		},
+		Prompt: `IMPORTANT: Do NOT respond conversationally. Execute immediately.
+
+/ms-impl-approve`,
+		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
+			// Agent should have run mindspec approve impl
+			assertCommandRan(t, events, "mindspec", "approve")
+			assertCommandContains(t, events, "mindspec", "impl")
+		},
+	}
+}
+
+// ScenarioSpecStatus tests the /ms-spec-status flow: check current mode and report.
+func ScenarioSpecStatus() Scenario {
+	return Scenario{
+		Name:        "spec_status",
+		Description: "Check current MindSpec status and report mode",
+		MaxTurns:    10,
+		Model:       "haiku",
+		Setup: func(sandbox *Sandbox) error {
+			// Set up in implement mode so there's interesting state to report
+			epicID := sandbox.CreateBead("[001-status] Epic", "epic", "")
+			beadID := sandbox.CreateBead("[001-status] Feature", "task", epicID)
+			sandbox.ClaimBead(beadID)
+
+			sandbox.WriteFile(".mindspec/docs/specs/001-status/spec.md", `---
+title: Status Feature
+status: Approved
+---
+# Status Feature
+`)
+			sandbox.WriteFile(".mindspec/docs/specs/001-status/lifecycle.yaml",
+				fmt.Sprintf("phase: implement\nepic_id: %s\n", epicID))
+			sandbox.WriteFocus(mustJSON(map[string]string{
+				"mode":       "implement",
+				"activeSpec": "001-status",
+				"activeBead": beadID,
+				"timestamp":  time.Now().UTC().Format(time.RFC3339),
+			}))
+			sandbox.Commit("setup: implement mode with active bead")
+			return nil
+		},
+		Prompt: `IMPORTANT: Do NOT respond conversationally. Execute immediately.
+
+/ms-spec-status`,
+		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
+			// Agent should have run mindspec state show or mindspec instruct
+			ran := false
+			for _, e := range events {
+				if e.Command != "mindspec" {
+					continue
+				}
+				args := eventArgs(e)
+				for _, arg := range args {
+					if arg == "state" || arg == "instruct" {
+						ran = true
+						break
+					}
+				}
+				if ran {
+					break
+				}
+			}
+			if !ran {
+				t.Error("expected agent to run 'mindspec state show' or 'mindspec instruct'")
+			}
+		},
+	}
+}
+
+// mustRunSandbox runs a command in the sandbox root, fataling on error.
+func mustRunSandbox(sandbox *Sandbox, name string, args ...string) {
+	sandbox.t.Helper()
+	mustRun(sandbox.t, sandbox.Root, name, args...)
 }
 
 // --- Helpers ---

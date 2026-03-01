@@ -337,6 +337,15 @@ func (s *Sandbox) ClaimBead(beadID string) {
 	}
 }
 
+// runBDMust executes a bd command in the sandbox, fataling on error.
+func (s *Sandbox) runBDMust(args ...string) {
+	s.t.Helper()
+	out, err := s.runBD(args...)
+	if err != nil {
+		s.t.Fatalf("bd %s: %v\n%s", strings.Join(args, " "), err, out)
+	}
+}
+
 // runBD executes a bd command in the sandbox directory, returning stdout only.
 func (s *Sandbox) runBD(args ...string) (string, error) {
 	bdPath, err := exec.LookPath("bd")

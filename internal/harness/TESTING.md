@@ -98,6 +98,11 @@ When an LLM test fails due to agent behavior, the fix MUST go into mindspec's ow
 | `TestLLM_InterruptForBug` | 25 | Medium | Mid-bead bug fix then resume |
 | `TestLLM_ResumeAfterCrash` | 15 | Low | Pick up partial work |
 | `TestLLM_SpecToIdle` | 75 | High | Full 9-step lifecycle (explore -> idle), verifies git state cleanup (branches, worktrees, CWD) |
+| `TestLLM_SpecInit` | 15 | Low | Idle → spec-init → spec mode, worktree + branch created |
+| `TestLLM_SpecApprove` | 15 | Low | Spec mode → approve spec → plan mode |
+| `TestLLM_PlanApprove` | 20 | Medium | Plan mode → approve plan → mindspec next → implement mode |
+| `TestLLM_ImplApprove` | 15 | Low | Review mode → approve impl → idle, merge + cleanup |
+| `TestLLM_SpecStatus` | 10 | Low | Check current mode via state show / instruct (read-only) |
 
 **Start with SingleBead** when validating changes -- it's the fastest and most reliable.
 
@@ -249,6 +254,36 @@ Track each test run with: scenario, date, pass/fail, recorded events count, turn
 | Date | Result | Events | Turns | Time | Change |
 |------|--------|--------|-------|------|--------|
 | 2026-02-28 | PASS | 230 | 6 | 66s | First recorded run: completed 2/3 beads within 30 turns, 66.7% fwd (2 retries on complete due to dirty tree), all 3 files created |
+
+### TestLLM_SpecInit
+
+| Date | Result | Events | Turns | Time | Change |
+|------|--------|--------|-------|------|--------|
+| 2026-03-01 | PASS | 57 | 6 | 37s | Baseline: agent ran spec-init, created worktree + branch. 100% fwd ratio. Hit max turns (15) while writing spec content. |
+
+### TestLLM_SpecApprove
+
+| Date | Result | Events | Turns | Time | Change |
+|------|--------|--------|-------|------|--------|
+| 2026-03-01 | PASS | 47 | 4 | 39s | Baseline: agent ran `mindspec approve spec` (3 attempts, exit=1 each — spec validation failures). 50% fwd ratio. Hit max turns (15). Validation errors are a product gap, not test issue. |
+
+### TestLLM_PlanApprove
+
+| Date | Result | Events | Turns | Time | Change |
+|------|--------|--------|-------|------|--------|
+| 2026-03-01 | PASS | 117 | 9 | 56s | Baseline: agent ran `approve plan` (succeeded on 3rd try) then `mindspec next` (claimed bead, created nested worktree). 77.8% fwd ratio (7 fwd / 2 retry). |
+
+### TestLLM_ImplApprove
+
+| Date | Result | Events | Turns | Time | Change |
+|------|--------|--------|-------|------|--------|
+| 2026-03-01 | PASS | 60 | 3 | 24s | Baseline: agent ran `state show`, then `approve impl` (direct merge + cleanup), then session close (bd sync, git commit, git push). 100% fwd ratio. |
+
+### TestLLM_SpecStatus
+
+| Date | Result | Events | Turns | Time | Change |
+|------|--------|--------|-------|------|--------|
+| 2026-03-01 | PASS | 40 | 2 | 14s | Baseline: agent ran `state show` and `instruct`, reported implement mode with active bead. 100% fwd ratio. |
 
 ### Key Metrics to Track Per Run
 - **Events**: total shim-recorded commands (multiple per turn -- measures total agent activity)
