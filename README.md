@@ -53,8 +53,9 @@ MindSpec treats these as system design problems, not prompting problems. It prov
 - **One-command bootstrap** — `mindspec init` scaffolds the full project structure; additive and safe for existing repos
 - **Brownfield onboarding** — analyzes existing docs and migrates them into canonical MindSpec structure with full provenance
 - **Claude Code integration** — `mindspec setup claude` configures hooks, slash commands, plan gates, and CLAUDE.md automatically
+- **Codex support** — first-class workflow for OpenAI Codex CLI with the same gated lifecycle
 - **Copilot support** — first-class workflow for GitHub Copilot users in both CLI and VS Code Chat
-- **OTLP-compatible** — any agent that speaks OpenTelemetry can feed AgentMind; not locked to Claude Code
+- **OTLP-compatible** — any agent that speaks OpenTelemetry can feed AgentMind; not locked to a single agent
 
 ## The Workflow
 
@@ -109,9 +110,10 @@ Tell the agent what you want to build. It will walk you through the lifecycle:
 
 | Goal | Guide |
 |:-----|:------|
-| **Full workflow with Claude Code** | [Claude Code guide](.mindspec/docs/guides/claude-code.md) |
-| **Full workflow with Codex** | [Codex guide](.mindspec/docs/guides/codex.md) |
-| **Visualize & benchmark agent activity** | [AgentMind guide](.mindspec/docs/guides/agentmind.md) |
+| **Full workflow with Claude Code** | [Claude Code guide](.mindspec/docs/user/guides/claude-code.md) |
+| **Full workflow with Codex** | [Codex guide](.mindspec/docs/user/guides/codex.md) |
+| **Full workflow with Copilot** | [Copilot guide](.mindspec/docs/user/guides/copilot.md) |
+| **Visualize & benchmark agent activity** | [AgentMind guide](.mindspec/docs/user/guides/agentmind.md) |
 | **Complete reference** | [USAGE.md](.mindspec/docs/core/USAGE.md) |
 
 ## Project Structure
@@ -119,15 +121,21 @@ Tell the agent what you want to build. It will walk you through the lifecycle:
 ```
 your-project/
 ├── .mindspec/
-│   ├── docs/                   # Canonical docs (core, domains, adr, specs, guides)
+│   ├── config.yaml             # MindSpec + Beads configuration
 │   ├── policies.yml            # Canonical architecture policies
-│   └── state.json              # Current mode, active spec/bead (committed)
+│   └── docs/
+│       ├── core/               # USAGE.md, MODES.md, ARCHITECTURE.md, etc.
+│       ├── adr/                # Architecture Decision Records
+│       ├── domains/            # Bounded context documentation
+│       ├── specs/              # Versioned specifications and plans
+│       └── user/               # Guides (claude-code, codex, copilot, agentmind)
 ├── .beads/                     # Beads work graph (committed)
 ├── .claude/                    # Claude Code config (created by mindspec setup claude)
-│   ├── settings.json           # Hooks (SessionStart, PreToolUse plan gates)
+│   ├── settings.json           # Hooks (SessionStart, PreToolUse gates)
+│   ├── commands/               # Custom slash commands
 │   └── skills/                 # Skills (/ms:spec-init, /ms:spec-approve, etc.)
-├── AGENTS.md                   # Cross-agent workflow conventions (read by all agents)
-└── CLAUDE.md                   # Claude Code-specific config (points to AGENTS.md)
+├── AGENTS.md                   # Cross-agent workflow conventions
+└── CLAUDE.md                   # Claude Code-specific config
 ```
 
 ## Tested Against Real Agents
