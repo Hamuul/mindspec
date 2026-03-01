@@ -309,9 +309,13 @@ Track each test run with: scenario, date, pass/fail, recorded events count, turn
 
 | Date | Result | Events | Turns | Time | Change |
 |------|--------|--------|-------|------|--------|
-| 2026-03-01 | PASS | 45 | 2 | 25s | Baseline (local bare remote): agent created `fix/division-by-zero` branch, fixed calculator.go, committed on branch, attempted `gh pr create` (failed — local bare remote), pushed branch. 100% fwd ratio. Main branch unmodified. |
-| 2026-03-01 | PASS | 51 | 3 | 23s | Switched to real GitHub remote (mrmaxsteel/test-mindspec). `gh pr create` succeeded (exit=0). PR #1 created. 100% fwd ratio. Added cleanup to close PRs + delete remote branches. |
-| 2026-03-01 | 3/3 PASS | 74-82 | 3-4 | 32-42s | Reliability run. All passes. Agent retries `gh pr create` once (branch not pushed yet — expected). 50-75% fwd ratio due to gh retry. PRs #2-4 created + cleaned up. Main always unmodified. |
+| 2026-03-01 | PASS | 45 | 2 | 25s | TAUTOLOGICAL — prompt said "create a branch, create PR, don't commit to main". Agent followed instructions. Not a valid workflow test. |
+| 2026-03-01 | PASS | 51 | 3 | 23s | Still tautological, added real GitHub remote (mrmaxsteel/test-mindspec). |
+| 2026-03-01 | 3/3 PASS | 74-82 | 3-4 | 32-42s | Reliability of tautological prompt confirmed. |
+| 2026-03-01 | FAIL | 70 | 3 | 25s | Removed workflow hints from prompt (task-only). Agent committed directly to main — no branch, no PR. **Confirmed guidance gap.** |
+| 2026-03-01 | FAIL | 25 | 2 | 12s | Added "Branch Policy — MANDATORY" section to idle.md. Agent still edited directly on main. Policy section too passive for Haiku. |
+| 2026-03-01 | PASS | 50 | 4 | 23s | Restructured idle.md: "How to Make Changes" with numbered steps, "you cannot edit files until you are on a branch". First non-tautological pass. |
+| 2026-03-01 | 2/3 PASS | 43-46 | 2-4 | 22-27s | Reliability (3 runs). 2 pass, 1 fail (Haiku skipped guidance, edited directly). ~67% reliability with guidance-only approach on Haiku. |
 
 ### Key Metrics to Track Per Run
 - **Events**: total shim-recorded commands (multiple per turn -- measures total agent activity)

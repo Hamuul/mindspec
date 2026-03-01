@@ -2,12 +2,30 @@
 
 You are not currently working on any spec or bead.
 
+## Branch Protection
+
+**main is protected.** You MUST NOT edit files or commit while on main. All changes require a branch.
+
+## How to Make Changes
+
+When asked to fix a bug, add a feature, or make any code change:
+
+1. **FIRST**: `git checkout -b fix/<description>` — you cannot edit files until you are on a branch
+2. Make your changes on the branch
+3. `git add <files>` + `git commit -m "<message>"`
+4. `git push -u origin <branch-name>`
+5. `gh pr create` — open a pull request
+
+Work is NOT complete until the PR is created. Always finish all 5 steps.
+
+For spec-driven work, use `mindspec spec-init` instead (it creates the branch automatically).
+
 ## Available Actions
 
-- Run `mindspec explore "idea"` to evaluate whether an idea is worth pursuing
-- Run `mindspec spec-init` to start a new specification (if you already know what to build)
-- Run `mindspec state set --mode=spec --spec=<id>` to resume work on an existing spec
-- Run `mindspec doctor` to check project health
+- `mindspec explore "idea"` — evaluate whether an idea is worth pursuing
+- `mindspec spec-init` — start a new specification (creates branch + worktree)
+- `mindspec state set --mode=spec --spec=<id>` — resume work on an existing spec
+- `mindspec doctor` — check project health
 
 ## Available Specs
 

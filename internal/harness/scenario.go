@@ -1304,7 +1304,7 @@ func main() {
 		},
 		Prompt: `IMPORTANT: Do NOT respond conversationally. Execute immediately.
 
-There is a division-by-zero bug in calculator.go — Divide(10, 0) panics. Fix it by adding a zero-divisor check that returns 0 when b is 0. Create a bugfix branch, fix the bug there, and create a pull request. Do NOT commit directly to main.`,
+There is a division-by-zero bug in calculator.go — Divide(10, 0) panics. Fix it by adding a zero-divisor check that returns 0 when b is 0.`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
 			// Agent must have created a branch (any non-main branch)
 			assertHasNonMainBranch(t, sandbox)
@@ -1594,18 +1594,54 @@ func assertHasNonMainBranch(t *testing.T, sandbox *Sandbox) {
 
 // assertMainCommitCountUnchanged verifies that main has the same number of
 // commits as when setup recorded the count in .harness/main_commit_count.
+// Infrastructure commits (e.g. bd prime's .beads/backup) are excluded —
+// only user-file-touching commits count.
 func assertMainCommitCountUnchanged(t *testing.T, sandbox *Sandbox) {
 	t.Helper()
 	expected := strings.TrimSpace(sandbox.ReadFile(".harness/main_commit_count"))
-	cmd := exec.Command("git", "rev-list", "--count", "main")
+
+	// Count commits on main, excluding those that ONLY touch .beads/ files
+	// (bd prime commits .beads/backup during SessionStart — not agent work)
+	cmd := exec.Command("git", "rev-list", "main")
 	cmd.Dir = sandbox.Root
 	out, err := cmd.Output()
 	if err != nil {
-		t.Errorf("git rev-list --count main failed: %v", err)
+		t.Errorf("git rev-list main failed: %v", err)
 		return
 	}
-	actual := strings.TrimSpace(string(out))
-	if actual != expected {
-		t.Errorf("main branch commit count changed: expected %s, got %s (agent committed directly to main)", expected, actual)
+	userCommits := 0
+	for _, sha := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if sha == "" {
+			continue
+		}
+		// Check what files this commit touched
+		diffCmd := exec.Command("git", "diff-tree", "--no-commit-id", "--name-only", "-r", sha)
+		diffCmd.Dir = sandbox.Root
+		diffOut, err := diffCmd.Output()
+		if err != nil {
+			userCommits++ // assume user commit if we can't check
+			continue
+		}
+		files := strings.TrimSpace(string(diffOut))
+		if files == "" {
+			userCommits++ // empty diff = initial commit or merge
+			continue
+		}
+		// If ALL changed files are under .beads/, it's infrastructure
+		allBeads := true
+		for _, f := range strings.Split(files, "\n") {
+			if !strings.HasPrefix(f, ".beads/") {
+				allBeads = false
+				break
+			}
+		}
+		if !allBeads {
+			userCommits++
+		}
+	}
+	expectedInt := 0
+	fmt.Sscanf(expected, "%d", &expectedInt)
+	if userCommits != expectedInt {
+		t.Errorf("main branch user commit count changed: expected %d, got %d (agent committed directly to main)", expectedInt, userCommits)
 	}
 }
