@@ -104,11 +104,32 @@ func LegacyDocsDir(root string) string {
 }
 
 // SpecDir returns the path to a specific spec directory under root.
-// NOTE: This is not worktree-aware. Callers that need to find spec artifacts
-// in worktrees should use EffectiveSpecRoot first. See ADR-0022 for planned
-// refactor to make SpecDir worktree-aware by default.
+// Resolution order (ADR-0022): worktree → canonical → legacy.
+// 1. root/.worktrees/worktree-spec-<specID>/.mindspec/docs/specs/<specID>/
+// 2. root/.mindspec/docs/specs/<specID>/
+// 3. root/docs/specs/<specID>/
+// Returns the first path that exists on disk. If none exist, returns the
+// canonical path (option 2) so that callers creating new specs write to
+// the right location.
 func SpecDir(root, specID string) string {
-	return filepath.Join(DocsDir(root), "specs", specID)
+	// 1. Worktree path
+	wtPath := filepath.Join(root, ".worktrees", "worktree-spec-"+specID,
+		".mindspec", "docs", "specs", specID)
+	if exists(wtPath) {
+		return wtPath
+	}
+	// 2. Canonical path
+	canonical := filepath.Join(CanonicalDocsDir(root), "specs", specID)
+	if exists(canonical) {
+		return canonical
+	}
+	// 3. Legacy path
+	legacy := filepath.Join(LegacyDocsDir(root), "specs", specID)
+	if exists(legacy) {
+		return legacy
+	}
+	// Default: canonical (for new spec creation)
+	return canonical
 }
 
 // ContextMapPath returns the path to docs/context-map.md under root.
@@ -151,9 +172,9 @@ func LifecyclePath(root, specID string) string {
 	return filepath.Join(SpecDir(root, specID), "lifecycle.yaml")
 }
 
+// Deprecated: Use SpecDir directly — it is now worktree-aware. See ADR-0022.
 // EffectiveSpecRoot returns the worktree root for a spec if one exists,
-// otherwise returns mainRoot. Use this for reading spec artifacts that
-// may only exist in the worktree (plan.md, lifecycle.yaml, etc.).
+// otherwise returns mainRoot.
 func EffectiveSpecRoot(mainRoot, specID string) string {
 	wtPath := filepath.Join(mainRoot, ".worktrees", "worktree-spec-"+specID)
 	if exists(filepath.Join(wtPath, ".mindspec")) {
