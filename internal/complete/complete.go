@@ -14,6 +14,7 @@ import (
 	"github.com/mindspec/mindspec/internal/recording"
 	"github.com/mindspec/mindspec/internal/resolve"
 	"github.com/mindspec/mindspec/internal/state"
+	"github.com/mindspec/mindspec/internal/workspace"
 )
 
 // Package-level function variables for testability.
@@ -49,7 +50,18 @@ func Run(root, beadID string) (*Result, error) {
 	if beadID == "" {
 		beadID, err = resolveActiveBeadFn(root, specID)
 		if err != nil {
-			return nil, fmt.Errorf("resolving active bead: %w", err)
+			// Fallback: check focus for activeBead
+			if focus, ferr := state.ReadFocus(root); ferr == nil && focus != nil && focus.ActiveBead != "" {
+				beadID = focus.ActiveBead
+			} else {
+				return nil, fmt.Errorf("resolving active bead: %w", err)
+			}
+		}
+	}
+	if beadID == "" {
+		// Final fallback: check focus for activeBead
+		if focus, ferr := state.ReadFocus(root); ferr == nil && focus != nil && focus.ActiveBead != "" {
+			beadID = focus.ActiveBead
 		}
 	}
 	if beadID == "" {
@@ -216,10 +228,11 @@ func advanceState(root, specID string) (mode, nextBead string) {
 		return state.ModeIdle, ""
 	}
 
-	// Read epic_id from lifecycle.yaml
-	specDir := filepath.Join(root, ".mindspec", "docs", "specs", specID)
+	// Read epic_id from lifecycle.yaml — check spec worktree if not in main repo.
+	effectiveRoot := workspace.EffectiveSpecRoot(root, specID)
+	specDir := filepath.Join(effectiveRoot, ".mindspec", "docs", "specs", specID)
 	if _, err := os.Stat(specDir); err != nil {
-		specDir = filepath.Join(root, "docs", "specs", specID)
+		specDir = filepath.Join(effectiveRoot, "docs", "specs", specID)
 	}
 
 	lc, err := state.ReadLifecycle(specDir)

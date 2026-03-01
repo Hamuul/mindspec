@@ -1057,8 +1057,8 @@ Your CWD may be the spec worktree, not the bead worktree.
 Run 'mindspec complete' to close the bead and finish implementation.
 If it fails, diagnose the issue and find a way to complete successfully.`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
-			// Agent should have run mindspec complete successfully
-			assertCommandRan(t, events, "mindspec", "complete")
+			// Agent should have run mindspec complete successfully (exit code 0)
+			assertCommandSucceeded(t, events, "mindspec", "complete")
 		},
 	}
 }
@@ -1146,6 +1146,21 @@ func eventArgs(e ActionEvent) []string {
 	args := flatArgs(e.Args)
 	args = append(args, e.ArgsList...)
 	return args
+}
+
+// assertCommandSucceeded checks that the command was run AND exited with code 0.
+func assertCommandSucceeded(t *testing.T, events []ActionEvent, command, argSubstr string) {
+	t.Helper()
+	for _, e := range events {
+		if e.Command != command {
+			continue
+		}
+		args := eventArgs(e)
+		if containsAll(args, argSubstr) && e.ExitCode == 0 {
+			return
+		}
+	}
+	t.Errorf("command %q with arg %q was not found with exit code 0 in events", command, argSubstr)
 }
 
 func assertBranchIs(t *testing.T, sandbox *Sandbox, expected string) {
