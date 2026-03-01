@@ -21,6 +21,16 @@
 {"created_at":"2026-02-28T17:26:48Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-eo0u.5","issue_id":"mindspec-eo0u.6","type":"blocks"}
 {"created_at":"2026-02-26T12:01:32Z","created_by":"Max Steel","depends_on_id":"mindspec-790r","issue_id":"mindspec-l37j","type":"blocks"}
 {"created_at":"2026-02-26T12:02:41Z","created_by":"Max Steel","depends_on_id":"mindspec-mol-9zt","issue_id":"mindspec-l37j","type":"parent-child"}
+{"created_at":"2026-03-01T22:20:30Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-mn2w","issue_id":"mindspec-mn2w.1","type":"parent-child"}
+{"created_at":"2026-03-01T22:20:31Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-mn2w","issue_id":"mindspec-mn2w.10","type":"parent-child"}
+{"created_at":"2026-03-01T22:20:30Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-mn2w","issue_id":"mindspec-mn2w.2","type":"parent-child"}
+{"created_at":"2026-03-01T22:20:30Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-mn2w","issue_id":"mindspec-mn2w.3","type":"parent-child"}
+{"created_at":"2026-03-01T22:20:30Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-mn2w","issue_id":"mindspec-mn2w.4","type":"parent-child"}
+{"created_at":"2026-03-01T22:20:30Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-mn2w","issue_id":"mindspec-mn2w.5","type":"parent-child"}
+{"created_at":"2026-03-01T22:20:30Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-mn2w","issue_id":"mindspec-mn2w.6","type":"parent-child"}
+{"created_at":"2026-03-01T22:20:30Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-mn2w","issue_id":"mindspec-mn2w.7","type":"parent-child"}
+{"created_at":"2026-03-01T22:20:31Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-mn2w","issue_id":"mindspec-mn2w.8","type":"parent-child"}
+{"created_at":"2026-03-01T22:20:31Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-mn2w","issue_id":"mindspec-mn2w.9","type":"parent-child"}
 {"created_at":"2026-02-27T08:10:28Z","created_by":"Max Steel","depends_on_id":"mindspec-mol-jpkyf","issue_id":"mindspec-mol-07lst","type":"parent-child"}
 {"created_at":"2026-02-27T08:10:28Z","created_by":"Max Steel","depends_on_id":"mindspec-mol-mw2ag","issue_id":"mindspec-mol-07lst","type":"blocks"}
 {"created_at":"2026-02-27T21:22:03Z","created_by":"Max Steel","depends_on_id":"mindspec-mol-07lst","issue_id":"mindspec-mol-07lst.1","type":"parent-child"}
@@ -183,6 +193,7 @@
 {"created_at":"2026-03-01T10:20:15Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-tf0g.3","issue_id":"mindspec-tf0g.5","type":"blocks"}
 {"created_at":"2026-03-01T10:20:15Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-tf0g.4","issue_id":"mindspec-tf0g.5","type":"blocks"}
 {"created_at":"2026-02-26T12:02:37Z","created_by":"Max Steel","depends_on_id":"mindspec-mol-9zt","issue_id":"mindspec-u7mk","type":"parent-child"}
+{"created_at":"2026-03-01T22:20:35Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-mn2w","issue_id":"mindspec-v9wy","type":"parent-child"}
 {"created_at":"2026-03-01T21:51:46Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-wqaz","issue_id":"mindspec-v9wy","type":"discovered-from"}
 {"created_at":"2026-02-26T12:02:41Z","created_by":"Max Steel","depends_on_id":"mindspec-mol-9zt","issue_id":"mindspec-wym1","type":"parent-child"}
 {"created_at":"2026-02-26T12:01:32Z","created_by":"Max Steel","depends_on_id":"mindspec-u7mk","issue_id":"mindspec-wym1","type":"blocks"}
