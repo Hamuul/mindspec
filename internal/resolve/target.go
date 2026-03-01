@@ -25,10 +25,11 @@ func (e *ErrAmbiguousTarget) Error() string {
 //
 // Resolution order:
 //  1. If specFlag is provided (from --spec), use it directly.
-//  2. Query active specs; if exactly one, auto-select it.
-//  3. If multiple active specs exist, return ErrAmbiguousTarget.
-//  4. Fall back to focus file's activeSpec (covers worktree CWD where
-//     lifecycle.yaml only exists in the spec worktree, not main repo).
+//  2. Check focus file — if activeSpec is set, use it (the focus tracks
+//     which spec the agent is currently working on, disambiguating
+//     multi-spec scenarios).
+//  3. Query active specs; if exactly one, auto-select it.
+//  4. If multiple active specs exist, return ErrAmbiguousTarget.
 //  5. If nothing found, return an error.
 func ResolveTarget(root, specFlag string) (string, error) {
 	// Explicit target
@@ -36,7 +37,13 @@ func ResolveTarget(root, specFlag string) (string, error) {
 		return specFlag, nil
 	}
 
-	// Query active specs
+	// Focus file: the agent's current working context.
+	focus, _ := state.ReadFocus(root)
+	if focus != nil && focus.ActiveSpec != "" {
+		return focus.ActiveSpec, nil
+	}
+
+	// Query active specs (no focus available)
 	active, err := ActiveSpecs(root)
 	if err == nil {
 		switch len(active) {
@@ -47,13 +54,6 @@ func ResolveTarget(root, specFlag string) (string, error) {
 				return "", &ErrAmbiguousTarget{Active: active}
 			}
 		}
-	}
-
-	// Fallback: check focus file. During implementation, lifecycle.yaml
-	// lives in the spec worktree but ActiveSpecs only scans the main repo.
-	focus, ferr := state.ReadFocus(root)
-	if ferr == nil && focus != nil && focus.ActiveSpec != "" {
-		return focus.ActiveSpec, nil
 	}
 
 	return "", fmt.Errorf("no active specs found; use --spec flag")

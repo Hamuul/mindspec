@@ -102,6 +102,53 @@ func TestActiveSpecsWorktreeWinsOverMain(t *testing.T) {
 	}
 }
 
+func TestResolveTarget_FocusDisambiguatesMultipleSpecs(t *testing.T) {
+	root := t.TempDir()
+	specsDir := filepath.Join(root, ".mindspec", "docs", "specs")
+
+	// Two active specs — would normally be ambiguous
+	specA := filepath.Join(specsDir, "038-alpha")
+	os.MkdirAll(specA, 0755)
+	state.WriteLifecycle(specA, &state.Lifecycle{Phase: state.ModeImplement})
+
+	specB := filepath.Join(specsDir, "039-beta")
+	os.MkdirAll(specB, 0755)
+	state.WriteLifecycle(specB, &state.Lifecycle{Phase: state.ModeSpec})
+
+	// Focus points to beta — should resolve without ambiguity
+	os.MkdirAll(filepath.Join(root, ".mindspec"), 0755)
+	state.WriteFocus(root, &state.Focus{
+		Mode:       state.ModeSpec,
+		ActiveSpec: "039-beta",
+	})
+
+	got, err := ResolveTarget(root, "")
+	if err != nil {
+		t.Fatalf("ResolveTarget with focus should not error: %v", err)
+	}
+	if got != "039-beta" {
+		t.Errorf("focus should disambiguate: got %q, want %q", got, "039-beta")
+	}
+}
+
+func TestResolveTarget_NoFocusFallsBackToActiveSpecs(t *testing.T) {
+	root := t.TempDir()
+	specsDir := filepath.Join(root, ".mindspec", "docs", "specs")
+
+	// Single active spec, no focus file
+	specDir := filepath.Join(specsDir, "038-alpha")
+	os.MkdirAll(specDir, 0755)
+	state.WriteLifecycle(specDir, &state.Lifecycle{Phase: state.ModePlan})
+
+	got, err := ResolveTarget(root, "")
+	if err != nil {
+		t.Fatalf("ResolveTarget should auto-select single spec: %v", err)
+	}
+	if got != "038-alpha" {
+		t.Errorf("got %q, want %q", got, "038-alpha")
+	}
+}
+
 func TestAmbiguousTarget_RefusesToGuess(t *testing.T) {
 	err := &ErrAmbiguousTarget{
 		Active: []SpecStatus{
