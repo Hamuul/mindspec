@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/mindspec/mindspec/internal/validate"
-	"github.com/mindspec/mindspec/internal/workspace"
 	"github.com/spf13/cobra"
 )
 
@@ -29,8 +28,7 @@ var validateSpecCmd = &cobra.Command{
 			return err
 		}
 
-		effectiveRoot := workspace.EffectiveSpecRoot(root, specID)
-		result := validate.ValidateSpec(effectiveRoot, specID)
+		result := validate.ValidateSpec(root, specID)
 		return outputResult(result, format)
 	},
 }
@@ -49,8 +47,7 @@ var validatePlanCmd = &cobra.Command{
 			return err
 		}
 
-		effectiveRoot := workspace.EffectiveSpecRoot(root, specID)
-		result := validate.ValidatePlan(effectiveRoot, specID)
+		result := validate.ValidatePlan(root, specID)
 		return outputResult(result, format)
 	},
 }

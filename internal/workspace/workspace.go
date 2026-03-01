@@ -172,17 +172,6 @@ func LifecyclePath(root, specID string) string {
 	return filepath.Join(SpecDir(root, specID), "lifecycle.yaml")
 }
 
-// Deprecated: Use SpecDir directly — it is now worktree-aware. See ADR-0022.
-// EffectiveSpecRoot returns the worktree root for a spec if one exists,
-// otherwise returns mainRoot.
-func EffectiveSpecRoot(mainRoot, specID string) string {
-	wtPath := filepath.Join(mainRoot, ".worktrees", "worktree-spec-"+specID)
-	if exists(filepath.Join(wtPath, ".mindspec")) {
-		return wtPath
-	}
-	return mainRoot
-}
-
 func exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil

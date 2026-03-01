@@ -101,8 +101,7 @@ func assertState(t *testing.T, root, specID, expectedMode, expectedPhase string)
 	if specID == "" || expectedPhase == "" {
 		return
 	}
-	effectiveRoot := workspace.EffectiveSpecRoot(root, specID)
-	specDir := workspace.SpecDir(effectiveRoot, specID)
+	specDir := workspace.SpecDir(root, specID)
 	lc, err := state.ReadLifecycle(specDir)
 	if err != nil {
 		t.Fatalf("assertState: reading lifecycle for %s: %v", specID, err)
@@ -269,8 +268,7 @@ func simulateComplete(t *testing.T, root, specID string) {
 	t.Helper()
 
 	// Update lifecycle to review
-	effectiveRoot := workspace.EffectiveSpecRoot(root, specID)
-	specDir := workspace.SpecDir(effectiveRoot, specID)
+	specDir := workspace.SpecDir(root, specID)
 	lc, err := state.ReadLifecycle(specDir)
 	if err != nil || lc == nil {
 		lc = &state.Lifecycle{}
@@ -291,8 +289,7 @@ func simulateApproveImpl(t *testing.T, root, specID string) {
 	t.Helper()
 
 	// Update lifecycle to done
-	effectiveRoot := workspace.EffectiveSpecRoot(root, specID)
-	specDir := workspace.SpecDir(effectiveRoot, specID)
+	specDir := workspace.SpecDir(root, specID)
 	lc, err := state.ReadLifecycle(specDir)
 	if err != nil || lc == nil {
 		lc = &state.Lifecycle{}
@@ -464,8 +461,7 @@ func TestScenario_InterruptForBug(t *testing.T) {
 	assertState(t, root, specID, state.ModeImplement, state.ModeImplement)
 
 	// The original spec's lifecycle should still be in implement phase
-	effectiveRoot := workspace.EffectiveSpecRoot(root, specID)
-	specDir := workspace.SpecDir(effectiveRoot, specID)
+	specDir := workspace.SpecDir(root, specID)
 	lc, err := state.ReadLifecycle(specDir)
 	if err != nil {
 		t.Fatalf("reading lifecycle after resume: %v", err)
@@ -487,8 +483,7 @@ func TestScenario_ResumeAfterCrash(t *testing.T) {
 	simulateSpecInit(t, root, specID)
 
 	// Skip through to implement state
-	effectiveRoot := workspace.EffectiveSpecRoot(root, specID)
-	specDir := workspace.SpecDir(effectiveRoot, specID)
+	specDir := workspace.SpecDir(root, specID)
 	must(t, state.WriteLifecycle(specDir, &state.Lifecycle{Phase: state.ModeImplement}))
 	must(t, state.WriteFocus(root, &state.Focus{
 		Mode:       state.ModeImplement,
@@ -567,8 +562,7 @@ func TestScenario_SpecApprovalUpdatesArtifacts(t *testing.T) {
 	}
 
 	// Verify lifecycle.yaml transitioned to plan
-	effectiveRoot := workspace.EffectiveSpecRoot(root, specID)
-	specDir := workspace.SpecDir(effectiveRoot, specID)
+	specDir := workspace.SpecDir(root, specID)
 	lc, err := state.ReadLifecycle(specDir)
 	if err != nil {
 		t.Fatalf("reading lifecycle: %v", err)

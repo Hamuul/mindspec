@@ -25,23 +25,21 @@ type SpecResult struct {
 func ApproveSpec(root, specID, approvedBy string) (*SpecResult, error) {
 	result := &SpecResult{SpecID: specID}
 
-	// Use effective root: spec artifacts may only exist in the worktree.
-	effectiveRoot := workspace.EffectiveSpecRoot(root, specID)
-
-	// Step 1: Validate
-	vr := validate.ValidateSpec(effectiveRoot, specID)
+	// Step 1: Validate (SpecDir is worktree-aware per ADR-0022)
+	vr := validate.ValidateSpec(root, specID)
 	if vr.HasFailures() {
 		return nil, fmt.Errorf("spec validation failed:\n%s", vr.FormatText())
 	}
 
+	specDir := workspace.SpecDir(root, specID)
+
 	// Step 2: Update spec frontmatter + markdown Approval section.
-	specPath := filepath.Join(workspace.SpecDir(effectiveRoot, specID), "spec.md")
+	specPath := filepath.Join(specDir, "spec.md")
 	if err := updateSpecApproval(specPath, approvedBy); err != nil {
 		return nil, fmt.Errorf("updating spec approval: %w", err)
 	}
 
 	// Step 3: Transition lifecycle to plan phase.
-	specDir := workspace.SpecDir(effectiveRoot, specID)
 	lc, err := state.ReadLifecycle(specDir)
 	if err != nil || lc == nil {
 		lc = &state.Lifecycle{}
@@ -70,10 +68,10 @@ func ApproveSpec(root, specID, approvedBy string) (*SpecResult, error) {
 	}
 
 	// Step 5: Emit recording phase marker (best-effort)
-	if err := recording.EmitPhaseMarker(effectiveRoot, specID, "spec", "plan"); err != nil {
+	if err := recording.EmitPhaseMarker(root, specID, "spec", "plan"); err != nil {
 		result.Warnings = append(result.Warnings, fmt.Sprintf("could not emit recording marker: %v", err))
 	}
-	if err := recording.UpdatePhase(effectiveRoot, specID, "spec", "plan"); err != nil {
+	if err := recording.UpdatePhase(root, specID, "spec", "plan"); err != nil {
 		result.Warnings = append(result.Warnings, fmt.Sprintf("could not update recording phase: %v", err))
 	}
 

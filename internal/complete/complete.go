@@ -3,9 +3,7 @@ package complete
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/mindspec/mindspec/internal/bead"
@@ -228,13 +226,8 @@ func advanceState(root, specID string) (mode, nextBead string) {
 		return state.ModeIdle, ""
 	}
 
-	// Read epic_id from lifecycle.yaml — check spec worktree if not in main repo.
-	effectiveRoot := workspace.EffectiveSpecRoot(root, specID)
-	specDir := filepath.Join(effectiveRoot, ".mindspec", "docs", "specs", specID)
-	if _, err := os.Stat(specDir); err != nil {
-		specDir = filepath.Join(effectiveRoot, "docs", "specs", specID)
-	}
-
+	// Read epic_id from lifecycle.yaml (SpecDir is worktree-aware per ADR-0022).
+	specDir := workspace.SpecDir(root, specID)
 	lc, err := state.ReadLifecycle(specDir)
 	if err != nil || lc == nil || lc.EpicID == "" {
 		return state.ModeIdle, ""
