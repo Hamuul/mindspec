@@ -218,3 +218,13 @@ func TestLLM_StaleWorktree(t *testing.T) {
 		t.Errorf("unexpected wrong actions: %d", len(report.WrongActions))
 	}
 }
+
+func TestLLM_CompleteFromSpecWorktree(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping LLM test in short mode")
+	}
+	report, _ := runScenario(t, ScenarioCompleteFromSpecWorktree())
+	if len(report.WrongActions) > 0 {
+		t.Errorf("unexpected wrong actions: %d", len(report.WrongActions))
+	}
+}
