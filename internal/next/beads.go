@@ -11,6 +11,7 @@ import (
 	"github.com/mindspec/mindspec/internal/config"
 	"github.com/mindspec/mindspec/internal/gitops"
 	"github.com/mindspec/mindspec/internal/state"
+	"github.com/mindspec/mindspec/internal/workspace"
 )
 
 // BeadInfo represents a work item from Beads.
@@ -141,10 +142,13 @@ func filterReadyItems(items []BeadInfo) []BeadInfo {
 // the epic_id from lifecycle.yaml and querying bd for in-progress children.
 // Returns empty string (no error) if no bead is in progress.
 func ResolveActiveBead(root, specID string) (string, error) {
-	specDir := filepath.Join(root, ".mindspec", "docs", "specs", specID)
+	// Use EffectiveSpecRoot to find lifecycle.yaml in the spec worktree
+	// when it doesn't exist in the main repo (common during implementation).
+	effectiveRoot := workspace.EffectiveSpecRoot(root, specID)
+	specDir := filepath.Join(effectiveRoot, ".mindspec", "docs", "specs", specID)
 	if _, err := os.Stat(specDir); err != nil {
 		// Try legacy docs path
-		specDir = filepath.Join(root, "docs", "specs", specID)
+		specDir = filepath.Join(effectiveRoot, "docs", "specs", specID)
 	}
 
 	lc, err := state.ReadLifecycle(specDir)

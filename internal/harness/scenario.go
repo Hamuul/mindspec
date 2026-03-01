@@ -36,6 +36,7 @@ func AllScenarios() []Scenario {
 		ScenarioSpecStatus(),
 		ScenarioMultipleActiveSpecs(),
 		ScenarioStaleWorktree(),
+		ScenarioCompleteFromSpecWorktree(),
 	}
 }
 
@@ -967,6 +968,101 @@ Then run 'mindspec complete' to finish the bead.`,
 	}
 }
 
+// ScenarioCompleteFromSpecWorktree reproduces the bug where `mindspec complete`
+// fails when the agent's CWD is the spec worktree (.worktrees/worktree-spec-XXX/)
+// instead of the nested bead worktree. The root cause: lifecycle.yaml only exists
+// in the spec worktree, but ActiveSpecs() scans the main repo root and finds nothing,
+// returning "no active specs found".
+//
+// Before: spec worktree with lifecycle.yaml + bead worktree with committed code,
+//
+//	implement mode, agent CWD is the spec worktree (not bead worktree)
+//
+// After:  agent successfully runs mindspec complete (bead closed, worktree removed)
+func ScenarioCompleteFromSpecWorktree() Scenario {
+	return Scenario{
+		Name:        "complete_from_spec_worktree",
+		Description: "mindspec complete fails when CWD is spec worktree instead of bead worktree",
+		MaxTurns:    15,
+		Model:       "haiku",
+		Setup: func(sandbox *Sandbox) error {
+			specID := "001-greeting"
+			specBranch := "spec/" + specID
+
+			// Create epic + bead
+			epicID := sandbox.CreateBead("["+specID+"] Epic", "epic", "")
+			beadID := sandbox.CreateBead("["+specID+"] Implement greeting", "task", epicID)
+			sandbox.ClaimBead(beadID)
+
+			// Create spec branch and worktree
+			mustRunGit(sandbox, "branch", specBranch)
+			specWtDir := ".worktrees/worktree-spec-" + specID
+			mustRunGit(sandbox, "worktree", "add", specWtDir, specBranch)
+
+			// Write spec files in the spec worktree (where they live during implementation)
+			sandbox.WriteFile(specWtDir+"/.mindspec/docs/specs/"+specID+"/spec.md", `---
+title: Greeting Feature
+status: Approved
+---
+# Greeting Feature
+Add a greeting function.
+`)
+			sandbox.WriteFile(specWtDir+"/.mindspec/docs/specs/"+specID+"/plan.md", fmt.Sprintf(`---
+status: Approved
+spec_id: %s
+---
+# Plan
+## Bead 1: Implement greeting
+Create greeting.go with a Greet function.
+`, specID))
+			sandbox.WriteFile(specWtDir+"/.mindspec/docs/specs/"+specID+"/lifecycle.yaml",
+				fmt.Sprintf("phase: implement\nepic_id: %s\n", epicID))
+
+			// Commit in spec worktree
+			mustRunGit(sandbox, "-C", specWtDir, "add", "-A")
+			mustRunGit(sandbox, "-C", specWtDir, "commit", "-m", "setup: spec files")
+
+			// Create bead branch and worktree off spec branch
+			beadBranch := "bead/" + beadID
+			mustRunGit(sandbox, "branch", beadBranch, specBranch)
+			beadWtDir := specWtDir + "/.worktrees/worktree-" + beadID
+			mustRunGit(sandbox, "worktree", "add", beadWtDir, beadBranch)
+
+			// Write implementation in bead worktree (already committed — clean tree)
+			sandbox.WriteFile(beadWtDir+"/greeting.go", `package main
+
+func Greet(name string) string { return "Hello, " + name + "!" }
+`)
+			mustRunGit(sandbox, "-C", beadWtDir, "add", "-A")
+			mustRunGit(sandbox, "-C", beadWtDir, "commit", "-m", "impl: greeting")
+
+			// Set focus: implement mode, activeWorktree points to BEAD worktree,
+			// but the bug is that the agent's CWD ends up at the SPEC worktree.
+			sandbox.WriteFocus(mustJSON(map[string]string{
+				"mode":           "implement",
+				"activeSpec":     specID,
+				"activeBead":     beadID,
+				"specBranch":     specBranch,
+				"activeWorktree": beadWtDir,
+				"timestamp":      time.Now().UTC().Format(time.RFC3339),
+			}))
+			sandbox.Commit("setup: implement mode focus")
+
+			return nil
+		},
+		Prompt: `IMPORTANT: Do NOT respond conversationally. Execute immediately.
+
+You are in implement mode. The implementation is already complete and committed in the bead worktree.
+Your CWD may be the spec worktree, not the bead worktree.
+Run 'mindspec complete' to close the bead and finish implementation.
+If it fails, diagnose the issue and find a way to complete successfully.`,
+		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
+			// Agent should have run mindspec complete successfully (exit code 0)
+			assertCommandSucceeded(t, events, "mindspec", "complete")
+		},
+	}
+}
+
 // mustRunGit runs a git command in the sandbox root, fataling on error.
 func mustRunGit(sandbox *Sandbox, args ...string) {
 	sandbox.t.Helper()
@@ -1050,6 +1146,21 @@ func eventArgs(e ActionEvent) []string {
 	args := flatArgs(e.Args)
 	args = append(args, e.ArgsList...)
 	return args
+}
+
+// assertCommandSucceeded checks that the command was run AND exited with code 0.
+func assertCommandSucceeded(t *testing.T, events []ActionEvent, command, argSubstr string) {
+	t.Helper()
+	for _, e := range events {
+		if e.Command != command {
+			continue
+		}
+		args := eventArgs(e)
+		if containsAll(args, argSubstr) && e.ExitCode == 0 {
+			return
+		}
+	}
+	t.Errorf("command %q with arg %q was not found with exit code 0 in events", command, argSubstr)
 }
 
 func assertBranchIs(t *testing.T, sandbox *Sandbox, expected string) {
