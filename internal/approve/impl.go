@@ -25,6 +25,7 @@ var (
 	mergeBranchFn       = gitops.MergeBranch
 	deleteBranchFn      = gitops.DeleteBranch
 	worktreeRemoveFn    = bead.WorktreeRemove
+	worktreeListFn      = bead.WorktreeList
 	hasRemoteFn         = gitops.HasRemote
 	pushBranchFn        = gitops.PushBranch
 	createPRFn          = gitops.CreatePR
@@ -131,15 +132,27 @@ func ApproveImpl(root, specID string, opts ...ImplOpts) (*ImplResult, error) {
 
 		mergeErr := mergeSpecToMain(root, specBranch, specID, cfg, result, opt)
 		if mergeErr != nil {
-			result.Warnings = append(result.Warnings, fmt.Sprintf("spec→main merge: %v", mergeErr))
+			return nil, fmt.Errorf("spec→main merge: %w", mergeErr)
 		} else if result.MergeStrategy == "direct" || result.PRMerged {
-			// Clean up spec worktree and branch after successful merge.
-			specWtName := "worktree-spec-" + specID
-			if err := worktreeRemoveFn(specWtName); err != nil {
-				result.Warnings = append(result.Warnings, fmt.Sprintf("could not remove spec worktree: %v", err))
-			}
-			if err := deleteBranchFn(specBranch); err != nil {
-				result.Warnings = append(result.Warnings, fmt.Sprintf("could not delete spec branch: %v", err))
+			// Cleanup must run from repo root. If command is invoked from inside the
+			// target spec worktree, bd refuses to remove that worktree.
+			if err := withWorkingDir(root, func() error {
+				// Clean up lingering bead worktrees/branches from this spec first.
+				if err := cleanupBeadBranchesAndWorktrees(root, specID); err != nil {
+					return fmt.Errorf("cleaning bead artifacts: %w", err)
+				}
+
+				// Clean up spec worktree and branch after successful merge.
+				specWtName := "worktree-spec-" + specID
+				if err := worktreeRemoveFn(specWtName); err != nil {
+					return fmt.Errorf("removing spec worktree %s: %w", specWtName, err)
+				}
+				if err := deleteBranchFn(specBranch); err != nil {
+					return fmt.Errorf("deleting spec branch %s: %w", specBranch, err)
+				}
+				return nil
+			}); err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -155,6 +168,57 @@ func ApproveImpl(root, specID string, opts ...ImplOpts) (*ImplResult, error) {
 	}
 
 	return result, nil
+}
+
+// cleanupBeadBranchesAndWorktrees removes lingering bead worktrees/branches for
+// the spec's implementation beads (derived from plan frontmatter bead_ids).
+func cleanupBeadBranchesAndWorktrees(root, specID string) error {
+	planPath := filepath.Join(workspace.SpecDir(root, specID), "plan.md")
+	beadIDs, err := readPlanBeadIDs(planPath)
+	if err != nil {
+		return nil // nothing to clean if bead_ids are unavailable
+	}
+
+	entries, _ := worktreeListFn()          // best-effort; branch deletion still runs
+	branchToWorktree := map[string]string{} // bead branch -> worktree name
+	for _, e := range entries {
+		branchToWorktree[e.Branch] = e.Name
+	}
+
+	var errs []string
+	for _, beadID := range beadIDs {
+		beadBranch := "bead/" + beadID
+		if wtName := branchToWorktree[beadBranch]; wtName != "" {
+			if err := worktreeRemoveFn(wtName); err != nil {
+				errs = append(errs, fmt.Sprintf("remove worktree %s: %v", wtName, err))
+			}
+		}
+		if err := deleteBranchFn(beadBranch); err != nil && !strings.Contains(strings.ToLower(err.Error()), "not found") {
+			errs = append(errs, fmt.Sprintf("delete branch %s: %v", beadBranch, err))
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf(strings.Join(errs, "; "))
+	}
+	return nil
+}
+
+func withWorkingDir(dir string, fn func() error) error {
+	wd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("getting cwd: %w", err)
+	}
+	if filepath.Clean(wd) == filepath.Clean(dir) {
+		return fn()
+	}
+	if err := os.Chdir(dir); err != nil {
+		return fmt.Errorf("chdir %s: %w", dir, err)
+	}
+	defer func() {
+		_ = os.Chdir(wd)
+	}()
+	return fn()
 }
 
 func readBeadStatus(id string) (string, error) {
@@ -238,13 +302,10 @@ func mergeSpecToMain(root, specBranch, specID string, cfg *config.Config, result
 // 2. All plan beads are closed.
 // 3. Any local bead branches are ancestors of the spec branch.
 func verifyImplContent(root, specBranch, specID string) error {
-	// Check 1: spec branch has commits beyond main.
+	// Check 1: spec branch has commits beyond main (or was already integrated).
 	count, err := commitCountFn(root, "main", specBranch)
 	if err != nil {
 		return fmt.Errorf("checking commit count: %w", err)
-	}
-	if count == 0 {
-		return fmt.Errorf("spec branch %s has no commits beyond main — nothing to merge", specBranch)
 	}
 
 	// Read bead_ids from plan.md frontmatter.
@@ -252,7 +313,14 @@ func verifyImplContent(root, specBranch, specID string) error {
 	beadIDs, err := readPlanBeadIDs(planPath)
 	if err != nil {
 		// If plan.md doesn't exist or has no bead_ids, skip bead checks.
+		if count == 0 {
+			return fmt.Errorf("spec branch %s has no commits beyond main — nothing to merge", specBranch)
+		}
 		return nil
+	}
+	specAlreadyIntegrated := count == 0
+	if specAlreadyIntegrated && len(beadIDs) == 0 {
+		return fmt.Errorf("spec branch %s has no commits beyond main — nothing to merge", specBranch)
 	}
 
 	// Check 2: all plan beads are closed.
@@ -268,6 +336,12 @@ func verifyImplContent(root, specBranch, specID string) error {
 
 	// Check 3: bead branches are ancestors of spec branch.
 	// If not, auto-merge them into the spec branch via the spec worktree.
+	// Skip this if spec is already integrated in main: this approval is acting
+	// as a cleanup/state-finalization step.
+	if specAlreadyIntegrated {
+		return nil
+	}
+
 	specWtPath := filepath.Join(root, ".worktrees", "worktree-spec-"+specID)
 	for _, bid := range beadIDs {
 		beadBranch := "bead/" + bid

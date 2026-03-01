@@ -23,7 +23,16 @@ func emitInstruct(root string) error {
 		localRoot = root
 	}
 	mc, err := state.ReadFocus(localRoot)
-	if err != nil {
+	if err != nil || mc == nil {
+		// Fallback to main-root focus when local worktree focus is absent.
+		// This happens on freshly created worktrees before focus is copied.
+		if localRoot != root {
+			if rootFocus, rootErr := state.ReadFocus(root); rootErr == nil && rootFocus != nil {
+				mc = rootFocus
+			}
+		}
+	}
+	if mc == nil {
 		mc = &state.Focus{Mode: state.ModeIdle}
 	}
 

@@ -14,6 +14,7 @@ import (
 	"github.com/mindspec/mindspec/internal/recording"
 	"github.com/mindspec/mindspec/internal/resolve"
 	"github.com/mindspec/mindspec/internal/state"
+	"github.com/mindspec/mindspec/internal/validate"
 	"github.com/mindspec/mindspec/internal/workspace"
 )
 
@@ -48,7 +49,15 @@ func defaultFindLocalRoot() (string, error) {
 // Run orchestrates bead completion: close bead, remove worktree, advance state.
 // root is the main repo root (for spec dirs, lifecycle, merges).
 // Focus is read from localRoot (per-worktree focus).
-func Run(root, beadID string) (*Result, error) {
+// specIDHint is optional and typically comes from --spec for disambiguation.
+func Run(root, beadID, specIDHint string) (*Result, error) {
+	// Backward-compatible UX: `mindspec complete <spec-id>` should behave like
+	// `mindspec complete --spec=<spec-id>`, not treat the spec ID as a bead ID.
+	if beadID != "" && specIDHint == "" && validate.SpecID(beadID) == nil {
+		specIDHint = beadID
+		beadID = ""
+	}
+
 	// Determine local root for per-worktree focus reads.
 	localRoot := root
 	if lr, err := findLocalRootFn(); err == nil {
@@ -56,7 +65,7 @@ func Run(root, beadID string) (*Result, error) {
 	}
 
 	// 1. Derive activeSpec from resolver, activeBead from arg or Beads query
-	specID, err := resolveTargetFn(root, "")
+	specID, err := resolveTargetFn(root, specIDHint)
 	if err != nil {
 		return nil, fmt.Errorf("resolving active spec: %w", err)
 	}
@@ -103,10 +112,6 @@ func Run(root, beadID string) (*Result, error) {
 	checkPath := wtPath
 	if checkPath == "" {
 		checkPath = root // No worktree — check main tree
-	}
-	// Auto-commit .mindspec/ state files so they don't block the clean-tree check.
-	if err := autoCommitStateFiles(checkPath); err != nil {
-		return nil, fmt.Errorf("auto-committing state files: %w", err)
 	}
 	if err := checkCleanWorktree(checkPath); err != nil {
 		return nil, err
@@ -235,10 +240,50 @@ func checkCleanWorktree(path string) error {
 	if err != nil {
 		return fmt.Errorf("checking worktree status: %w", err)
 	}
-	if strings.TrimSpace(string(out)) != "" {
-		return fmt.Errorf("worktree has uncommitted changes — commit before completing:\n%s", strings.TrimSpace(string(out)))
+	rawOut := strings.TrimRight(string(out), "\n")
+	if strings.TrimSpace(rawOut) == "" {
+		return nil
+	}
+	lines := strings.Split(rawOut, "\n")
+	var blocking []string
+	for _, line := range lines {
+		raw := strings.TrimRight(line, "\r")
+		if strings.TrimSpace(raw) == "" {
+			continue
+		}
+		if !isIgnorableStateChange(raw) {
+			blocking = append(blocking, strings.TrimSpace(raw))
+		}
+	}
+	if len(blocking) > 0 {
+		return fmt.Errorf("worktree has uncommitted changes — commit before completing:\n%s", strings.Join(blocking, "\n"))
 	}
 	return nil
+}
+
+func isIgnorableStateChange(statusLine string) bool {
+	// Porcelain format: XY<space>PATH (or XY<space>OLD -> NEW)
+	path := strings.TrimRight(statusLine, "\r")
+	if len(path) >= 3 {
+		path = strings.TrimSpace(path[3:])
+	} else {
+		path = strings.TrimSpace(path)
+	}
+	if strings.Contains(path, " -> ") {
+		parts := strings.Split(path, " -> ")
+		path = strings.TrimSpace(parts[len(parts)-1])
+	}
+
+	if path == ".mindspec/focus" || path == ".mindspec/session.json" {
+		return true
+	}
+	if strings.Contains(path, "/recording/") {
+		return true
+	}
+	if strings.HasSuffix(path, "/lifecycle.yaml") && strings.Contains(path, ".mindspec/docs/specs/") {
+		return true
+	}
+	return false
 }
 
 // advanceState determines the next mode after completing a bead.

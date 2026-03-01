@@ -178,7 +178,16 @@ func (s *Sandbox) FileExists(relPath string) bool {
 func (s *Sandbox) Commit(msg string) {
 	s.t.Helper()
 	mustRun(s.t, s.Root, "git", "add", "-A")
-	mustRun(s.t, s.Root, "git", "commit", "--allow-empty", "-m", msg)
+	// Scenario setup may intentionally place focus in non-idle modes while still
+	// committing bootstrap files on main. Use the documented escape hatch so
+	// setup remains deterministic without weakening runtime enforcement.
+	cmd := exec.Command("git", "commit", "--allow-empty", "-m", msg)
+	cmd.Dir = s.Root
+	cmd.Env = append(os.Environ(), "MINDSPEC_ALLOW_MAIN=1")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		s.t.Fatalf("git commit --allow-empty -m %s failed: %v\n%s", msg, err, out)
+	}
 }
 
 func mustRun(t *testing.T, dir string, name string, args ...string) string { //nolint:unparam // name kept for call-site clarity
@@ -263,18 +272,42 @@ func (s *Sandbox) GitStatusClean() bool {
 	return strings.TrimSpace(string(out)) == ""
 }
 
-// ListWorktrees returns directory entries under .worktrees/ (empty if dir doesn't exist).
+// ListWorktrees returns linked git worktrees (excluding main) by name.
 func (s *Sandbox) ListWorktrees() []string {
-	wtDir := filepath.Join(s.Root, ".worktrees")
-	entries, err := os.ReadDir(wtDir)
+	cmd := exec.Command("git", "worktree", "list", "--porcelain")
+	cmd.Dir = s.Root
+	out, err := cmd.Output()
 	if err != nil {
 		return nil
 	}
+
+	var paths []string
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "worktree ") {
+			paths = append(paths, strings.TrimPrefix(line, "worktree "))
+		}
+	}
+
 	var names []string
-	for _, e := range entries {
-		names = append(names, e.Name())
+	rootClean := canonicalPath(s.Root)
+	for _, p := range paths {
+		p = canonicalPath(p)
+		if p == rootClean {
+			continue // skip main worktree
+		}
+		names = append(names, filepath.Base(p))
 	}
 	return names
+}
+
+func canonicalPath(path string) string {
+	clean := filepath.Clean(path)
+	resolved, err := filepath.EvalSymlinks(clean)
+	if err != nil {
+		return clean
+	}
+	return filepath.Clean(resolved)
 }
 
 // WriteFocus writes a focus file to the sandbox .mindspec/focus.

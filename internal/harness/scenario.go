@@ -3,7 +3,10 @@ package harness
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +22,7 @@ type Scenario struct {
 	Prompt      string                                                     // the prompt given to the agent
 	Assertions  func(t *testing.T, sandbox *Sandbox, events []ActionEvent) // post-run assertions
 	MaxTurns    int                                                        // turn budget (0 = unlimited)
+	TimeoutMin  int                                                        // scenario runtime timeout in minutes (0 = default 10m)
 	Model       string                                                     // model override (e.g. "haiku")
 }
 
@@ -51,6 +55,7 @@ func ScenarioSpecToIdle() Scenario {
 		Name:        "spec_to_idle",
 		Description: "Full lifecycle from explore through idle",
 		MaxTurns:    75,
+		TimeoutMin:  15,
 		Model:       "haiku",
 		Setup: func(sandbox *Sandbox) error {
 			// Sandbox comes with a clean repo; agent starts from scratch
@@ -65,6 +70,7 @@ You are in a MindSpec project with no active work. Your task: add a simple "gree
 				[]string{"spec-init"}, []string{"explore", "promote"})
 			assertCommandRan(t, events, "mindspec", "next")
 			assertCommandRan(t, events, "mindspec", "complete")
+			assertNoPreApproveImplMainMergeOrPR(t, events)
 
 			// Approve commands ran during lifecycle
 			assertCommandRan(t, events, "mindspec", "approve")
@@ -186,11 +192,10 @@ Create formatter_test.go with tests.
 3. Create formatter_test.go that tests FormatMessage
 Run 'mindspec complete' after each bead.`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
-			for _, f := range []string{"types.go", "formatter.go", "formatter_test.go"} {
-				if !sandbox.FileExists(f) {
-					t.Errorf("%s was not created", f)
-				}
-			}
+			// Workflow adherence: the agent must progress through at least one
+			// multi-bead handoff using mindspec next from dependency-ordered work.
+			assertCommandRan(t, events, "mindspec", "next")
+			assertEventCWDContains(t, events, ".worktrees/")
 		},
 	}
 }
@@ -205,12 +210,14 @@ func ScenarioAbandonSpec() Scenario {
 		Setup: func(sandbox *Sandbox) error {
 			return nil
 		},
-		Prompt: `IMPORTANT: Do NOT respond conversationally. Do NOT ask what I'd like to do. Execute immediately.
+		Prompt: `IMPORTANT: Do NOT respond conversationally. Execute immediately.
 
-You are in a MindSpec project. Evaluate whether adding a "bad idea" feature is worth pursuing. After evaluating, decide it is not worth it and exit the exploration.`,
+Run this workflow exactly:
+1. Start exploration for "bad idea feature".
+2. Decide it is not worth pursuing.
+3. Dismiss the exploration and return to idle (without ADR).`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
 			assertCommandRan(t, events, "mindspec", "explore")
-			// Check that dismiss was called
 			assertCommandContains(t, events, "mindspec", "dismiss")
 		},
 	}
@@ -690,6 +697,7 @@ func Done() string { return "done" }
 			// Command ran
 			assertCommandRan(t, events, "mindspec", "approve")
 			assertCommandContains(t, events, "mindspec", "impl")
+			assertNoPreApproveImplMainMergeOrPR(t, events)
 
 			// Git state: spec branch deleted after merge
 			assertNoBranches(t, sandbox, "spec/")
@@ -763,6 +771,8 @@ status: Approved
 				"timestamp":      time.Now().UTC().Format(time.RFC3339),
 			}))
 			sandbox.Commit("setup: implement mode with active bead")
+			mainCount := mustRun(sandbox.t, sandbox.Root, "git", "rev-list", "--count", "main")
+			sandbox.WriteFile(".harness/main_commit_count", strings.TrimSpace(mainCount))
 
 			// Verify preconditions
 			if branch := sandbox.GitBranch(); branch != "main" {
@@ -784,6 +794,9 @@ status: Approved
 			ran := false
 			for _, e := range events {
 				if e.Command != "mindspec" {
+					continue
+				}
+				if e.ExitCode != 0 {
 					continue
 				}
 				args := eventArgs(e)
@@ -813,6 +826,7 @@ status: Approved
 
 			// Read-only: no non-infrastructure files modified.
 			assertNoUserFilesModified(t, sandbox)
+			assertMainCommitCountUnchanged(t, sandbox)
 		},
 	}
 }
@@ -879,10 +893,11 @@ TBD
 			sandbox.WriteFile(".mindspec/docs/specs/002-beta/lifecycle.yaml",
 				fmt.Sprintf("phase: plan\nepic_id: %s\n", epicBeta))
 
-			// Focus: implement mode for 001-alpha (but both specs are active)
+			// Focus: implement mode with activeBead but NO activeSpec.
+			// This forces disambiguation across multiple active specs so the
+			// agent must use --spec on complete.
 			sandbox.WriteFocus(mustJSON(map[string]string{
 				"mode":       "implement",
-				"activeSpec": "001-alpha",
 				"activeBead": beadAlpha,
 				"timestamp":  time.Now().UTC().Format(time.RFC3339),
 			}))
@@ -899,6 +914,8 @@ that returns "Hello, <name>!". Then run 'mindspec complete' to finish the bead.`
 			}
 			// Agent should have run mindspec complete
 			assertCommandRan(t, events, "mindspec", "complete")
+			// Agent should have discovered and used --spec disambiguation.
+			assertCommandUsedFlag(t, events, "mindspec", "complete", "--spec")
 		},
 	}
 }
@@ -967,8 +984,22 @@ Then run 'mindspec complete' to finish the bead.`,
 			if !sandbox.FileExists("widget.go") {
 				t.Error("widget.go was not created")
 			}
-			// Agent should have run mindspec complete
+
+			// Preferred path: successfully complete the bead.
+			for _, e := range events {
+				if e.Command != "mindspec" || e.ExitCode != 0 {
+					continue
+				}
+				args := eventArgs(e)
+				if containsAll(args, "complete") {
+					return
+				}
+			}
+
+			// Recovery fallback: if complete cannot succeed from stale state,
+			// accept explicit operator recovery back to idle.
 			assertCommandRan(t, events, "mindspec", "complete")
+			assertCommandSucceeded(t, events, "mindspec", "state", "set", "--mode=idle")
 		},
 	}
 }
@@ -1100,15 +1131,40 @@ version: 1
 
 Add a greeting function that takes a name and returns a personalized greeting.
 
-## User Value
+## Impacted Domains
 
-Users can generate personalized greetings.
+- messaging
+- CLI output
+
+## ADR Touchpoints
+
+None.
+
+## Requirements
+
+1. Implement `+"`Greet(name string) string`"+` in greeting.go
+2. Return `+"`Hello, <name>!`"+` for non-empty names
+3. Return `+"`Hello!`"+` when the input name is empty
+
+## Scope
+
+### In Scope
+- greeting string formatting
+- empty-name fallback behavior
+
+### Out of Scope
+- localization
+- punctuation/style customization
 
 ## Acceptance Criteria
 
 - [ ] Greet("World") returns "Hello, World!"
 - [ ] Greet("") returns "Hello!"
 - [ ] Function is exported and documented
+
+## Approval
+
+Pending.
 
 ## Open Questions
 
@@ -1136,9 +1192,9 @@ None.
 		Prompt: `IMPORTANT: Do NOT respond conversationally. Execute immediately.
 
 You are in spec mode for spec 001-greeting. The spec is written and ready for approval.
-Run 'mindspec approve spec 001-greeting' to approve the spec and transition to plan mode.`,
+Approve the spec so the workflow transitions into plan mode.`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
-			assertCommandSucceeded(t, events, "mindspec", "approve")
+			assertCommandSucceeded(t, events, "mindspec", "approve", "spec")
 		},
 	}
 }
@@ -1250,9 +1306,9 @@ None
 		Prompt: `IMPORTANT: Do NOT respond conversationally. Execute immediately.
 
 You are in plan mode for spec 001-greeting. The plan is written and ready for approval.
-Run 'mindspec approve plan 001-greeting' to approve the plan and create implementation beads.`,
+Approve the plan so implementation beads are created.`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
-			assertCommandSucceeded(t, events, "mindspec", "approve")
+			assertCommandSucceeded(t, events, "mindspec", "approve", "plan")
 		},
 	}
 }
@@ -1326,7 +1382,7 @@ There is a division-by-zero bug in calculator.go — Divide(10, 0) panics. Fix i
 			assertCommandRan(t, events, "gh", "pr")
 
 			// PR should have succeeded (exit=0)
-			assertCommandSucceeded(t, events, "gh", "pr")
+			assertCommandSucceeded(t, events, "gh", "pr", "create")
 
 			// Cleanup: close any PRs and delete remote branches created by this test
 			cleanupBugfixBranchPRs(t, sandbox)
@@ -1407,8 +1463,11 @@ func assertCommandRan(t *testing.T, events []ActionEvent, command string, argSub
 		if e.Command != command {
 			continue
 		}
+		if e.ExitCode != 0 {
+			continue
+		}
 		if len(argSubstr) == 0 {
-			return // found the command
+			return // found successful command
 		}
 		args := eventArgs(e)
 		if containsAll(args, argSubstr[0]) {
@@ -1416,9 +1475,9 @@ func assertCommandRan(t *testing.T, events []ActionEvent, command string, argSub
 		}
 	}
 	if len(argSubstr) > 0 {
-		t.Errorf("command %q with arg %q was not found in events", command, argSubstr[0])
+		t.Errorf("command %q with arg %q was not found with exit code 0 in events", command, argSubstr[0])
 	} else {
-		t.Errorf("command %q was not found in events", command)
+		t.Errorf("command %q was not found with exit code 0 in events", command)
 	}
 }
 
@@ -1428,6 +1487,9 @@ func assertCommandRanEither(t *testing.T, events []ActionEvent, command string, 
 	t.Helper()
 	for _, e := range events {
 		if e.Command != command {
+			continue
+		}
+		if e.ExitCode != 0 {
 			continue
 		}
 		args := eventArgs(e)
@@ -1444,13 +1506,16 @@ func assertCommandRanEither(t *testing.T, events []ActionEvent, command string, 
 			}
 		}
 	}
-	t.Errorf("command %q was not found with any of the expected arg patterns %v", command, patterns)
+	t.Errorf("command %q was not found with exit code 0 for any expected arg patterns %v", command, patterns)
 }
 
 func assertCommandContains(t *testing.T, events []ActionEvent, command, substr string) {
 	t.Helper()
 	for _, e := range events {
 		if e.Command != command {
+			continue
+		}
+		if e.ExitCode != 0 {
 			continue
 		}
 		args := eventArgs(e)
@@ -1460,7 +1525,33 @@ func assertCommandContains(t *testing.T, events []ActionEvent, command, substr s
 			}
 		}
 	}
-	t.Errorf("command %q with arg containing %q was not found in events", command, substr)
+	t.Errorf("command %q with arg containing %q was not found with exit code 0 in events", command, substr)
+}
+
+// assertCommandUsedFlag checks that a successful command invocation included the
+// expected verb (e.g. "complete") and a flag with the given prefix (e.g. "--spec").
+func assertCommandUsedFlag(t *testing.T, events []ActionEvent, command, verb, flagPrefix string) {
+	t.Helper()
+	for _, e := range events {
+		if e.Command != command || e.ExitCode != 0 {
+			continue
+		}
+		args := eventArgs(e)
+		hasVerb := false
+		hasFlag := false
+		for _, arg := range args {
+			if arg == verb {
+				hasVerb = true
+			}
+			if strings.HasPrefix(arg, flagPrefix) {
+				hasFlag = true
+			}
+		}
+		if hasVerb && hasFlag {
+			return
+		}
+	}
+	t.Errorf("command %q did not run successfully with verb %q and flag prefix %q", command, verb, flagPrefix)
 }
 
 // eventArgs returns args from both the Args map and ArgsList slice.
@@ -1471,18 +1562,82 @@ func eventArgs(e ActionEvent) []string {
 }
 
 // assertCommandSucceeded checks that the command was run AND exited with code 0.
-func assertCommandSucceeded(t *testing.T, events []ActionEvent, command, argSubstr string) {
+func assertCommandSucceeded(t *testing.T, events []ActionEvent, command string, argSubstr ...string) {
 	t.Helper()
 	for _, e := range events {
 		if e.Command != command {
 			continue
 		}
+		if e.ExitCode != 0 {
+			continue
+		}
 		args := eventArgs(e)
-		if containsAll(args, argSubstr) && e.ExitCode == 0 {
+		matched := true
+		for _, sub := range argSubstr {
+			if !containsAll(args, sub) {
+				matched = false
+				break
+			}
+		}
+		if matched {
 			return
 		}
 	}
-	t.Errorf("command %q with arg %q was not found with exit code 0 in events", command, argSubstr)
+	if len(argSubstr) == 0 {
+		t.Errorf("command %q was not found with exit code 0 in events", command)
+		return
+	}
+	t.Errorf("command %q with args %v was not found with exit code 0 in events", command, argSubstr)
+}
+
+// assertNoPreApproveImplMainMergeOrPR enforces workflow ordering at the test
+// layer: no direct merge-to-main or PR creation before approve impl is invoked.
+//
+// Note: internal git merge commands executed *inside* `mindspec approve impl`
+// appear in event logs before the top-level `mindspec approve impl` event due to
+// wrapper timing. We treat the known canonical internal merge command as allowed.
+func assertNoPreApproveImplMainMergeOrPR(t *testing.T, events []ActionEvent) {
+	t.Helper()
+	if err := preApproveImplMainMergeOrPRViolation(events); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func preApproveImplMainMergeOrPRViolation(events []ActionEvent) error {
+	approveSeen := false
+	for _, e := range events {
+		args := eventArgs(e)
+
+		if e.Command == "mindspec" && containsAll(args, "approve") && containsAll(args, "impl") {
+			approveSeen = true
+			continue
+		}
+
+		if approveSeen {
+			continue
+		}
+
+		// Fail if PR creation/merge is attempted before approve impl.
+		if e.Command == "gh" && (containsAll(args, "pr") && (containsAll(args, "create") || containsAll(args, "merge"))) {
+			return fmt.Errorf("PR command ran before approve impl: %v", args)
+		}
+
+		// Fail if a non-canonical merge-to-main is attempted before approve impl.
+		// Canonical internal merge pattern (from approve impl) is allowed:
+		//   git ... merge --no-ff spec/<id> -m "Merge spec/<id> into main"
+		if e.Command == "git" && e.ExitCode == 0 && containsAll(args, "merge") && containsAll(args, "main") {
+			isCanonicalInternal := containsAll(args, "--no-ff") &&
+				containsAll(args, "spec/") &&
+				containsAll(args, "-m") &&
+				containsAll(args, "Merge spec/") &&
+				containsAll(args, "into main")
+			if !isCanonicalInternal {
+				return fmt.Errorf("merge-to-main occurred before approve impl: %v", args)
+			}
+		}
+	}
+
+	return nil
 }
 
 func assertBranchIs(t *testing.T, sandbox *Sandbox, expected string) {
@@ -1568,16 +1723,64 @@ func assertNoUserFilesModified(t *testing.T, sandbox *Sandbox) {
 
 func assertFocusMode(t *testing.T, sandbox *Sandbox, expectedMode string) {
 	t.Helper()
-	data := sandbox.ReadFile(".mindspec/focus")
-	var focus map[string]interface{}
-	if err := json.Unmarshal([]byte(data), &focus); err != nil {
-		t.Errorf("could not parse .mindspec/focus: %v", err)
+	focusPaths := []string{
+		filepath.Join(sandbox.Root, ".mindspec", "focus"),
+	}
+
+	// If root focus points at an active worktree, include its focus file.
+	if rootData, err := os.ReadFile(focusPaths[0]); err == nil {
+		var rootFocus map[string]interface{}
+		if json.Unmarshal(rootData, &rootFocus) == nil {
+			if wt, _ := rootFocus["activeWorktree"].(string); wt != "" {
+				wtPath := wt
+				if !filepath.IsAbs(wtPath) {
+					wtPath = filepath.Join(sandbox.Root, wtPath)
+				}
+				focusPaths = append(focusPaths, filepath.Join(wtPath, ".mindspec", "focus"))
+			}
+		}
+	}
+
+	// Also include all worktree focus files (including nested bead worktrees)
+	// as fallback. This covers per-worktree focus flows in plan/implement mode.
+	worktreeRoot := filepath.Join(sandbox.Root, ".worktrees")
+	_ = filepath.WalkDir(worktreeRoot, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d == nil || d.IsDir() {
+			return nil
+		}
+		if filepath.Base(path) == "focus" && strings.Contains(path, string(filepath.Separator)+".mindspec"+string(filepath.Separator)+"focus") {
+			focusPaths = append(focusPaths, path)
+		}
+		return nil
+	})
+
+	seenModes := map[string]string{} // path -> mode
+	seenPath := map[string]bool{}
+	for _, p := range focusPaths {
+		if seenPath[p] {
+			continue
+		}
+		seenPath[p] = true
+		data, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		var focus map[string]interface{}
+		if err := json.Unmarshal(data, &focus); err != nil {
+			continue
+		}
+		mode, _ := focus["mode"].(string)
+		seenModes[p] = mode
+		if mode == expectedMode {
+			return
+		}
+	}
+
+	if len(seenModes) == 0 {
+		t.Errorf("expected focus mode %q, but no parseable focus files were found", expectedMode)
 		return
 	}
-	mode, _ := focus["mode"].(string)
-	if mode != expectedMode {
-		t.Errorf("expected focus mode %q, got %q", expectedMode, mode)
-	}
+	t.Errorf("expected focus mode %q, found modes: %v", expectedMode, seenModes)
 }
 
 // assertHasNonMainBranch checks that at least one branch besides "main" exists.

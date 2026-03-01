@@ -1,0 +1,3 @@
+interface:
+  display_name: "LLM Test"
+  short_description: "Run .claude/commands/llm-test workflow"
