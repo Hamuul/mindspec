@@ -247,6 +247,14 @@ your-project/
 └── CLAUDE.md                   # Claude Code-specific config (points to AGENTS.md)
 ```
 
+## Tested Against Real Agents
+
+MindSpec's workflow is validated by a behavioral test harness that runs real LLM agents (Claude Code via `claude -p`) in isolated sandbox repositories. Each test gives the agent a task — not step-by-step instructions — and asserts it discovers and executes the correct lifecycle commands from MindSpec's own guidance layer alone.
+
+Tests track **forward ratio** (percentage of turns doing productive work vs. retries), **retry count**, and **event volume**. When a test fails because the agent does the wrong thing, the fix goes into MindSpec's guidance (instruct templates, CLI error messages, CLAUDE.md) — never into the test prompt. This keeps tests honest: they validate the product, not prompt engineering.
+
+14 scenarios cover the full lifecycle — from single-bead implementation to the complete Explore-to-Idle journey — running on Haiku for cost efficiency. The logic: if the smallest model can follow the workflow from guidance alone, larger models will too.
+
 ## Design Principles
 
 1. **Docs-first** — every code change updates documentation, enforced by the system
