@@ -8,7 +8,7 @@ import (
 )
 
 const preCommitScript = `#!/usr/bin/env bash
-# MindSpec pre-commit hook (Layer 1 enforcement — ADR-0019)
+# MindSpec pre-commit hook v2 (Layer 1 enforcement — ADR-0019)
 # Prevents commits on protected branches when mindspec is active.
 
 # Escape hatch: MINDSPEC_ALLOW_MAIN=1 git commit
@@ -23,7 +23,7 @@ if [ ! -f "$MODE_CACHE" ]; then
 fi
 
 MODE=$(cat "$MODE_CACHE" 2>/dev/null | grep -o '"mode"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"mode"[[:space:]]*:[[:space:]]*"//;s/"$//')
-if [ -z "$MODE" ] || [ "$MODE" = "idle" ]; then
+if [ -z "$MODE" ]; then
   exit 0
 fi
 
@@ -54,9 +54,11 @@ fi
 for p in $PROTECTED; do
   if [ "$BRANCH" = "$p" ]; then
     WORKTREE=$(cat "$MODE_CACHE" 2>/dev/null | grep -o '"activeWorktree"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"activeWorktree"[[:space:]]*:[[:space:]]*"//;s/"$//')
-    echo "mindspec: commits on '$BRANCH' are blocked while mindspec is active (mode: $MODE)." >&2
+    echo "mindspec: commits on '$BRANCH' are blocked (mode: $MODE)." >&2
     if [ -n "$WORKTREE" ]; then
       echo "  Switch to your worktree: cd $WORKTREE" >&2
+    else
+      echo "  Create a branch first: git checkout -b fix/<description>" >&2
     fi
     echo "  Escape hatch: MINDSPEC_ALLOW_MAIN=1 git commit ..." >&2
     exit 1
@@ -139,10 +141,15 @@ func InstallPreCommit(root string) error {
 	hookPath := filepath.Join(hooksDir, "pre-commit")
 	marker := "# MindSpec pre-commit hook"
 
-	// Check if already installed
+	// Check if already installed (and current version)
 	if data, err := os.ReadFile(hookPath); err == nil {
-		if strings.Contains(string(data), marker) {
-			return nil // already installed
+		content := string(data)
+		if strings.Contains(content, marker) {
+			// Detect stale v1 hook (missing "v2" marker) and re-install
+			if !strings.Contains(content, "pre-commit hook v2") {
+				return os.WriteFile(hookPath, []byte(preCommitScript), 0755)
+			}
+			return nil // already installed and current
 		}
 		// Existing hook — chain by renaming and calling it
 		backupPath := hookPath + ".pre-mindspec"

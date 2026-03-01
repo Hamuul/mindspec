@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"text/template"
 
+	"github.com/mindspec/mindspec/internal/config"
 	"github.com/mindspec/mindspec/internal/contextpack"
 	"github.com/mindspec/mindspec/internal/state"
 	"github.com/mindspec/mindspec/internal/workspace"
@@ -26,8 +27,9 @@ type Context struct {
 	PlanApproved   bool     `json:"plan_approved,omitempty"`
 	AvailableSpecs []string `json:"available_specs,omitempty"`
 	BeadPrimer     string   `json:"bead_primer,omitempty"`
-	BeadsContext   string   `json:"beads_context,omitempty"`
-	Warnings       []string `json:"warnings,omitempty"`
+	BeadsContext     string   `json:"beads_context,omitempty"`
+	BranchProtection bool    `json:"branch_protection,omitempty"`
+	Warnings         []string `json:"warnings,omitempty"`
 }
 
 // JSONOutput is the structured output for --format=json.
@@ -48,6 +50,10 @@ func BuildContext(root string, mc *state.Focus) *Context {
 		ActiveSpec: mc.ActiveSpec,
 		ActiveBead: mc.ActiveBead,
 	}
+
+	// Load config for branch protection setting
+	cfg, _ := config.Load(root)
+	ctx.BranchProtection = cfg.Enforcement.PreCommitHook
 
 	// Load spec goal if we have an active spec
 	if mc.ActiveSpec != "" {
