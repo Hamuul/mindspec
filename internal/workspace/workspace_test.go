@@ -258,43 +258,105 @@ func TestRecordingDir_UsesSpecDir(t *testing.T) {
 	}
 }
 
-func TestEffectiveSpecRoot_WorktreeExists(t *testing.T) {
-	mainRepo := t.TempDir()
+func TestSpecDir_WorktreeAware_WorktreeFirst(t *testing.T) {
+	root := t.TempDir()
 
-	// Create worktree directory with .mindspec marker
-	wtDir := filepath.Join(mainRepo, ".worktrees", "worktree-spec-044-launch-website")
-	if err := os.MkdirAll(filepath.Join(wtDir, ".mindspec"), 0o755); err != nil {
-		t.Fatal(err)
+	// Create spec dir in worktree, canonical, and legacy locations
+	specID := "044-launch-website"
+	wtSpec := filepath.Join(root, ".worktrees", "worktree-spec-"+specID, ".mindspec", "docs", "specs", specID)
+	canonical := filepath.Join(root, ".mindspec", "docs", "specs", specID)
+	legacy := filepath.Join(root, "docs", "specs", specID)
+	for _, p := range []string{wtSpec, canonical, legacy} {
+		if err := os.MkdirAll(p, 0o755); err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	got := EffectiveSpecRoot(mainRepo, "044-launch-website")
-	if got != wtDir {
-		t.Errorf("EffectiveSpecRoot with worktree: got %q, want %q", got, wtDir)
-	}
-}
-
-func TestEffectiveSpecRoot_NoWorktree(t *testing.T) {
-	mainRepo := t.TempDir()
-
-	// No worktree exists — should fall back to mainRoot
-	got := EffectiveSpecRoot(mainRepo, "044-launch-website")
-	if got != mainRepo {
-		t.Errorf("EffectiveSpecRoot without worktree: got %q, want %q", got, mainRepo)
+	got := SpecDir(root, specID)
+	if got != wtSpec {
+		t.Errorf("SpecDir worktree-first: got %q, want %q", got, wtSpec)
 	}
 }
 
-func TestEffectiveSpecRoot_WorktreeDirExistsButNoMindspec(t *testing.T) {
-	mainRepo := t.TempDir()
+func TestSpecDir_WorktreeAware_CanonicalFallback(t *testing.T) {
+	root := t.TempDir()
 
-	// Worktree directory exists but without .mindspec marker
-	wtDir := filepath.Join(mainRepo, ".worktrees", "worktree-spec-044-launch-website")
-	if err := os.MkdirAll(wtDir, 0o755); err != nil {
+	// Only canonical and legacy exist (no worktree)
+	specID := "044-launch-website"
+	canonical := filepath.Join(root, ".mindspec", "docs", "specs", specID)
+	legacy := filepath.Join(root, "docs", "specs", specID)
+	for _, p := range []string{canonical, legacy} {
+		if err := os.MkdirAll(p, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got := SpecDir(root, specID)
+	if got != canonical {
+		t.Errorf("SpecDir canonical fallback: got %q, want %q", got, canonical)
+	}
+}
+
+func TestSpecDir_WorktreeAware_LegacyFallback(t *testing.T) {
+	root := t.TempDir()
+
+	// Only legacy exists
+	specID := "044-launch-website"
+	legacy := filepath.Join(root, "docs", "specs", specID)
+	if err := os.MkdirAll(legacy, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	got := EffectiveSpecRoot(mainRepo, "044-launch-website")
-	if got != mainRepo {
-		t.Errorf("EffectiveSpecRoot with dir but no .mindspec: got %q, want %q", got, mainRepo)
+	got := SpecDir(root, specID)
+	if got != legacy {
+		t.Errorf("SpecDir legacy fallback: got %q, want %q", got, legacy)
+	}
+}
+
+func TestSpecDir_WorktreeAware_DefaultsToCanonical(t *testing.T) {
+	root := t.TempDir()
+
+	// Nothing exists on disk — should default to canonical path
+	specID := "044-launch-website"
+	want := filepath.Join(root, ".mindspec", "docs", "specs", specID)
+
+	got := SpecDir(root, specID)
+	if got != want {
+		t.Errorf("SpecDir default canonical: got %q, want %q", got, want)
+	}
+}
+
+func TestRecordingDir_WorktreeAware(t *testing.T) {
+	root := t.TempDir()
+
+	// Create spec dir only in worktree
+	specID := "044-launch-website"
+	wtSpec := filepath.Join(root, ".worktrees", "worktree-spec-"+specID, ".mindspec", "docs", "specs", specID)
+	if err := os.MkdirAll(wtSpec, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got := RecordingDir(root, specID)
+	want := filepath.Join(wtSpec, "recording")
+	if got != want {
+		t.Errorf("RecordingDir worktree: got %q, want %q", got, want)
+	}
+}
+
+func TestLifecyclePath_WorktreeAware(t *testing.T) {
+	root := t.TempDir()
+
+	// Create spec dir only in worktree
+	specID := "044-launch-website"
+	wtSpec := filepath.Join(root, ".worktrees", "worktree-spec-"+specID, ".mindspec", "docs", "specs", specID)
+	if err := os.MkdirAll(wtSpec, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got := LifecyclePath(root, specID)
+	want := filepath.Join(wtSpec, "lifecycle.yaml")
+	if got != want {
+		t.Errorf("LifecyclePath worktree: got %q, want %q", got, want)
 	}
 }
 

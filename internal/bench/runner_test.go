@@ -296,7 +296,7 @@ func TestCheckPortFree(t *testing.T) {
 
 func TestBenchmarkDir(t *testing.T) {
 	dir := BenchmarkDir("/repo", "021-bench-go-command")
-	expected := filepath.Join("/repo", "docs", "specs", "021-bench-go-command", "benchmark")
+	expected := filepath.Join("/repo", ".mindspec", "docs", "specs", "021-bench-go-command", "benchmark")
 	if dir != expected {
 		t.Errorf("BenchmarkDir = %q, want %q", dir, expected)
 	}
