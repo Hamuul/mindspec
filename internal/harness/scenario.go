@@ -3,6 +3,7 @@ package harness
 import (
 	"encoding/json"
 	"fmt"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -291,6 +292,9 @@ Complete the Process function (make it return "processed") and run 'mindspec com
 }
 
 // ScenarioSpecInit tests the /ms-spec-init flow: idle → spec-init → spec mode with worktree.
+//
+// Before: main branch, no worktrees, no spec/ branches, clean tree, idle mode
+// After:  main branch (CWD), spec/ branch created, worktree created, spec mode in focus
 func ScenarioSpecInit() Scenario {
 	return Scenario{
 		Name:        "spec_init",
@@ -298,30 +302,44 @@ func ScenarioSpecInit() Scenario {
 		MaxTurns:    15,
 		Model:       "haiku",
 		Setup: func(sandbox *Sandbox) error {
-			// Sandbox starts in idle mode — no active spec
+			// Verify preconditions
+			if branch := sandbox.GitBranch(); branch != "main" {
+				return fmt.Errorf("precondition: expected main branch, got %q", branch)
+			}
+			if wts := sandbox.ListWorktrees(); len(wts) != 0 {
+				return fmt.Errorf("precondition: expected no worktrees, got %v", wts)
+			}
+			if branches := sandbox.ListBranches("spec/"); len(branches) != 0 {
+				return fmt.Errorf("precondition: expected no spec/ branches, got %v", branches)
+			}
 			return nil
 		},
 		Prompt: `IMPORTANT: Do NOT respond conversationally. Execute immediately.
 
 /ms-spec-init 001-calculator --title "Calculator"`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
-			// Agent should have run mindspec spec-init
+			// Command ran
 			assertCommandRan(t, events, "mindspec", "spec-init")
 
-			// A spec branch should exist
-			if branches := sandbox.ListBranches("spec/"); len(branches) == 0 {
-				t.Error("expected a spec/ branch to be created")
-			}
+			// Git state: spec branch created
+			assertHasBranches(t, sandbox, "spec/")
 
-			// A worktree should exist
-			if wts := sandbox.ListWorktrees(); len(wts) == 0 {
-				t.Error("expected a worktree to be created")
-			}
+			// Git state: worktree created
+			assertHasWorktrees(t, sandbox)
+
+			// Git state: main branch still exists (CWD is main repo root)
+			assertBranchIs(t, sandbox, "main")
+
+			// Focus transitioned to spec mode
+			assertFocusMode(t, sandbox, "spec")
 		},
 	}
 }
 
 // ScenarioSpecApprove tests the /ms-spec-approve flow: spec mode → approve → plan mode.
+//
+// Before: main branch (CWD), spec/001-calc branch, worktree exists, spec mode, clean tree
+// After:  approve ran, plan mode in focus, spec/ branch still exists, worktree still exists
 func ScenarioSpecApprove() Scenario {
 	return Scenario{
 		Name:        "spec_approve",
@@ -332,7 +350,7 @@ func ScenarioSpecApprove() Scenario {
 			specID := "001-calc"
 			specBranch := "spec/" + specID
 
-			// Create the branch and switch back to main
+			// Create the branch (stay on main)
 			mustRunSandbox(sandbox, "git", "branch", specBranch)
 
 			// Create worktree from the branch
@@ -342,25 +360,43 @@ func ScenarioSpecApprove() Scenario {
 			// Create epic for lifecycle
 			epicID := sandbox.CreateBead("["+specID+"] Epic", "epic", "")
 
-			// Write spec file in the worktree
+			// Write spec file in the worktree — must pass ValidateSpec
 			sandbox.WriteFile(wtDir+"/.mindspec/docs/specs/"+specID+"/spec.md", `---
 title: Calculator Feature
 status: Draft
 ---
 # Calculator Feature
 
-## Summary
-Add basic arithmetic operations.
+## Goal
+Add basic arithmetic operations (add, subtract) to the project.
 
-## Motivation
-Users need a calculator.
+## Impacted Domains
+- core arithmetic module
 
-## Detailed Design
-Implement add and subtract functions.
+## ADR Touchpoints
+None applicable.
+
+## Requirements
+1. Implement an add(a, b) function that returns the sum.
+2. Implement a subtract(a, b) function that returns the difference.
+
+## Scope
+
+### In Scope
+- add and subtract functions
+- integer arithmetic
+
+### Out of Scope
+- floating point arithmetic
+- division and multiplication
 
 ## Acceptance Criteria
-- add(a, b) returns a + b
-- subtract(a, b) returns a - b
+- [ ] add(2, 3) returns 5
+- [ ] subtract(5, 2) returns 3
+- [ ] functions handle negative numbers correctly
+
+## Approval
+Pending.
 `)
 			// Write lifecycle in worktree
 			sandbox.WriteFile(wtDir+"/.mindspec/docs/specs/"+specID+"/lifecycle.yaml",
@@ -379,20 +415,43 @@ Implement add and subtract functions.
 				"timestamp":      time.Now().UTC().Format(time.RFC3339),
 			}))
 			sandbox.Commit("setup: spec mode focus")
+
+			// Verify preconditions
+			if branch := sandbox.GitBranch(); branch != "main" {
+				return fmt.Errorf("precondition: expected main branch, got %q", branch)
+			}
+			if !sandbox.GitStatusClean() {
+				return fmt.Errorf("precondition: expected clean working tree")
+			}
 			return nil
 		},
 		Prompt: `IMPORTANT: Do NOT respond conversationally. Execute immediately.
 
 /ms-spec-approve`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
-			// Agent should have run mindspec approve spec
+			// Command ran
 			assertCommandRan(t, events, "mindspec", "approve")
 			assertCommandContains(t, events, "mindspec", "spec")
+
+			// Git state: spec branch still exists (not deleted during approve)
+			assertHasBranches(t, sandbox, "spec/")
+
+			// Git state: worktree still exists (spec worktree persists through plan mode)
+			assertHasWorktrees(t, sandbox)
+
+			// Git state: CWD is still main
+			assertBranchIs(t, sandbox, "main")
+
+			// Focus transitioned to plan mode
+			assertFocusMode(t, sandbox, "plan")
 		},
 	}
 }
 
 // ScenarioPlanApprove tests the /ms-plan-approve flow: plan mode → approve → implement mode.
+//
+// Before: main branch (CWD), spec/001-planner branch, spec worktree, no bead/ branches, plan mode, clean tree
+// After:  approve plan ran, next ran, implement mode, bead/ branch created, nested worktree created
 func ScenarioPlanApprove() Scenario {
 	return Scenario{
 		Name:        "plan_approve",
@@ -424,19 +483,50 @@ Add a planning feature.
 ## Acceptance Criteria
 - plan() returns a plan string
 `)
-			// Write draft plan with bead sections
+			// Write draft plan with bead sections (must pass ValidatePlan: version, ADR Fitness,
+			// Testing Strategy, 3+ steps per bead, verification with test artifact references)
 			sandbox.WriteFile(wtDir+"/.mindspec/docs/specs/"+specID+"/plan.md", `---
 status: Draft
 spec_id: 001-planner
+version: "1"
+last_updated: "2026-03-01"
+adr_citations: []
 ---
-# Plan
+# Plan: 001-planner — Planner Feature
+
+## ADR Fitness
+
+No existing ADRs are impacted by this change. This is a new standalone module.
+
+## Testing Strategy
+
+Unit tests via `+"`go test`"+` covering the Plan() function and edge cases.
 
 ## Bead 1: Core planner
-Create planner.go with a Plan() function.
+
+**Steps**
+1. Create internal/planner/planner.go with package declaration
+2. Implement Plan() function that returns a plan string
+3. Add input validation for empty arguments
+
+**Verification**
+- [ ] `+"`go test ./internal/planner/`"+` passes
+- [ ] Plan() returns non-empty string
+
+**Depends on**: None
 
 ## Bead 2: Tests
-Create planner_test.go with tests.
-Depends on: Bead 1
+
+**Steps**
+1. Create internal/planner/planner_test.go with table-driven tests
+2. Add test for empty input edge case
+3. Add test for normal plan generation
+
+**Verification**
+- [ ] `+"`go test ./internal/planner/`"+` passes with all cases
+- [ ] Test coverage above 80%
+
+**Depends on**: Bead 1
 `)
 			// Write lifecycle in plan phase
 			sandbox.WriteFile(wtDir+"/.mindspec/docs/specs/"+specID+"/lifecycle.yaml",
@@ -457,22 +547,49 @@ Depends on: Bead 1
 
 			// Commit focus in main
 			sandbox.Commit("setup: plan mode focus")
+
+			// Verify preconditions
+			if branch := sandbox.GitBranch(); branch != "main" {
+				return fmt.Errorf("precondition: expected main branch, got %q", branch)
+			}
+			if branches := sandbox.ListBranches("bead/"); len(branches) != 0 {
+				return fmt.Errorf("precondition: expected no bead/ branches, got %v", branches)
+			}
+			if !sandbox.GitStatusClean() {
+				return fmt.Errorf("precondition: expected clean working tree")
+			}
 			return nil
 		},
 		Prompt: `IMPORTANT: Do NOT respond conversationally. Execute immediately.
 
 /ms-plan-approve`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
-			// Agent should have run mindspec approve plan
+			// Commands ran
 			assertCommandRan(t, events, "mindspec", "approve")
-
-			// Agent should have run mindspec next (per /ms-plan-approve flow)
 			assertCommandRan(t, events, "mindspec", "next")
+
+			// Git state: spec branch still exists
+			assertHasBranches(t, sandbox, "spec/")
+
+			// Git state: bead branch created by mindspec next
+			assertHasBranches(t, sandbox, "bead/")
+
+			// Git state: CWD is still main
+			assertBranchIs(t, sandbox, "main")
+
+			// Focus transitioned to implement mode
+			assertFocusMode(t, sandbox, "implement")
+
+			// Agent CWD entered a worktree during next
+			assertEventCWDContains(t, events, ".worktrees/")
 		},
 	}
 }
 
 // ScenarioImplApprove tests the /ms-impl-approve flow: review mode → approve impl → idle.
+//
+// Before: main branch (CWD), spec/001-done branch with impl content, review mode, clean tree
+// After:  approve impl ran, idle mode, spec/ branch deleted (merged to main), no worktrees, clean tree
 func ScenarioImplApprove() Scenario {
 	return Scenario{
 		Name:        "impl_approve",
@@ -487,7 +604,6 @@ func ScenarioImplApprove() Scenario {
 			epicID := sandbox.CreateBead("["+specID+"] Epic", "epic", "")
 			beadID := sandbox.CreateBead("["+specID+"] Implement feature", "task", epicID)
 			sandbox.ClaimBead(beadID)
-			// Close the bead
 			sandbox.runBDMust("close", beadID)
 
 			// Create spec branch with implementation content
@@ -532,20 +648,49 @@ func Done() string { return "done" }
 				"timestamp":  time.Now().UTC().Format(time.RFC3339),
 			}))
 			sandbox.Commit("setup: review mode focus")
+
+			// Verify preconditions
+			if branch := sandbox.GitBranch(); branch != "main" {
+				return fmt.Errorf("precondition: expected main branch, got %q", branch)
+			}
+			if branches := sandbox.ListBranches("spec/"); len(branches) == 0 {
+				return fmt.Errorf("precondition: expected spec/ branch to exist")
+			}
+			if !sandbox.GitStatusClean() {
+				return fmt.Errorf("precondition: expected clean working tree")
+			}
 			return nil
 		},
 		Prompt: `IMPORTANT: Do NOT respond conversationally. Execute immediately.
 
 /ms-impl-approve`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
-			// Agent should have run mindspec approve impl
+			// Command ran
 			assertCommandRan(t, events, "mindspec", "approve")
 			assertCommandContains(t, events, "mindspec", "impl")
+
+			// Git state: back on main
+			assertBranchIs(t, sandbox, "main")
+
+			// Git state: spec branch deleted after merge
+			assertNoBranches(t, sandbox, "spec/")
+
+			// Git state: no worktrees remain
+			assertNoWorktrees(t, sandbox)
+
+			// Git state: working tree is clean (agent committed state files)
+			assertCleanWorktree(t, sandbox)
+
+			// Focus transitioned to idle
+			assertFocusMode(t, sandbox, "idle")
 		},
 	}
 }
 
 // ScenarioSpecStatus tests the /ms-spec-status flow: check current mode and report.
+//
+// Before: main branch, implement mode, clean tree
+// After:  no state changes (read-only command), still implement mode, still main branch, still clean
 func ScenarioSpecStatus() Scenario {
 	return Scenario{
 		Name:        "spec_status",
@@ -573,13 +718,21 @@ status: Approved
 				"timestamp":  time.Now().UTC().Format(time.RFC3339),
 			}))
 			sandbox.Commit("setup: implement mode with active bead")
+
+			// Verify preconditions
+			if branch := sandbox.GitBranch(); branch != "main" {
+				return fmt.Errorf("precondition: expected main branch, got %q", branch)
+			}
+			if !sandbox.GitStatusClean() {
+				return fmt.Errorf("precondition: expected clean working tree")
+			}
 			return nil
 		},
 		Prompt: `IMPORTANT: Do NOT respond conversationally. Execute immediately.
 
 /ms-spec-status`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
-			// Agent should have run mindspec state show or mindspec instruct
+			// Command ran: agent ran state show or instruct
 			ran := false
 			for _, e := range events {
 				if e.Command != "mindspec" {
@@ -599,6 +752,16 @@ status: Approved
 			if !ran {
 				t.Error("expected agent to run 'mindspec state show' or 'mindspec instruct'")
 			}
+
+			// Read-only: no state changes — still implement mode
+			assertFocusMode(t, sandbox, "implement")
+
+			// Read-only: still on main branch
+			assertBranchIs(t, sandbox, "main")
+
+			// Read-only: no non-infrastructure files modified.
+			// Note: .mindspec/session.json is written by SessionStart hook (infrastructure noise).
+			assertNoUserFilesModified(t, sandbox)
 		},
 	}
 }
@@ -720,4 +883,65 @@ func assertEventCWDContains(t *testing.T, events []ActionEvent, substr string) {
 		}
 	}
 	t.Errorf("no event had CWD containing %q", substr)
+}
+
+func assertCleanWorktree(t *testing.T, sandbox *Sandbox) {
+	t.Helper()
+	if !sandbox.GitStatusClean() {
+		t.Error("expected clean working tree, but found uncommitted changes")
+	}
+}
+
+func assertHasBranches(t *testing.T, sandbox *Sandbox, prefix string) {
+	t.Helper()
+	branches := sandbox.ListBranches(prefix)
+	if len(branches) == 0 {
+		t.Errorf("expected at least one branch with prefix %q, found none", prefix)
+	}
+}
+
+func assertHasWorktrees(t *testing.T, sandbox *Sandbox) {
+	t.Helper()
+	wts := sandbox.ListWorktrees()
+	if len(wts) == 0 {
+		t.Error("expected at least one worktree, found none")
+	}
+}
+
+// assertNoUserFilesModified checks that no files outside .mindspec/ are dirty.
+// .mindspec/session.json is written by the SessionStart hook and is expected noise.
+func assertNoUserFilesModified(t *testing.T, sandbox *Sandbox) {
+	t.Helper()
+	cmd := exec.Command("git", "status", "--porcelain")
+	cmd.Dir = sandbox.Root
+	out, err := cmd.Output()
+	if err != nil {
+		t.Errorf("git status failed: %v", err)
+		return
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
+			continue
+		}
+		// Skip .mindspec/ infrastructure files (session.json, focus, etc.)
+		file := strings.TrimSpace(line[2:]) // strip status prefix
+		if strings.HasPrefix(file, ".mindspec/") {
+			continue
+		}
+		t.Errorf("unexpected modified file outside .mindspec/: %s", line)
+	}
+}
+
+func assertFocusMode(t *testing.T, sandbox *Sandbox, expectedMode string) {
+	t.Helper()
+	data := sandbox.ReadFile(".mindspec/focus")
+	var focus map[string]interface{}
+	if err := json.Unmarshal([]byte(data), &focus); err != nil {
+		t.Errorf("could not parse .mindspec/focus: %v", err)
+		return
+	}
+	mode, _ := focus["mode"].(string)
+	if mode != expectedMode {
+		t.Errorf("expected focus mode %q, got %q", expectedMode, mode)
+	}
 }

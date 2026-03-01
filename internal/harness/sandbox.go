@@ -252,6 +252,17 @@ func (s *Sandbox) ListBranches(prefix string) []string {
 	return branches
 }
 
+// GitStatusClean returns true if the working tree has no uncommitted changes.
+func (s *Sandbox) GitStatusClean() bool {
+	cmd := exec.Command("git", "status", "--porcelain")
+	cmd.Dir = s.Root
+	out, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(out)) == ""
+}
+
 // ListWorktrees returns directory entries under .worktrees/ (empty if dir doesn't exist).
 func (s *Sandbox) ListWorktrees() []string {
 	wtDir := filepath.Join(s.Root, ".worktrees")

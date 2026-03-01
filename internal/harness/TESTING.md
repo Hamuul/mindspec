@@ -272,6 +272,7 @@ Track each test run with: scenario, date, pass/fail, recorded events count, turn
 | Date | Result | Events | Turns | Time | Change |
 |------|--------|--------|-------|------|--------|
 | 2026-03-01 | PASS | 117 | 9 | 56s | Baseline: agent ran `approve plan` (succeeded on 3rd try) then `mindspec next` (claimed bead, created nested worktree). 77.8% fwd ratio (7 fwd / 2 retry). |
+| 2026-03-01 | PASS | 130 | 8 | 54s | Fixed plan.md to pass ValidatePlan (added version, ADR Fitness, Testing Strategy, proper bead Steps/Verification). Added git state assertions. 100% fwd ratio. |
 
 ### TestLLM_ImplApprove
 
