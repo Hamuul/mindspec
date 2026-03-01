@@ -183,6 +183,7 @@
 {"created_at":"2026-03-01T10:20:15Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-tf0g.3","issue_id":"mindspec-tf0g.5","type":"blocks"}
 {"created_at":"2026-03-01T10:20:15Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-tf0g.4","issue_id":"mindspec-tf0g.5","type":"blocks"}
 {"created_at":"2026-02-26T12:02:37Z","created_by":"Max Steel","depends_on_id":"mindspec-mol-9zt","issue_id":"mindspec-u7mk","type":"parent-child"}
+{"created_at":"2026-03-01T21:51:46Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-wqaz","issue_id":"mindspec-v9wy","type":"discovered-from"}
 {"created_at":"2026-02-26T12:02:41Z","created_by":"Max Steel","depends_on_id":"mindspec-mol-9zt","issue_id":"mindspec-wym1","type":"parent-child"}
 {"created_at":"2026-02-26T12:01:32Z","created_by":"Max Steel","depends_on_id":"mindspec-u7mk","issue_id":"mindspec-wym1","type":"blocks"}
 {"created_at":"2026-02-26T17:55:10Z","created_by":"Max Steel","depends_on_id":"mindspec-4oua","issue_id":"mindspec-xcr6","type":"blocks"}
