@@ -339,7 +339,9 @@ func ScenarioSpecInit() Scenario {
 // ScenarioSpecApprove tests the /ms-spec-approve flow: spec mode → approve → plan mode.
 //
 // Before: spec worktree exists with draft spec, spec/001-calc branch, spec mode,
-//         focus.activeWorktree points to spec worktree, clean tree
+//
+//	focus.activeWorktree points to spec worktree, clean tree
+//
 // After:  approve ran, plan mode in focus, spec/ branch + worktree still exist
 func ScenarioSpecApprove() Scenario {
 	return Scenario{
@@ -449,9 +451,12 @@ Pending.
 // ScenarioPlanApprove tests the /ms-plan-approve flow: plan mode → approve → implement mode.
 //
 // Before: spec worktree exists with draft plan, spec/001-planner branch, no bead/ branches,
-//         plan mode, focus.activeWorktree points to spec worktree, clean tree
+//
+//	plan mode, focus.activeWorktree points to spec worktree, clean tree
+//
 // After:  approve plan ran, mindspec next ran, implement mode, bead/ branch + worktree created,
-//         agent CWD moved to bead worktree
+//
+//	agent CWD moved to bead worktree
 func ScenarioPlanApprove() Scenario {
 	return Scenario{
 		Name:        "plan_approve",
@@ -589,9 +594,12 @@ Unit tests via `+"`go test`"+` covering the Plan() function and edge cases.
 // ScenarioImplApprove tests the /ms-impl-approve flow: review mode → approve impl → idle.
 //
 // Before: spec worktree exists with impl content, spec/001-done branch, review mode,
-//         focus.activeWorktree points to spec worktree, all beads closed, clean tree
+//
+//	focus.activeWorktree points to spec worktree, all beads closed, clean tree
+//
 // After:  approve impl ran, idle mode, spec/ branch deleted (merged to main),
-//         spec worktree removed, implementation content merged to main, clean tree
+//
+//	spec worktree removed, implementation content merged to main, clean tree
 func ScenarioImplApprove() Scenario {
 	return Scenario{
 		Name:        "impl_approve",
@@ -644,11 +652,11 @@ func Done() string { return "done" }
 
 			// Set focus to review mode with activeWorktree (as mindspec complete would)
 			sandbox.WriteFocus(mustJSON(map[string]string{
-				"mode":            "review",
-				"activeSpec":      specID,
-				"specBranch":      specBranch,
-				"activeWorktree":  wtDir,
-				"timestamp":       time.Now().UTC().Format(time.RFC3339),
+				"mode":           "review",
+				"activeSpec":     specID,
+				"specBranch":     specBranch,
+				"activeWorktree": wtDir,
+				"timestamp":      time.Now().UTC().Format(time.RFC3339),
 			}))
 			sandbox.Commit("setup: review mode focus")
 
@@ -695,7 +703,9 @@ func Done() string { return "done" }
 // ScenarioSpecStatus tests the /ms-spec-status flow: check current mode and report.
 //
 // Before: implement mode, spec worktree + bead worktree exist, spec/001-status + bead/ branches,
-//         focus.activeWorktree points to bead worktree, active bead in focus
+//
+//	focus.activeWorktree points to bead worktree, active bead in focus
+//
 // After:  no state changes (read-only command), still implement mode, worktrees+branches unchanged
 func ScenarioSpecStatus() Scenario {
 	return Scenario{
@@ -737,12 +747,12 @@ status: Approved
 
 			// Set focus to implement mode with bead worktree
 			sandbox.WriteFocus(mustJSON(map[string]string{
-				"mode":            "implement",
-				"activeSpec":      specID,
-				"activeBead":      beadID,
-				"specBranch":      specBranch,
-				"activeWorktree":  beadWtDir,
-				"timestamp":       time.Now().UTC().Format(time.RFC3339),
+				"mode":           "implement",
+				"activeSpec":     specID,
+				"activeBead":     beadID,
+				"specBranch":     specBranch,
+				"activeWorktree": beadWtDir,
+				"timestamp":      time.Now().UTC().Format(time.RFC3339),
 			}))
 			sandbox.Commit("setup: implement mode with active bead")
 
