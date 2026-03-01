@@ -110,7 +110,7 @@ func TestRun_HappyPath(t *testing.T) {
 		return nil, fmt.Errorf("unexpected args: %v", args)
 	}
 
-	result, err := Run(root, "")
+	result, err := Run(root, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -166,12 +166,43 @@ func TestRun_DirtyTreeRefuses(t *testing.T) {
 		return exec.Command("echo", "M modified-file.go")
 	}
 
-	_, err := Run(root, "")
+	_, err := Run(root, "", "")
 	if err == nil {
 		t.Fatal("expected error for dirty worktree")
 	}
 	if !strings.Contains(err.Error(), "uncommitted changes") {
 		t.Errorf("error should mention uncommitted changes: %v", err)
+	}
+}
+
+func TestCheckCleanWorktree_IgnoresGeneratedStateFiles(t *testing.T) {
+	saveAndRestore(t)
+
+	execCommandFn = func(name string, args ...string) *exec.Cmd {
+		return exec.Command("sh", "-c", "printf ' M .mindspec/focus\n?? .mindspec/session.json\n'")
+	}
+
+	if err := checkCleanWorktree("/tmp/ignored"); err != nil {
+		t.Fatalf("expected state-only changes to be ignored, got: %v", err)
+	}
+}
+
+func TestCheckCleanWorktree_ReportsUserChanges(t *testing.T) {
+	saveAndRestore(t)
+
+	execCommandFn = func(name string, args ...string) *exec.Cmd {
+		return exec.Command("sh", "-c", "printf ' M .mindspec/focus\n M hello.go\n'")
+	}
+
+	err := checkCleanWorktree("/tmp/mixed")
+	if err == nil {
+		t.Fatal("expected user change to block completion")
+	}
+	if !strings.Contains(err.Error(), "hello.go") {
+		t.Fatalf("expected error to mention blocking file, got: %v", err)
+	}
+	if strings.Contains(err.Error(), ".mindspec/focus") {
+		t.Fatalf("expected ignorable state file to be filtered, got: %v", err)
 	}
 }
 
@@ -200,7 +231,7 @@ func TestRun_DefaultsToActiveBead(t *testing.T) {
 	worktreeRemoveFn = func(name string) error { return nil }
 	runBDFn = func(args ...string) ([]byte, error) { return nil, fmt.Errorf("no results") }
 
-	_, err := Run(root, "") // no explicit bead ID
+	_, err := Run(root, "", "") // no explicit bead ID
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -234,7 +265,7 @@ func TestRun_NoWorktree(t *testing.T) {
 	}
 	runBDFn = func(args ...string) ([]byte, error) { return nil, fmt.Errorf("no results") }
 
-	result, err := Run(root, "bead-1")
+	result, err := Run(root, "bead-1", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -344,12 +375,46 @@ func TestRun_NoBead(t *testing.T) {
 	resolveTargetFn = func(r, flag string) (string, error) { return "008-test", nil }
 	resolveActiveBeadFn = func(r, specID string) (string, error) { return "", nil }
 
-	_, err := Run(root, "")
+	_, err := Run(root, "", "")
 	if err == nil {
 		t.Fatal("expected error when no bead ID available")
 	}
 	if !strings.Contains(err.Error(), "no bead ID") {
 		t.Errorf("error should mention no bead ID: %v", err)
+	}
+}
+
+func TestRun_PositionalSpecIDTreatedAsSpecHint(t *testing.T) {
+	saveAndRestore(t)
+
+	root := setupTempRoot(t)
+
+	var gotSpecHint string
+	resolveTargetFn = func(r, flag string) (string, error) {
+		gotSpecHint = flag
+		return "008-test", nil
+	}
+	resolveActiveBeadFn = func(r, specID string) (string, error) { return "repo-abc.1", nil }
+	worktreeListFn = func() ([]bead.WorktreeListEntry, error) { return nil, nil }
+	execCommandFn = func(name string, args ...string) *exec.Cmd { return exec.Command("echo", "") }
+
+	var closedID string
+	closeBeadFn = func(ids ...string) error {
+		closedID = ids[0]
+		return nil
+	}
+
+	// No lifecycle fixture -> advanceState falls back to idle.
+	runBDFn = func(args ...string) ([]byte, error) { return json.Marshal([]bead.BeadInfo{}) }
+
+	if _, err := Run(root, "008-test", ""); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotSpecHint != "008-test" {
+		t.Fatalf("resolveTarget spec hint: got %q, want %q", gotSpecHint, "008-test")
+	}
+	if closedID != "repo-abc.1" {
+		t.Fatalf("closed bead ID: got %q, want %q", closedID, "repo-abc.1")
 	}
 }
 
@@ -379,7 +444,7 @@ func TestRun_AdvancesToImplementWhenNextBeadReady(t *testing.T) {
 		return nil, fmt.Errorf("unexpected")
 	}
 
-	result, err := Run(root, "")
+	result, err := Run(root, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -412,7 +477,7 @@ func TestRun_AdvancesToReviewWhenNoMoreBeads(t *testing.T) {
 		return json.Marshal([]bead.BeadInfo{})
 	}
 
-	result, err := Run(root, "")
+	result, err := Run(root, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -248,6 +248,81 @@ func TestApproveImpl_DirectMergeSummary(t *testing.T) {
 	}
 }
 
+func TestApproveImpl_CleanupRunsFromRoot(t *testing.T) {
+	tmp := t.TempDir()
+	writeLifecycleSpec(t, tmp, "010-test")
+	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
+
+	state.WriteFocus(tmp, &state.Focus{
+		Mode:       state.ModeReview,
+		ActiveSpec: "010-test",
+		SpecBranch: "spec/010-test",
+	})
+
+	specWorktreePath := filepath.Join(tmp, ".worktrees", "worktree-spec-010-test")
+	if err := os.MkdirAll(specWorktreePath, 0755); err != nil {
+		t.Fatalf("mkdir spec worktree: %v", err)
+	}
+
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get cwd: %v", err)
+	}
+	if err := os.Chdir(specWorktreePath); err != nil {
+		t.Fatalf("chdir spec worktree: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origWD) })
+
+	saveAndRestore(t)
+
+	implRunBDFn = func(args ...string) ([]byte, error) {
+		payload := []map[string]string{{"status": "open"}}
+		return json.Marshal(payload)
+	}
+	implRunBDCombinedFn = func(args ...string) ([]byte, error) { return []byte("ok"), nil }
+	loadConfigFn = func(root string) (*config.Config, error) {
+		cfg := config.DefaultConfig()
+		cfg.MergeStrategy = "direct"
+		return cfg, nil
+	}
+	mergeBranchFn = func(workdir, source, target string) error { return nil }
+	commitCountFn = func(workdir, base, head string) (int, error) { return 1, nil }
+	branchExistsFn = func(name string) bool { return false }
+	diffStatFn = func(workdir, base, head string) (string, error) { return "", nil }
+
+	var worktreeRemoved bool
+	worktreeRemoveFn = func(name string) error {
+		worktreeRemoved = true
+		cwd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		cwdInfo, err := os.Stat(cwd)
+		if err != nil {
+			return err
+		}
+		rootInfo, err := os.Stat(tmp)
+		if err != nil {
+			return err
+		}
+		if !os.SameFile(cwdInfo, rootInfo) {
+			return fmt.Errorf("expected cleanup cwd %s, got %s", tmp, cwd)
+		}
+		if name != "worktree-spec-010-test" {
+			return fmt.Errorf("unexpected worktree name: %s", name)
+		}
+		return nil
+	}
+	deleteBranchFn = func(name string) error { return nil }
+
+	if _, err := ApproveImpl(tmp, "010-test"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !worktreeRemoved {
+		t.Fatal("expected spec worktree cleanup to run")
+	}
+}
+
 func TestApproveImpl_PRWaitFlow(t *testing.T) {
 	tmp := t.TempDir()
 	writeLifecycleSpec(t, tmp, "010-test")
@@ -486,6 +561,45 @@ func TestVerifyImplContent_NoCommits(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "no commits beyond main") {
 		t.Errorf("error should mention no commits: %v", err)
+	}
+}
+
+func TestVerifyImplContent_NoCommitsButClosedBeads_AllowsCleanup(t *testing.T) {
+	tmp := t.TempDir()
+	writeLifecycleSpec(t, tmp, "010-test")
+	writePlanWithBeads(t, tmp, "010-test", []string{"bead-aaa"})
+	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
+
+	state.WriteFocus(tmp, &state.Focus{
+		Mode:       state.ModeReview,
+		ActiveSpec: "010-test",
+		SpecBranch: "spec/010-test",
+	})
+
+	saveAndRestore(t)
+
+	implRunBDFn = func(args ...string) ([]byte, error) {
+		if len(args) >= 2 && args[0] == "show" {
+			payload := []map[string]string{{"status": "closed"}}
+			return json.Marshal(payload)
+		}
+		return nil, fmt.Errorf("unexpected args: %v", args)
+	}
+	implRunBDCombinedFn = func(args ...string) ([]byte, error) { return []byte("ok"), nil }
+	commitCountFn = func(workdir, base, head string) (int, error) { return 0, nil }
+	branchExistsFn = func(name string) bool { return true }
+	loadConfigFn = func(root string) (*config.Config, error) {
+		cfg := config.DefaultConfig()
+		cfg.MergeStrategy = "direct"
+		return cfg, nil
+	}
+	mergeBranchFn = func(workdir, source, target string) error { return nil }
+	worktreeRemoveFn = func(name string) error { return nil }
+	deleteBranchFn = func(name string) error { return nil }
+	diffStatFn = func(workdir, base, head string) (string, error) { return "", nil }
+
+	if _, err := ApproveImpl(tmp, "010-test"); err != nil {
+		t.Fatalf("expected approval to continue as cleanup path, got: %v", err)
 	}
 }
 

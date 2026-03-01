@@ -26,6 +26,7 @@ The bead ID is auto-resolved from state if not provided.`,
 		if err != nil {
 			return err
 		}
+		specID, _ := cmd.Flags().GetString("spec")
 
 		// CWD guard: prefer running from the bead worktree.
 		// If we're in main but an active worktree exists, auto-chdir there.
@@ -48,7 +49,7 @@ The bead ID is auto-resolved from state if not provided.`,
 			beadID = args[0]
 		}
 
-		result, err := complete.Run(root, beadID)
+		result, err := complete.Run(root, beadID, specID)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
@@ -63,4 +64,8 @@ The bead ID is auto-resolved from state if not provided.`,
 		}
 		return nil
 	},
+}
+
+func init() {
+	completeCmd.Flags().String("spec", "", "Target spec ID when multiple specs are active")
 }

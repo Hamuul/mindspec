@@ -33,7 +33,11 @@ func runScenario(t *testing.T, scenario Scenario) (*Report, *Sandbox) {
 	agent := resolveTestAgent(t)
 	sandbox := NewSandbox(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	timeoutMin := scenario.TimeoutMin
+	if timeoutMin <= 0 {
+		timeoutMin = 10
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutMin)*time.Minute)
 	defer cancel()
 
 	result, err := RunSession(ctx, agent, scenario, sandbox)
@@ -257,4 +261,81 @@ func TestLLM_BugfixBranch(t *testing.T) {
 	if len(report.WrongActions) > 0 {
 		t.Errorf("unexpected wrong actions: %d", len(report.WrongActions))
 	}
+}
+
+func TestAssertNoPreApproveImplMainMergeOrPR(t *testing.T) {
+	t.Run("allows canonical internal merge before approve event", func(t *testing.T) {
+		events := []ActionEvent{
+			{
+				ActionType: "command",
+				Command:    "git",
+				ExitCode:   0,
+				ArgsList: []string{
+					"-C", "/tmp/repo",
+					"merge", "--no-ff", "spec/001-test",
+					"-m", "Merge spec/001-test into main",
+				},
+			},
+			{
+				ActionType: "command",
+				Command:    "mindspec",
+				ExitCode:   0,
+				ArgsList:   []string{"approve", "impl", "001-test"},
+			},
+		}
+
+		if err := preApproveImplMainMergeOrPRViolation(events); err != nil {
+			t.Fatalf("expected no violation, got: %v", err)
+		}
+	})
+
+	t.Run("fails on pre-approve pr create", func(t *testing.T) {
+		events := []ActionEvent{
+			{
+				ActionType: "command",
+				Command:    "gh",
+				ExitCode:   0,
+				ArgsList:   []string{"pr", "create", "--base", "main", "--head", "spec/001-test"},
+			},
+			{
+				ActionType: "command",
+				Command:    "mindspec",
+				ExitCode:   0,
+				ArgsList:   []string{"approve", "impl", "001-test"},
+			},
+		}
+
+		err := preApproveImplMainMergeOrPRViolation(events)
+		if err == nil {
+			t.Fatal("expected violation when PR is created before approve impl")
+		}
+		if !strings.Contains(err.Error(), "PR command ran before approve impl") {
+			t.Fatalf("expected PR violation error, got: %v", err)
+		}
+	})
+
+	t.Run("fails on non-canonical pre-approve merge-to-main", func(t *testing.T) {
+		events := []ActionEvent{
+			{
+				ActionType: "command",
+				Command:    "git",
+				ExitCode:   0,
+				ArgsList:   []string{"merge", "main"},
+			},
+			{
+				ActionType: "command",
+				Command:    "mindspec",
+				ExitCode:   0,
+				ArgsList:   []string{"approve", "impl", "001-test"},
+			},
+		}
+
+		err := preApproveImplMainMergeOrPRViolation(events)
+		if err == nil {
+			t.Fatal("expected violation on merge-to-main before approve impl")
+		}
+		if !strings.Contains(err.Error(), "merge-to-main occurred before approve impl") {
+			t.Fatalf("expected merge violation error, got: %v", err)
+		}
+	})
 }
