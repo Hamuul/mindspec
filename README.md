@@ -28,7 +28,7 @@ MindSpec treats these as system design problems, not prompting problems. It prov
 - **Scope discipline** — discovered work becomes new beads (work items), never scope creep in the current task
 
 **Context Engineering**
-- **Deterministic context packs** — token-budgeted, DDD-informed bundles of specs, domain docs, ADRs, glossary terms, and policies assembled automatically
+- **Deterministic context packs** — token-budgeted, DDD-informed bundles of specs, domain docs, ADRs, and policies assembled automatically
 - **Domain-driven bounded contexts** — specs declare impacted domains; context packs expand through the Context Map to include neighboring contexts
 - **Dynamic agent guidance** — `mindspec instruct` emits mode-appropriate operating instructions at runtime based on current state, replacing static instruction files
 - **Architecture Decision Records** — governed ADR lifecycle with auto-numbered IDs, superseding workflow, and mandatory citation in plans
@@ -93,10 +93,10 @@ Documentation stays current because the system won't let you skip it — beads c
 # 2. Bootstrap your project
 cd your-project
 mindspec init
-mindspec setup claude   # Configure Claude Code hooks + slash commands
+mindspec setup claude   # Or: codex, copilot — configures hooks + skills
 ```
 
-`mindspec init` scaffolds the `.mindspec/` directory, `GLOSSARY.md`, `AGENTS.md`, and the project structure. `mindspec setup claude` adds Claude Code-specific integration (SessionStart hook, plan gates, `/ms:spec-init` and other skills). From here, your coding agent picks up the workflow automatically — the SessionStart hook runs `mindspec instruct` and the agent knows what to do.
+`mindspec init` scaffolds the `.mindspec/` directory, `AGENTS.md`, and the project structure. `mindspec setup claude` adds Claude Code-specific integration (SessionStart hook, plan gates, and skills). From here, your coding agent picks up the workflow automatically — the SessionStart hook runs `mindspec instruct` and the agent knows what to do.
 
 Tell the agent what you want to build. It will walk you through the lifecycle:
 
