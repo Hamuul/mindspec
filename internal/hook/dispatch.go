@@ -155,12 +155,15 @@ func WorkflowGuard(inp *Input, st *HookState, enforce bool) Result {
 	if st == nil || !enforce {
 		return Result{Action: Pass}
 	}
-
+	// Workflow guard is for file edits only; bash commands are handled by WorktreeBash.
+	if inp.FilePath == "" {
+		return Result{Action: Pass}
+	}
 	switch st.Mode {
 	case state.ModeIdle, "":
 		return Result{
-			Action:  Warn,
-			Message: warnIdle,
+			Action:  Block,
+			Message: blockIdle,
 		}
 
 	case state.ModeExplore:
@@ -203,10 +206,11 @@ func WorkflowGuard(inp *Input, st *HookState, enforce bool) Result {
 	}
 }
 
-const warnIdle = "⚠️ WORKFLOW VIOLATION: You are editing files with no active spec. " +
-	"You must stop and go through the spec lifecycle (/ms-spec-init or /ms-explore). " +
-	"If these are exceptional circumstances (debugging a CI failure, fixing a broken build, " +
-	"correcting a typo in config, or other urgent operational fix), you may proceed but must note the reason."
+const blockIdle = "mindspec: blocked — no active work context. All edits must happen on a worktree branch.\n\n" +
+	"Start work via one of:\n" +
+	"  • mindspec spec-init <NNN-slug>  — new feature (full spec lifecycle)\n" +
+	"  • mindspec bugfix <description>  — bug fix (lightweight branch)\n" +
+	"  • mindspec quick <description>   — minor task (no spec required)"
 
 const warnExplore = "⚠️ WORKFLOW VIOLATION: Explore Mode is for evaluating ideas, not implementing them. " +
 	"You must stop editing files. Promote to a spec (/ms-explore promote) or dismiss (/ms-explore dismiss). " +
