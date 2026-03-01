@@ -104,6 +104,9 @@ func LegacyDocsDir(root string) string {
 }
 
 // SpecDir returns the path to a specific spec directory under root.
+// NOTE: This is not worktree-aware. Callers that need to find spec artifacts
+// in worktrees should use EffectiveSpecRoot first. See ADR-0022 for planned
+// refactor to make SpecDir worktree-aware by default.
 func SpecDir(root, specID string) string {
 	return filepath.Join(DocsDir(root), "specs", specID)
 }
