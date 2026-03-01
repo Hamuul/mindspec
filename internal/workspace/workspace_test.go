@@ -360,6 +360,104 @@ func TestLifecyclePath_WorktreeAware(t *testing.T) {
 	}
 }
 
+func TestFindLocalRoot_ReturnsWorktreeDir(t *testing.T) {
+	// FindLocalRoot should return the worktree directory itself, NOT the main repo.
+	mainRepo := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(mainRepo, ".mindspec"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	wtGitDir := filepath.Join(mainRepo, ".git", "worktrees", "wt-local")
+	if err := os.MkdirAll(wtGitDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(wtGitDir, "commondir"), []byte("../..\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	wtDir := filepath.Join(mainRepo, ".worktrees", "wt-local")
+	if err := os.MkdirAll(filepath.Join(wtDir, ".mindspec"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitFileContent := "gitdir: " + wtGitDir + "\n"
+	if err := os.WriteFile(filepath.Join(wtDir, ".git"), []byte(gitFileContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// FindLocalRoot from inside the worktree should return the worktree dir (NOT mainRepo).
+	root, err := FindLocalRoot(wtDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if root != wtDir {
+		t.Errorf("FindLocalRoot: expected worktree dir %q, got %q", wtDir, root)
+	}
+
+	// Contrast with FindRoot which resolves to mainRepo.
+	mainRoot, err := FindRoot(wtDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if mainRoot != mainRepo {
+		t.Errorf("FindRoot: expected main repo %q, got %q", mainRepo, mainRoot)
+	}
+}
+
+func TestFindLocalRoot_NonWorktree(t *testing.T) {
+	// For a non-worktree directory, FindLocalRoot and FindRoot should return the same result.
+	tmp := t.TempDir()
+	if err := os.Mkdir(filepath.Join(tmp, ".mindspec"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	localRoot, err := FindLocalRoot(tmp)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	root, err := FindRoot(tmp)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if localRoot != root {
+		t.Errorf("FindLocalRoot and FindRoot should match for non-worktree: local=%q root=%q", localRoot, root)
+	}
+}
+
+func TestFindLocalRoot_NestedSubdir(t *testing.T) {
+	// FindLocalRoot from a subdirectory inside a worktree should return the worktree root.
+	mainRepo := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(mainRepo, ".mindspec"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	wtGitDir := filepath.Join(mainRepo, ".git", "worktrees", "wt-nested")
+	if err := os.MkdirAll(wtGitDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(wtGitDir, "commondir"), []byte("../.."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	wtDir := filepath.Join(mainRepo, ".worktrees", "wt-nested")
+	if err := os.MkdirAll(filepath.Join(wtDir, ".mindspec"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(wtDir, ".git"), []byte("gitdir: "+wtGitDir+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	nested := filepath.Join(wtDir, "internal", "pkg")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	root, err := FindLocalRoot(nested)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if root != wtDir {
+		t.Errorf("FindLocalRoot nested: expected worktree %q, got %q", wtDir, root)
+	}
+}
+
 func TestCanonicalAndLegacyDocsDir(t *testing.T) {
 	root := "/project"
 	if got := CanonicalDocsDir(root); got != filepath.Join(root, ".mindspec", "docs") {

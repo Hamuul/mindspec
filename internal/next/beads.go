@@ -242,8 +242,13 @@ func EnsureWorktree(root, beadID string) (string, error) {
 	}
 
 	// Determine the base branch: use spec branch from focus if available.
+	// Read focus from local root (per-worktree focus).
 	baseBranch := "HEAD"
-	mc, mcErr := readFocusFn(root)
+	localRoot := root
+	if lr, err := workspace.FindLocalRoot("."); err == nil {
+		localRoot = lr
+	}
+	mc, mcErr := readFocusFn(localRoot)
 	if mcErr == nil && mc.SpecBranch != "" {
 		baseBranch = mc.SpecBranch
 	}

@@ -84,6 +84,31 @@ func resolveWorktreeRoot(dir string) string {
 	return ""
 }
 
+// FindLocalRoot walks up from startDir looking for .mindspec/ or .git at each level.
+// Unlike FindRoot, it does NOT resolve worktrees back to the main repo.
+// When CWD is inside a worktree, this returns the worktree directory itself.
+// This is used for per-worktree focus: each worktree maintains its own .mindspec/focus.
+func FindLocalRoot(startDir string) (string, error) {
+	dir, err := filepath.Abs(startDir)
+	if err != nil {
+		return "", err
+	}
+
+	for {
+		if exists(filepath.Join(dir, ".mindspec")) || exists(filepath.Join(dir, ".git")) {
+			return dir, nil
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+
+	return "", ErrNoRoot
+}
+
 // DocsDir returns the path to the docs directory under root.
 func DocsDir(root string) string {
 	canonical := CanonicalDocsDir(root)

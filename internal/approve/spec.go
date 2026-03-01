@@ -56,14 +56,18 @@ func ApproveSpec(root, specID, approvedBy string) (*SpecResult, error) {
 		result.Warnings = append(result.Warnings, fmt.Sprintf("could not auto-commit spec approval: %v", err))
 	}
 
-	// Step 4: Write focus for plan mode.
+	// Step 4: Write focus for plan mode (per-worktree: prefer spec worktree, fallback to root).
 	mc := &state.Focus{
 		Mode:           state.ModePlan,
 		ActiveSpec:     specID,
 		SpecBranch:     state.SpecBranch(specID),
 		ActiveWorktree: specWtPath,
 	}
-	if err := state.WriteFocus(root, mc); err != nil {
+	focusRoot := specWtPath
+	if _, err := os.Stat(filepath.Join(focusRoot, ".mindspec")); err != nil {
+		focusRoot = root // no worktree .mindspec — write to main root
+	}
+	if err := state.WriteFocus(focusRoot, mc); err != nil {
 		return nil, fmt.Errorf("writing focus: %w", err)
 	}
 

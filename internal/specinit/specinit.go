@@ -146,20 +146,15 @@ func Run(root, specID, title string) (*Result, error) {
 
 	// --- Phase 4: Focus + hooks + recording ---
 
-	// Write focus to main root (enforcement hooks read this).
+	// Write focus to worktree only (per-worktree focus — hooks read local root).
 	mc := &state.Focus{
 		Mode:           state.ModeSpec,
 		ActiveSpec:     specID,
 		SpecBranch:     specBranch,
 		ActiveWorktree: wtPath,
 	}
-	if err := state.WriteFocus(root, mc); err != nil {
-		return nil, fmt.Errorf("writing focus: %w", err)
-	}
-
-	// Also write focus to worktree root so commands work from either location.
 	if err := state.WriteFocus(wtPath, mc); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not write focus to worktree: %v\n", err)
+		return nil, fmt.Errorf("writing focus to worktree: %w", err)
 	}
 
 	// Install git hooks (best-effort, ensures Layer 1 enforcement).

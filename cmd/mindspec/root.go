@@ -66,6 +66,18 @@ func findRoot() (string, error) {
 	return root, nil
 }
 
+func findLocalRoot() (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("cannot determine working directory: %w", err)
+	}
+	root, err := workspace.FindLocalRoot(cwd)
+	if err != nil {
+		return "", fmt.Errorf("workspace not found: %w", err)
+	}
+	return root, nil
+}
+
 func init() {
 	rootCmd.PersistentFlags().String("trace", "", "Write trace events to file (use - for stderr)")
 

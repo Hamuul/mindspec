@@ -35,7 +35,12 @@ var (
 	mergePRFn           = gitops.MergePR
 	isAncestorFn        = gitops.IsAncestor
 	branchExistsFn      = gitops.BranchExists
+	findLocalRootFn     = defaultFindLocalRoot
 )
+
+func defaultFindLocalRoot() (string, error) {
+	return workspace.FindLocalRoot(".")
+}
 
 // ImplOpts holds options for implementation approval.
 type ImplOpts struct {
@@ -67,8 +72,14 @@ func ApproveImpl(root, specID string, opts ...ImplOpts) (*ImplResult, error) {
 	}
 	result := &ImplResult{SpecID: specID}
 
+	// Determine local root for per-worktree focus reads.
+	localRoot := root
+	if lr, err := findLocalRootFn(); err == nil {
+		localRoot = lr
+	}
+
 	// Verify current state is review mode for this spec
-	mc, err := state.ReadFocus(root)
+	mc, err := state.ReadFocus(localRoot)
 	if err != nil {
 		return nil, fmt.Errorf("reading state: %w", err)
 	}
@@ -138,8 +149,8 @@ func ApproveImpl(root, specID string, opts ...ImplOpts) (*ImplResult, error) {
 		result.Warnings = append(result.Warnings, fmt.Sprintf("could not stop recording: %v", err))
 	}
 
-	// Transition to idle
-	if err := state.WriteFocus(root, &state.Focus{Mode: state.ModeIdle}); err != nil {
+	// Transition to idle (per-worktree: write to local root)
+	if err := state.WriteFocus(localRoot, &state.Focus{Mode: state.ModeIdle}); err != nil {
 		return nil, fmt.Errorf("writing focus: %w", err)
 	}
 

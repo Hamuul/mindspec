@@ -23,7 +23,7 @@ Use 'explore dismiss' to exit without a spec, or 'explore promote' to
 create a spec from the exploration.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		root, err := findRoot()
+		root, err := findLocalRoot()
 		if err != nil {
 			return err
 		}
@@ -57,7 +57,7 @@ var exploreDismissCmd = &cobra.Command{
 	Long: `Exits Explore Mode and returns to idle. Use --adr to capture the
 decision as an Architecture Decision Record.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		root, err := findRoot()
+		root, err := findLocalRoot()
 		if err != nil {
 			return err
 		}
@@ -113,7 +113,7 @@ var explorePromoteCmd = &cobra.Command{
 The spec-id should follow the NNN-slug convention (e.g., 042-api-caching).`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		root, err := findRoot()
+		root, err := findLocalRoot()
 		if err != nil {
 			return err
 		}

@@ -25,6 +25,7 @@ func saveAndRestore(t *testing.T) {
 	origDelete := deleteBranchFn
 	origResolveTarget := resolveTargetFn
 	origResolveActiveBead := resolveActiveBeadFn
+	origFindLocalRoot := findLocalRootFn
 
 	t.Cleanup(func() {
 		closeBeadFn = origClose
@@ -36,6 +37,7 @@ func saveAndRestore(t *testing.T) {
 		deleteBranchFn = origDelete
 		resolveTargetFn = origResolveTarget
 		resolveActiveBeadFn = origResolveActiveBead
+		findLocalRootFn = origFindLocalRoot
 	})
 
 	// Default stubs
@@ -43,6 +45,7 @@ func saveAndRestore(t *testing.T) {
 	deleteBranchFn = func(branch string) error { return nil }
 	resolveTargetFn = func(root, flag string) (string, error) { return "", fmt.Errorf("no active specs") }
 	resolveActiveBeadFn = func(root, specID string) (string, error) { return "", fmt.Errorf("no active bead") }
+	findLocalRootFn = func() (string, error) { return "", fmt.Errorf("test: no local root") }
 }
 
 // setupTempRoot creates a temp dir with .mindspec/.

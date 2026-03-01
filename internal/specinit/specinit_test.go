@@ -138,14 +138,15 @@ func TestRunSetsState(t *testing.T) {
 	root := setupTestRoot(t)
 	mockSuccess(t, root)
 
-	_, err := Run(root, "012-state-test", "")
+	result, err := Run(root, "012-state-test", "")
 	if err != nil {
 		t.Fatalf("Run() error: %v", err)
 	}
 
-	mc, err := state.ReadFocus(root)
+	// Focus is now written to the worktree (per-worktree focus), not main root.
+	mc, err := state.ReadFocus(result.WorktreePath)
 	if err != nil {
-		t.Fatalf("state.ReadFocus() error: %v", err)
+		t.Fatalf("state.ReadFocus(worktree) error: %v", err)
 	}
 
 	if mc.Mode != state.ModeSpec {

@@ -3,7 +3,9 @@ package complete
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/mindspec/mindspec/internal/bead"
@@ -26,6 +28,7 @@ var (
 	deleteBranchFn      = gitops.DeleteBranch
 	resolveTargetFn     = resolve.ResolveTarget
 	resolveActiveBeadFn = next.ResolveActiveBead
+	findLocalRootFn     = defaultFindLocalRoot
 )
 
 // Result summarizes what mindspec complete did.
@@ -38,8 +41,20 @@ type Result struct {
 	NextSpec        string
 }
 
+func defaultFindLocalRoot() (string, error) {
+	return workspace.FindLocalRoot(".")
+}
+
 // Run orchestrates bead completion: close bead, remove worktree, advance state.
+// root is the main repo root (for spec dirs, lifecycle, merges).
+// Focus is read from localRoot (per-worktree focus).
 func Run(root, beadID string) (*Result, error) {
+	// Determine local root for per-worktree focus reads.
+	localRoot := root
+	if lr, err := findLocalRootFn(); err == nil {
+		localRoot = lr
+	}
+
 	// 1. Derive activeSpec from resolver, activeBead from arg or Beads query
 	specID, err := resolveTargetFn(root, "")
 	if err != nil {
@@ -49,7 +64,7 @@ func Run(root, beadID string) (*Result, error) {
 		beadID, err = resolveActiveBeadFn(root, specID)
 		if err != nil {
 			// Fallback: check focus for activeBead
-			if focus, ferr := state.ReadFocus(root); ferr == nil && focus != nil && focus.ActiveBead != "" {
+			if focus, ferr := state.ReadFocus(localRoot); ferr == nil && focus != nil && focus.ActiveBead != "" {
 				beadID = focus.ActiveBead
 			} else {
 				return nil, fmt.Errorf("resolving active bead: %w", err)
@@ -58,7 +73,7 @@ func Run(root, beadID string) (*Result, error) {
 	}
 	if beadID == "" {
 		// Final fallback: check focus for activeBead
-		if focus, ferr := state.ReadFocus(root); ferr == nil && focus != nil && focus.ActiveBead != "" {
+		if focus, ferr := state.ReadFocus(localRoot); ferr == nil && focus != nil && focus.ActiveBead != "" {
 			beadID = focus.ActiveBead
 		}
 	}
@@ -140,7 +155,7 @@ func Run(root, beadID string) (*Result, error) {
 	result.NextBead = nextBead
 	result.NextSpec = specID
 
-	// 6.5. Write focus with next state
+	// 6.5. Write focus with next state (per-worktree: write to spec worktree or local root).
 	specWtPath := state.SpecWorktreePath(root, specID)
 	mc := &state.Focus{
 		Mode:       nextMode,
@@ -148,15 +163,21 @@ func Run(root, beadID string) (*Result, error) {
 		ActiveBead: nextBead,
 		SpecBranch: specBranch,
 	}
+	focusRoot := specWtPath
 	if nextMode == state.ModeIdle {
 		result.NextSpec = ""
 		mc.ActiveSpec = ""
 		mc.SpecBranch = ""
 		mc.ActiveWorktree = ""
+		focusRoot = localRoot // idle → write to wherever we are
 	} else {
 		mc.ActiveWorktree = specWtPath
+		// Fall back to localRoot if spec worktree .mindspec doesn't exist.
+		if _, err := os.Stat(filepath.Join(focusRoot, ".mindspec")); err != nil {
+			focusRoot = localRoot
+		}
 	}
-	if err := state.WriteFocus(root, mc); err != nil {
+	if err := state.WriteFocus(focusRoot, mc); err != nil {
 		return result, fmt.Errorf("writing focus: %w", err)
 	}
 

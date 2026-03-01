@@ -24,7 +24,7 @@ var recordStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show recording status for the active spec",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		root, err := findRoot()
+		root, err := findLocalRoot()
 		if err != nil {
 			return err
 		}
@@ -90,7 +90,7 @@ var recordStopCmd = &cobra.Command{
 	Use:   "stop",
 	Short: "Stop recording for the active spec",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		root, err := findRoot()
+		root, err := findLocalRoot()
 		if err != nil {
 			return err
 		}
@@ -117,7 +117,7 @@ var recordHealthCmd = &cobra.Command{
 	Short:  "Check and restart dead collector (for SessionStart hook)",
 	Hidden: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		root, err := findRoot()
+		root, err := findLocalRoot()
 		if err != nil {
 			return nil // silent exit if no project root
 		}

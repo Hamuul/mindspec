@@ -127,6 +127,10 @@ func TestApproveImpl_WrongSpec(t *testing.T) {
 		ActiveSpec: "010-test",
 	})
 
+	origFindLocalRoot := findLocalRootFn
+	findLocalRootFn = func() (string, error) { return "", fmt.Errorf("test") }
+	t.Cleanup(func() { findLocalRootFn = origFindLocalRoot })
+
 	_, err := ApproveImpl(tmp, "011-other")
 	if err == nil {
 		t.Fatal("expected error for wrong spec")
@@ -185,6 +189,8 @@ func TestApproveImpl_DirectMergeSummary(t *testing.T) {
 		SpecBranch: "spec/010-test",
 	})
 
+	origFindLocalRoot := findLocalRootFn
+	findLocalRootFn = func() (string, error) { return "", fmt.Errorf("test") }
 	origRunBD := implRunBDFn
 	origRunBDCombined := implRunBDCombinedFn
 	origLoadConfig := loadConfigFn
@@ -202,6 +208,7 @@ func TestApproveImpl_DirectMergeSummary(t *testing.T) {
 		worktreeRemoveFn = origWorktreeRemove
 		diffStatFn = origDiffStat
 		commitCountFn = origCommitCount
+		findLocalRootFn = origFindLocalRoot
 	}()
 
 	implRunBDFn = func(args ...string) ([]byte, error) {
@@ -252,6 +259,8 @@ func TestApproveImpl_PRWaitFlow(t *testing.T) {
 		SpecBranch: "spec/010-test",
 	})
 
+	origFindLocalRoot := findLocalRootFn
+	findLocalRootFn = func() (string, error) { return "", fmt.Errorf("test") }
 	origRunBD := implRunBDFn
 	origRunBDCombined := implRunBDCombinedFn
 	origLoadConfig := loadConfigFn
@@ -277,6 +286,7 @@ func TestApproveImpl_PRWaitFlow(t *testing.T) {
 		commitCountFn = origCommitCount
 		prChecksWatchFn = origPRChecksWatch
 		mergePRFn = origMergePR
+		findLocalRootFn = origFindLocalRoot
 	}()
 
 	implRunBDFn = func(args ...string) ([]byte, error) {
@@ -328,6 +338,8 @@ func TestApproveImpl_PRNoWaitFlow(t *testing.T) {
 		SpecBranch: "spec/010-test",
 	})
 
+	origFindLocalRoot := findLocalRootFn
+	findLocalRootFn = func() (string, error) { return "", fmt.Errorf("test") }
 	origRunBD := implRunBDFn
 	origRunBDCombined := implRunBDCombinedFn
 	origLoadConfig := loadConfigFn
@@ -349,6 +361,7 @@ func TestApproveImpl_PRNoWaitFlow(t *testing.T) {
 		worktreeRemoveFn = origWorktreeRemove
 		diffStatFn = origDiffStat
 		commitCountFn = origCommitCount
+		findLocalRootFn = origFindLocalRoot
 	}()
 
 	implRunBDFn = func(args ...string) ([]byte, error) {
@@ -423,6 +436,7 @@ func saveAndRestore(t *testing.T) {
 	origCreatePR := createPRFn
 	origPRChecksWatch := prChecksWatchFn
 	origMergePR := mergePRFn
+	origFindLocalRoot := findLocalRootFn
 	t.Cleanup(func() {
 		implRunBDFn = origRunBD
 		implRunBDCombinedFn = origRunBDCombined
@@ -439,7 +453,11 @@ func saveAndRestore(t *testing.T) {
 		createPRFn = origCreatePR
 		prChecksWatchFn = origPRChecksWatch
 		mergePRFn = origMergePR
+		findLocalRootFn = origFindLocalRoot
 	})
+
+	// Default: findLocalRoot falls back to the root arg passed to ApproveImpl.
+	findLocalRootFn = func() (string, error) { return "", fmt.Errorf("test: no local root") }
 }
 
 func TestVerifyImplContent_NoCommits(t *testing.T) {

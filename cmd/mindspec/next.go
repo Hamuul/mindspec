@@ -188,7 +188,12 @@ team lead spawns fresh agents per bead. Accepts an optional positional bead ID.`
 		if wtErr == nil && wtPath != "" {
 			mc.ActiveWorktree = wtPath
 		}
-		if err := state.WriteFocus(root, mc); err != nil {
+		// Write focus to the worktree (per-worktree focus) or local root.
+		focusRoot := root
+		if wtErr == nil && wtPath != "" {
+			focusRoot = wtPath
+		}
+		if err := state.WriteFocus(focusRoot, mc); err != nil {
 			return fmt.Errorf("writing focus: %w", err)
 		}
 

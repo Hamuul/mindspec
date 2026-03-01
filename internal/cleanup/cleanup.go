@@ -10,6 +10,7 @@ import (
 	"github.com/mindspec/mindspec/internal/bead"
 	"github.com/mindspec/mindspec/internal/gitops"
 	"github.com/mindspec/mindspec/internal/state"
+	"github.com/mindspec/mindspec/internal/workspace"
 )
 
 // Package-level function variables for testability.
@@ -17,7 +18,12 @@ var (
 	prStatusFn       = gitops.PRStatus
 	worktreeRemoveFn = bead.WorktreeRemove
 	deleteBranchFn   = gitops.DeleteBranch
+	findLocalRootFn  = defaultFindLocalRoot
 )
+
+func defaultFindLocalRoot() (string, error) {
+	return workspace.FindLocalRoot(".")
+}
 
 // Result holds the output of a cleanup operation.
 type Result struct {
@@ -43,8 +49,12 @@ func Run(root, specID string, force bool) (*Result, error) {
 		return forceCleanup(root, result, specWtName, specBranch)
 	}
 
-	// If focus still has activeSpec matching, check mode.
-	mc, _ := state.ReadFocus(root)
+	// If focus still has activeSpec matching, check mode (per-worktree focus).
+	localRoot := root
+	if lr, err := findLocalRootFn(); err == nil {
+		localRoot = lr
+	}
+	mc, _ := state.ReadFocus(localRoot)
 	if mc != nil && mc.ActiveSpec == specID && mc.Mode != state.ModeIdle {
 		return nil, fmt.Errorf("spec %s is still active (mode: %s). Run `mindspec approve impl %s` first", specID, mc.Mode, specID)
 	}
@@ -86,7 +96,7 @@ func Run(root, specID string, force bool) (*Result, error) {
 	}
 
 	// Clear focus if it still points to this spec (prevent stale worktree deadlock).
-	clearFocusIfStale(root, specID)
+	clearFocusIfStale(localRoot, specID)
 
 	// Delete branch (best-effort).
 	if gitops.BranchExists(specBranch) {
@@ -110,8 +120,12 @@ func forceCleanup(root string, result *Result, wtName, branch string) (*Result, 
 		result.WorktreeRemoved = true
 	}
 
-	// Clear focus if it still points to this spec.
-	clearFocusIfStale(root, result.SpecID)
+	// Clear focus if it still points to this spec (per-worktree).
+	forceLocalRoot := root
+	if lr, err := findLocalRootFn(); err == nil {
+		forceLocalRoot = lr
+	}
+	clearFocusIfStale(forceLocalRoot, result.SpecID)
 
 	if gitops.BranchExists(branch) {
 		if err := deleteBranchFn(branch); err != nil {

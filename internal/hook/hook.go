@@ -159,7 +159,7 @@ func emitCopilot(r Result) int {
 // ReadState constructs a HookState from focus and session.json.
 // Returns nil (not error) if state cannot be determined.
 func ReadState() *HookState {
-	root, err := workspace.FindRoot(".")
+	root, err := workspace.FindLocalRoot(".")
 	if err != nil {
 		return nil
 	}

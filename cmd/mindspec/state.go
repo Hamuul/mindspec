@@ -36,7 +36,7 @@ var stateSetCmd = &cobra.Command{
 			return fmt.Errorf("getting working directory: %w", err)
 		}
 
-		root, err := workspace.FindRoot(cwd)
+		root, err := workspace.FindLocalRoot(cwd)
 		if err != nil {
 			return err
 		}
@@ -81,7 +81,7 @@ If multiple active specs exist and no --spec is given, shows the ambiguity.`,
 			return fmt.Errorf("getting working directory: %w", err)
 		}
 
-		root, err := workspace.FindRoot(cwd)
+		root, err := workspace.FindLocalRoot(cwd)
 		if err != nil {
 			return err
 		}

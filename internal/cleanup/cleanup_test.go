@@ -31,12 +31,16 @@ func mockCleanupFns(t *testing.T) {
 	origWorktreeRemove := worktreeRemoveFn
 	origDeleteBranch := deleteBranchFn
 	origFindPR := findPRForBranchFn
+	origFindLocalRoot := findLocalRootFn
 	t.Cleanup(func() {
 		prStatusFn = origPRStatus
 		worktreeRemoveFn = origWorktreeRemove
 		deleteBranchFn = origDeleteBranch
 		findPRForBranchFn = origFindPR
+		findLocalRootFn = origFindLocalRoot
 	})
+	// Default: fall back to root arg (no local root resolution in tests).
+	findLocalRootFn = func() (string, error) { return "", fmt.Errorf("test: no local root") }
 }
 
 func TestCleanup_ForceRemovesWorktreeAndBranch(t *testing.T) {

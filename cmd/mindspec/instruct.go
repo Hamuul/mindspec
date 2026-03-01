@@ -30,14 +30,19 @@ If multiple active specs exist, the command fails with a list of candidates.`,
 			return fmt.Errorf("getting working directory: %w", err)
 		}
 
-		root, err := workspace.FindRoot(cwd)
+		localRoot, err := workspace.FindLocalRoot(cwd)
 		if err != nil {
 			return err
+		}
+		// mainRoot resolves worktrees back to the main repo (for guard, spec lookup).
+		mainRoot, _ := workspace.FindRoot(cwd)
+		if mainRoot == "" {
+			mainRoot = localRoot
 		}
 
 		// CWD redirect: if running from main with an active worktree,
 		// emit ONLY the redirect message — no normal guidance.
-		if wtPath := guard.ActiveWorktreePath(root); wtPath != "" && guard.IsMainCWD(root) {
+		if wtPath := guard.ActiveWorktreePath(mainRoot); wtPath != "" && guard.IsMainCWD(mainRoot) {
 			msg := fmt.Sprintf("# MindSpec — CWD Redirect\n\nYou are in the main worktree. Run:\n\n  cd %s\n\nThen run `mindspec instruct` for mode-appropriate guidance.\n", wtPath)
 			if format == "json" {
 				fmt.Printf(`{"redirect":true,"worktree_path":%q,"message":"Switch to worktree"}`, wtPath)
@@ -48,10 +53,10 @@ If multiple active specs exist, the command fails with a list of candidates.`,
 			return nil
 		}
 
-		// Resolve target spec (ADR-0015 targeting rules)
-		specID, resolveErr := resolve.ResolveTarget(root, specFlag)
+		// Resolve target spec (ADR-0015 targeting rules) — uses mainRoot for spec dirs.
+		specID, resolveErr := resolve.ResolveTarget(mainRoot, specFlag)
 
-		// Build focus for instruct.BuildContext
+		// Build focus for instruct.BuildContext — read focus from localRoot.
 		var mc *state.Focus
 		if resolveErr != nil {
 			// If ambiguous, surface the error directly
@@ -59,15 +64,15 @@ If multiple active specs exist, the command fails with a list of candidates.`,
 				return resolveErr
 			}
 			// Other errors: fall back to focus
-			cached, mcErr := state.ReadFocus(root)
+			cached, mcErr := state.ReadFocus(localRoot)
 			if mcErr != nil || cached == nil {
-				return handleNoState(root, format)
+				return handleNoState(mainRoot, format)
 			}
 			mc = cached
 		} else {
 			// Derive mode from lifecycle
-			mode, modeErr := resolve.ResolveMode(root, specID)
-			cached, _ := state.ReadFocus(root)
+			mode, modeErr := resolve.ResolveMode(mainRoot, specID)
+			cached, _ := state.ReadFocus(localRoot)
 			if modeErr != nil {
 				// Fallback: use focus mode but resolved specID
 				if cached != nil {
@@ -95,7 +100,7 @@ If multiple active specs exist, the command fails with a list of candidates.`,
 			}
 		}
 
-		ctx := instruct.BuildContext(root, mc)
+		ctx := instruct.BuildContext(mainRoot, mc)
 
 		// Add worktree check when an active worktree is set.
 		if mc.ActiveWorktree != "" {

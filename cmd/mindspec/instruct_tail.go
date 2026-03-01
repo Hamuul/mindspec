@@ -13,8 +13,16 @@ import (
 // This is the "instruct-tail" convention: every state-changing command
 // (approve, next, complete) calls this after transitioning to emit
 // guidance for the new mode.
+//
+// root is the main repo root (for spec dirs and guard). Focus is read
+// from the local root (per-worktree focus).
 func emitInstruct(root string) error {
-	mc, err := state.ReadFocus(root)
+	// Read focus from local root (per-worktree).
+	localRoot, localErr := findLocalRoot()
+	if localErr != nil {
+		localRoot = root
+	}
+	mc, err := state.ReadFocus(localRoot)
 	if err != nil {
 		mc = &state.Focus{Mode: state.ModeIdle}
 	}
