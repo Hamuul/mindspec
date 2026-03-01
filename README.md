@@ -18,6 +18,44 @@ MindSpec treats these as system design problems, not prompting problems. It prov
   <em>AgentMind — real-time observability for AI coding agents</em>
 </p>
 
+## Features
+
+**Lifecycle & Governance**
+- **Gated development lifecycle** — Explore, Spec, Plan, Implement, Review — every phase transition requires explicit human approval
+- **Explore Mode** — evaluate whether an idea is worth pursuing before committing to a full spec
+- **Spec-anchored implementation** — all code traces back to a versioned specification with acceptance criteria
+- **Human gates for architecture divergence** — if the agent needs to deviate from an ADR, it stops and escalates
+- **Scope discipline** — discovered work becomes new beads (work items), never scope creep in the current task
+
+**Context Engineering**
+- **Deterministic context packs** — token-budgeted, DDD-informed bundles of specs, domain docs, ADRs, glossary terms, and policies assembled automatically
+- **Domain-driven bounded contexts** — specs declare impacted domains; context packs expand through the Context Map to include neighboring contexts
+- **Dynamic agent guidance** — `mindspec instruct` emits mode-appropriate operating instructions at runtime based on current state, replacing static instruction files
+- **Architecture Decision Records** — governed ADR lifecycle with auto-numbered IDs, superseding workflow, and mandatory citation in plans
+
+**Workflow Automation**
+- **One-command work selection** — `mindspec next` discovers the next ready work item, creates an isolated git worktree, and emits guidance
+- **Isolated worktrees** — each work item executes in its own git worktree, scoped to exactly what the plan defined
+- **Automated bead creation** — approving a spec or plan automatically creates and links the corresponding work items
+- **Doc-sync enforcement** — work items can't close without documentation updates; docs stay current because the system won't let you skip them
+- **Validation gates** — `mindspec validate` catches structural issues in specs, plans, and docs before they reach approval
+- **Proof runner** — executes validation proof commands from specs and records timestamped pass/fail evidence
+
+**Observability (AgentMind)**
+- **3D activity visualization** — agents, tools, MCP servers, and LLM endpoints rendered as an interactive force-directed constellation, updating live
+- **Token and cost tracking** — input/output tokens, cache reads, cache creation, and estimated USD cost broken down per model
+- **Tool and MCP analytics** — every tool call and MCP server interaction counted and categorized with frequency histograms
+- **Session recording and replay** — capture full sessions as NDJSON, replay at any speed, filter by lifecycle phase
+- **A/B/C benchmarking** — compare agentic workflows side-by-side with automated delta reporting and qualitative analysis
+- **Multi-agent identity** — distinct visualization nodes for each agent and sub-agent with parent-child hierarchy
+
+**Project Setup & Integration**
+- **One-command bootstrap** — `mindspec init` scaffolds the full project structure; additive and safe for existing repos
+- **Brownfield onboarding** — analyzes existing docs and migrates them into canonical MindSpec structure with full provenance
+- **Claude Code integration** — `mindspec setup claude` configures hooks, slash commands, plan gates, and CLAUDE.md automatically
+- **Copilot support** — first-class workflow for GitHub Copilot users in both CLI and VS Code Chat
+- **OTLP-compatible** — any agent that speaks OpenTelemetry can feed AgentMind; not locked to Claude Code
+
 ## The Workflow
 
 Every phase transition requires explicit human approval:
