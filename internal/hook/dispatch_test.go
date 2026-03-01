@@ -295,12 +295,23 @@ func TestWorkflowGuard_EnforcementDisabled(t *testing.T) {
 	}
 }
 
+func TestWorkflowGuard_BashPassesAllModes(t *testing.T) {
+	t.Parallel()
+	for _, mode := range []string{state.ModeIdle, "", state.ModeExplore, state.ModeSpec, state.ModePlan, state.ModeReview} {
+		st := &HookState{Mode: mode}
+		r := WorkflowGuard(&Input{Command: "git status"}, st, true)
+		if r.Action != Pass {
+			t.Errorf("mode %q: bash command should pass workflow guard, got %d", mode, r.Action)
+		}
+	}
+}
+
 func TestWorkflowGuard_Idle_CodeFile(t *testing.T) {
 	t.Parallel()
 	st := &HookState{Mode: state.ModeIdle}
 	r := WorkflowGuard(&Input{FilePath: "internal/foo.go"}, st, true)
-	if r.Action != Warn {
-		t.Errorf("idle mode code edit should warn, got %d", r.Action)
+	if r.Action != Block {
+		t.Errorf("idle mode code edit should block, got %d", r.Action)
 	}
 }
 
@@ -308,8 +319,8 @@ func TestWorkflowGuard_Idle_DocFile(t *testing.T) {
 	t.Parallel()
 	st := &HookState{Mode: state.ModeIdle}
 	r := WorkflowGuard(&Input{FilePath: ".mindspec/docs/specs/001/spec.md"}, st, true)
-	if r.Action != Warn {
-		t.Errorf("idle mode doc edit should still warn, got %d", r.Action)
+	if r.Action != Block {
+		t.Errorf("idle mode doc edit should still block, got %d", r.Action)
 	}
 }
 
@@ -317,8 +328,8 @@ func TestWorkflowGuard_Idle_EmptyMode(t *testing.T) {
 	t.Parallel()
 	st := &HookState{Mode: ""}
 	r := WorkflowGuard(&Input{FilePath: "internal/foo.go"}, st, true)
-	if r.Action != Warn {
-		t.Errorf("empty mode should warn like idle, got %d", r.Action)
+	if r.Action != Block {
+		t.Errorf("empty mode should block like idle, got %d", r.Action)
 	}
 }
 
@@ -503,20 +514,17 @@ func TestHasPathPrefix(t *testing.T) {
 
 // --- Warning message content ---
 
-func TestWorkflowGuard_IdleWarning_ContainsEscapeHatch(t *testing.T) {
+func TestWorkflowGuard_IdleBlock_ContainsEscapePaths(t *testing.T) {
 	t.Parallel()
 	st := &HookState{Mode: state.ModeIdle}
 	r := WorkflowGuard(&Input{FilePath: "internal/foo.go"}, st, true)
 	for _, phrase := range []string{
-		"/ms-spec-init",
-		"/ms-explore",
-		"debugging a CI failure",
-		"fixing a broken build",
-		"correcting a typo",
-		"urgent operational fix",
+		"spec-init",
+		"bugfix",
+		"quick",
 	} {
 		if !contains(r.Message, phrase) {
-			t.Errorf("idle warning should contain %q", phrase)
+			t.Errorf("idle block message should contain %q", phrase)
 		}
 	}
 }

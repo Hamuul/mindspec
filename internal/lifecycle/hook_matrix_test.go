@@ -18,11 +18,11 @@ func TestHookMatrix_WorkflowGuard(t *testing.T) {
 		filePath string
 		want     hook.Action
 	}{
-		// idle — always warns
-		{"idle/code", state.ModeIdle, "internal/foo.go", hook.Warn},
-		{"idle/doc", state.ModeIdle, ".mindspec/docs/spec.md", hook.Warn},
-		{"idle/plan", state.ModeIdle, "docs/specs/001/plan.md", hook.Warn},
-		{"idle/config", state.ModeIdle, ".mindspec/config.yaml", hook.Warn},
+		// idle — always blocks file edits
+		{"idle/code", state.ModeIdle, "internal/foo.go", hook.Block},
+		{"idle/doc", state.ModeIdle, ".mindspec/docs/spec.md", hook.Block},
+		{"idle/plan", state.ModeIdle, "docs/specs/001/plan.md", hook.Block},
+		{"idle/config", state.ModeIdle, ".mindspec/config.yaml", hook.Block},
 
 		// explore — always warns
 		{"explore/code", state.ModeExplore, "internal/foo.go", hook.Warn},
@@ -60,8 +60,8 @@ func TestHookMatrix_WorkflowGuard(t *testing.T) {
 		{"review/doc", state.ModeReview, ".mindspec/docs/spec.md", hook.Warn},
 		{"review/test", state.ModeReview, "internal/foo_test.go", hook.Warn},
 
-		// empty mode — treated as idle, warns
-		{"empty/code", "", "internal/foo.go", hook.Warn},
+		// empty mode — treated as idle, blocks
+		{"empty/code", "", "internal/foo.go", hook.Block},
 
 		// empty file path — no code file, so Pass in spec/plan
 		{"spec/empty_path", state.ModeSpec, "", hook.Pass},
