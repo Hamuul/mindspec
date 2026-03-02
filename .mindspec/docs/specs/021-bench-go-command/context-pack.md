@@ -637,7 +637,7 @@ MindSpec's v1 workflow depends on strong, consistent operational guidance for ag
 - worktree-first execution and parallelism hygiene
 - Beads integration as the durable execution work graph (tracking substrate)
 
-In practice, agents are bootstrapped via tool-specific instruction files (e.g., repo-level markdowns), which creates several problems:
+In practice, agents are bootstrapped via tool-specific instruction files (e.g., repo-level markdowns), which creates several problems-
 
 - **Drift**: multiple instruction sources diverge over time.
 - **Tool coupling**: different agent runtimes prefer different file names and conventions.
@@ -868,7 +868,7 @@ Without explicit state tracking, mode must be inferred heuristically from multip
 - Beads issue state (`bd list --status=in_progress`)
 - Current git worktree name
 
-This creates problems:
+This creates problems-
 
 - **Ambiguity**: Multiple specs or beads may exist in various states; heuristics must guess which is "active"
 - **Conflicts**: An in-progress spec bead AND an in-progress implementation bead create contradictory signals

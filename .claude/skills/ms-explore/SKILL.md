@@ -1,5 +1,5 @@
 ---
-name: ms:explore
+name: ms-explore
 description: Enter, promote, or dismiss a MindSpec Explore Mode session
 ---
 

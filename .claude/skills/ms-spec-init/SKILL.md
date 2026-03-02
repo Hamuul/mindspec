@@ -1,5 +1,5 @@
 ---
-name: ms:spec-init
+name: ms-spec-init
 description: Initialize a new MindSpec specification
 ---
 

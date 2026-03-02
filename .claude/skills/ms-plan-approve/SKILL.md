@@ -1,5 +1,5 @@
 ---
-name: ms:plan-approve
+name: ms-plan-approve
 description: Approve a plan and transition toward Implementation Mode
 ---
 

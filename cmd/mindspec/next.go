@@ -128,7 +128,7 @@ team lead spawns fresh agents per bead. Accepts an optional positional bead ID.`
 			fmt.Println()
 			fmt.Println("Next steps:")
 			fmt.Println("  - Create a new spec: mindspec spec-init")
-			fmt.Println("  - Check blocked items: bd blocked")
+			fmt.Println("  - Check blocked items- bd blocked")
 			fmt.Println("  - List all open work: bd list --status=open")
 			return nil
 		}

@@ -1,5 +1,5 @@
 ---
-name: ms:spec-status
+name: ms-spec-status
 description: Check the current MindSpec mode and active specification
 ---
 

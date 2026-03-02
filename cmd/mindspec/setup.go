@@ -28,7 +28,7 @@ var setupClaudeCmd = &cobra.Command{
 	Long: `Creates Claude Code-specific configuration:
 
   - .claude/settings.json with SessionStart and PreToolUse hooks
-  - .claude/skills/ms:*/SKILL.md workflow skills (explore, spec-init, approve, etc.)
+  - .claude/skills/ms-*/SKILL.md workflow skills (explore, spec-init, approve, etc.)
   - CLAUDE.md with pointer to AGENTS.md and MindSpec guidance
 
 If beads (bd) is installed, also runs 'bd setup claude'.
