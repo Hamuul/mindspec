@@ -188,6 +188,114 @@ func TestInstallAll(t *testing.T) {
 	}
 }
 
+func TestPreCommit_ImplementModeWithoutWorktreeSuggestsNext(t *testing.T) {
+	root := initGitRepo(t)
+
+	if err := InstallPreCommit(root); err != nil {
+		t.Fatal(err)
+	}
+
+	os.MkdirAll(filepath.Join(root, ".mindspec"), 0755)
+	os.WriteFile(filepath.Join(root, ".mindspec", "focus"), []byte(`{"mode":"implement","activeSpec":"002-multi","activeBead":"repo-02z.1"}`), 0644)
+
+	target := filepath.Join(root, "main.go")
+	os.WriteFile(target, []byte("package main\n"), 0644)
+
+	cmd := exec.Command("git", "add", "main.go")
+	cmd.Dir = root
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git add main.go: %s: %v", out, err)
+	}
+
+	cmd = exec.Command("git", "commit", "-m", "test commit")
+	cmd.Dir = root
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected commit on protected branch to fail, output: %s", out)
+	}
+
+	output := string(out)
+	if !strings.Contains(output, "Run: mindspec next") {
+		t.Fatalf("expected implement-mode recovery to suggest mindspec next, got: %s", output)
+	}
+	if strings.Contains(output, "Create a branch first") {
+		t.Fatalf("should not suggest manual branch creation in implement mode: %s", output)
+	}
+}
+
+func TestPreCommit_WithActiveWorktreeSuggestsCd(t *testing.T) {
+	root := initGitRepo(t)
+
+	if err := InstallPreCommit(root); err != nil {
+		t.Fatal(err)
+	}
+
+	worktreePath := "/tmp/worktree-bead-123"
+	os.MkdirAll(filepath.Join(root, ".mindspec"), 0755)
+	os.WriteFile(filepath.Join(root, ".mindspec", "focus"), []byte(`{"mode":"implement","activeSpec":"002-multi","activeBead":"repo-02z.1","activeWorktree":"`+worktreePath+`"}`), 0644)
+
+	target := filepath.Join(root, "main.go")
+	os.WriteFile(target, []byte("package main\n"), 0644)
+
+	cmd := exec.Command("git", "add", "main.go")
+	cmd.Dir = root
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git add main.go: %s: %v", out, err)
+	}
+
+	cmd = exec.Command("git", "commit", "-m", "test commit")
+	cmd.Dir = root
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected commit on protected branch to fail, output: %s", out)
+	}
+
+	output := string(out)
+	expected := "Switch to your worktree: cd " + worktreePath
+	if !strings.Contains(output, expected) {
+		t.Fatalf("expected worktree redirect in pre-commit output, got: %s", output)
+	}
+}
+
+func TestPreCommit_ImplementModeBlocksSpecBranchWithoutWorktree(t *testing.T) {
+	root := initGitRepo(t)
+
+	if err := InstallPreCommit(root); err != nil {
+		t.Fatal(err)
+	}
+
+	// Move to a lifecycle branch manually (the path we want to block).
+	cmd := exec.Command("git", "checkout", "-b", "spec/002-multi")
+	cmd.Dir = root
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git checkout -b spec/002-multi: %s: %v", out, err)
+	}
+
+	os.MkdirAll(filepath.Join(root, ".mindspec"), 0755)
+	os.WriteFile(filepath.Join(root, ".mindspec", "focus"), []byte(`{"mode":"implement","activeSpec":"002-multi","activeBead":"repo-02z.1"}`), 0644)
+
+	target := filepath.Join(root, "types.go")
+	os.WriteFile(target, []byte("package main\n"), 0644)
+
+	cmd = exec.Command("git", "add", "types.go")
+	cmd.Dir = root
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git add types.go: %s: %v", out, err)
+	}
+
+	cmd = exec.Command("git", "commit", "-m", "manual spec branch commit")
+	cmd.Dir = root
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected commit to fail, output: %s", out)
+	}
+
+	output := string(out)
+	if !strings.Contains(output, "Run: mindspec next") {
+		t.Fatalf("expected mindspec next recovery in output, got: %s", output)
+	}
+}
+
 // initGitRepo creates a real git repo with an initial commit and returns its path.
 func initGitRepo(t *testing.T) string {
 	t.Helper()

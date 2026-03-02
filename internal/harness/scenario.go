@@ -257,7 +257,7 @@ main.go has a critical bug — the main function doesn't print anything.
 Fix main.go to add fmt.Println("hello") and commit the fix, then continue your feature work
 by creating feature.go with a Feature() function. Run 'mindspec complete' when done.`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
-			if !sandbox.FileExists("feature.go") {
+			if !sandbox.FileExists("feature.go") && !fileExistsInWorktrees(sandbox.Root, "feature.go") {
 				t.Error("feature.go was not created")
 			}
 		},
@@ -1448,6 +1448,21 @@ func mustRunGit(sandbox *Sandbox, args ...string) {
 }
 
 // --- Helpers ---
+
+func fileExistsInWorktrees(root, fileName string) bool {
+	worktreeRoot := filepath.Join(root, ".worktrees")
+	found := false
+	_ = filepath.WalkDir(worktreeRoot, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d == nil || d.IsDir() {
+			return nil
+		}
+		if filepath.Base(path) == fileName {
+			found = true
+		}
+		return nil
+	})
+	return found
+}
 
 func mustJSON(v interface{}) string {
 	data, err := json.Marshal(v)

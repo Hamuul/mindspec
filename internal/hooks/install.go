@@ -8,7 +8,7 @@ import (
 )
 
 const preCommitScript = `#!/usr/bin/env bash
-# MindSpec pre-commit hook v2 (Layer 1 enforcement — ADR-0019)
+# MindSpec pre-commit hook v4 (Layer 1 enforcement — ADR-0019)
 # Prevents commits on protected branches when mindspec is active.
 
 # Escape hatch: MINDSPEC_ALLOW_MAIN=1 git commit
@@ -57,6 +57,10 @@ for p in $PROTECTED; do
     echo "mindspec: commits on '$BRANCH' are blocked (mode: $MODE)." >&2
     if [ -n "$WORKTREE" ]; then
       echo "  Switch to your worktree: cd $WORKTREE" >&2
+    elif [ "$MODE" = "implement" ]; then
+      echo "  Run: mindspec next" >&2
+      echo "  Then switch to the printed worktree and commit there." >&2
+      echo "  Do not create manual git branches/worktrees in implement mode." >&2
     else
       echo "  Create a branch first: git checkout -b fix/<description>" >&2
     fi
@@ -64,6 +68,21 @@ for p in $PROTECTED; do
     exit 1
   fi
 done
+
+# Implement mode must operate through mindspec-managed worktrees.
+# If no activeWorktree is set, commits on lifecycle branches are likely manual bypass.
+if [ "$MODE" = "implement" ] && [ -z "$WORKTREE" ]; then
+  case "$BRANCH" in
+    spec/*|bead/*)
+      echo "mindspec: commits on '$BRANCH' are blocked (mode: $MODE, no active worktree)." >&2
+      echo "  Run: mindspec next" >&2
+      echo "  Then switch to the printed worktree and commit there." >&2
+      echo "  Do not create manual git branches/worktrees in implement mode." >&2
+      echo "  Escape hatch: MINDSPEC_ALLOW_MAIN=1 git commit ..." >&2
+      exit 1
+      ;;
+  esac
+fi
 
 exit 0
 `
@@ -91,8 +110,8 @@ func InstallPreCommit(root string) error {
 	if data, err := os.ReadFile(hookPath); err == nil {
 		content := string(data)
 		if strings.Contains(content, marker) {
-			// Detect stale v1 hook (missing "v2" marker) and re-install
-			if !strings.Contains(content, "pre-commit hook v2") {
+			// Detect stale hook revisions and re-install
+			if !strings.Contains(content, "pre-commit hook v4") {
 				return os.WriteFile(hookPath, []byte(preCommitScript), 0755)
 			}
 			return nil // already installed and current

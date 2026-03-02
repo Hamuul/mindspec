@@ -219,6 +219,7 @@ Track each test run with: scenario, date, pass/fail, recorded events count, turn
 | 2026-03-02 | PASS | 107 | 4 | 29.16s | Full-suite rerun after guard tightening: scenario passes again with one retry in commit/complete flow. |
 | 2026-03-02 | PASS | 94 | 3 | 26.54s | Regression check after `approve impl` focus-write fix: still green, one expected commit/complete retry remains. |
 | 2026-03-02 | PASS | 102 | 3 | 27.61s | Regression check after `mindspec-ce5b` worktree-anchor fix: remains green with one expected retry before final `mindspec complete`. |
+| 2026-03-02 | PASS | 91 | 3 | 24.69s | Regression check for `mindspec-n9j7`: implement guidance + pre-commit messaging changes still keep SingleBead green. |
 
 ### TestLLM_SpecToIdle
 
@@ -272,6 +273,7 @@ Track each test run with: scenario, date, pass/fail, recorded events count, turn
 | 2026-03-01 | FAIL | - | - | 2.12s | **REGRESSION**: setup failed before agent run. `sandbox.Commit()` blocked on main in implement mode. |
 | 2026-03-01 | PASS | 180 | 7 | 61.76s | Full-suite rerun pass: interrupt-for-bug scenario still completes with current assertions. |
 | 2026-03-02 | FAIL | 148 | 12 | 1m13.62s | **REGRESSION**: run reached `mindspec complete`, but `feature.go` was never created so artifact assertion failed. |
+| 2026-03-02 | PASS | 156 | 8 | 57.97s | `mindspec-n9j7` validation: guidance/hook updates plus artifact assertion hardened to accept root or worktree output; scenario completes successfully. |
 
 ### TestLLM_MultiBeadDeps
 
@@ -281,6 +283,7 @@ Track each test run with: scenario, date, pass/fail, recorded events count, turn
 | 2026-03-01 | FAIL | - | - | 2.46s | **REGRESSION**: setup failed before agent run. `sandbox.Commit()` blocked on main in implement mode. |
 | 2026-03-01 | FAIL | 228 | 7 | 69.37s | Full-suite rerun: scenario advanced, but artifact assertions failed (`formatter.go` and `formatter_test.go` not found at expected location). |
 | 2026-03-02 | FAIL | 131 | 12 | 1m15.11s | Full-suite rerun: max turns reached without successful `mindspec next`; no `.worktrees/` CWD observed. |
+| 2026-03-02 | PASS | 187 | 12 | 1m19.56s | `mindspec-n9j7` fix: implement template + pre-commit guardrails now steer retries toward `mindspec next` and managed worktree handoff, restoring pass. |
 
 ### TestLLM_SpecInit
 
@@ -515,6 +518,11 @@ Haiku in `claude -p` mode tends to be conversational unless strongly directed. R
 ### mindspec complete CWD Guard
 **Problem**: Agent runs from `sandbox.Root` (main repo) but `mindspec complete` requires CWD in the bead worktree.
 **Fix applied**: `cmd/mindspec/complete.go` now auto-chdirs to `ActiveWorktree` from focus state when CWD is main.
+
+### Implement Mode Manual Worktree Bypass (RESOLVED — 2026-03-02)
+**Problem**: In implement mode with no recorded `activeWorktree`, agents could bypass lifecycle commands by creating spec/bead branches or worktrees manually, then get stuck in `complete`/`next` retries.
+**Workaround**: N/A (fixed in guidance + hook messaging).
+**Status (2026-03-02)**: Fixed by strengthening implement template handoff rules and pre-commit guardrail messaging for implement mode (including no-active-worktree branch commits). Added deterministic coverage in `internal/hooks/install_test.go` and `internal/complete/complete_test.go`. Targeted reruns now pass (`MultiBeadDeps`, `InterruptForBug`, and `SingleBead` regression check).
 
 ### Nested Worktrees
 **Status**: Git fully supports nested worktrees. `workspace.FindRoot()` correctly resolves them. The bead worktree is created inside the spec worktree: `.worktrees/worktree-spec-XXX/.worktrees/worktree-bead-YYY`. This is fine -- it reflects the merge hierarchy (bead -> spec -> main).

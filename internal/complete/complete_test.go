@@ -175,6 +175,36 @@ func TestRun_DirtyTreeRefuses(t *testing.T) {
 	}
 }
 
+func TestRun_DirtyTreeWithoutWorktreeSuggestsNext(t *testing.T) {
+	saveAndRestore(t)
+
+	root := setupTempRoot(t)
+
+	resolveTargetFn = func(r, flag string) (string, error) { return "008-test", nil }
+	resolveActiveBeadFn = func(r, specID string) (string, error) { return "bead-1", nil }
+	worktreeListFn = func() ([]bead.WorktreeListEntry, error) { return nil, nil }
+
+	execCommandFn = func(name string, args ...string) *exec.Cmd {
+		return exec.Command("echo", " M hello.go")
+	}
+
+	if err := state.WriteFocus(root, &state.Focus{
+		Mode:       state.ModeImplement,
+		ActiveSpec: "008-test",
+		ActiveBead: "bead-1",
+	}); err != nil {
+		t.Fatalf("writing focus: %v", err)
+	}
+
+	_, err := Run(root, "", "")
+	if err == nil {
+		t.Fatal("expected error for dirty tree")
+	}
+	if !strings.Contains(err.Error(), "mindspec next") {
+		t.Fatalf("expected recovery hint to mention `mindspec next`, got: %v", err)
+	}
+}
+
 func TestCheckCleanWorktree_IgnoresGeneratedStateFiles(t *testing.T) {
 	saveAndRestore(t)
 
@@ -203,6 +233,47 @@ func TestCheckCleanWorktree_ReportsUserChanges(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), ".mindspec/focus") {
 		t.Fatalf("expected ignorable state file to be filtered, got: %v", err)
+	}
+}
+
+func TestCheckCleanWorktree_ManualWorktreeHint(t *testing.T) {
+	saveAndRestore(t)
+
+	execCommandFn = func(name string, args ...string) *exec.Cmd {
+		return exec.Command("sh", "-c", "printf ' M .gitignore\n?? .worktrees/worktree-bead-1/tmp.txt\n'")
+	}
+
+	err := checkCleanWorktree("/tmp/worktree")
+	if err == nil {
+		t.Fatal("expected dirty tree error")
+	}
+	if !strings.Contains(err.Error(), "mindspec next") {
+		t.Fatalf("expected manual worktree recovery hint, got: %v", err)
+	}
+}
+
+func TestCheckCleanWorktree_LinkedWorktreeDirHint(t *testing.T) {
+	saveAndRestore(t)
+
+	root := t.TempDir()
+	wt := filepath.Join(root, "impl-002-multi")
+	if err := os.MkdirAll(wt, 0755); err != nil {
+		t.Fatalf("mkdir worktree dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(wt, ".git"), []byte("gitdir: /tmp/fake\n"), 0644); err != nil {
+		t.Fatalf("write .git marker: %v", err)
+	}
+
+	execCommandFn = func(name string, args ...string) *exec.Cmd {
+		return exec.Command("sh", "-c", "printf '?? impl-002-multi\n'")
+	}
+
+	err := checkCleanWorktree(root)
+	if err == nil {
+		t.Fatal("expected dirty tree error")
+	}
+	if !strings.Contains(err.Error(), "mindspec next") {
+		t.Fatalf("expected linked worktree hint, got: %v", err)
 	}
 }
 

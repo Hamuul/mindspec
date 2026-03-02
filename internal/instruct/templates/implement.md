@@ -10,6 +10,19 @@
 
 Execute the active bead in an isolated worktree. Stay within scope.
 
+## Worktree Bootstrap
+
+`mindspec next` is the only supported way to enter/manage bead worktrees.
+
+{{- if .ActiveWorktree}}
+**Active Worktree**: `{{.ActiveWorktree}}`
+{{- else}}
+No active worktree is recorded for this bead. Run `mindspec next` before writing code.
+{{- end}}
+
+Do NOT create manual workflow branches/worktrees in implement mode (`git checkout -b ...`, `git worktree add ...`).
+If `mindspec complete` reports another ready bead, run `mindspec next` immediately before further implementation.
+
 ## Permitted Actions
 
 - Code changes within the bead's defined scope
@@ -24,6 +37,7 @@ Execute the active bead in an isolated worktree. Stay within scope.
 - Ignoring ADR divergence
 - Completing a bead without proof and doc-sync
 - Making changes outside the assigned worktree
+- Creating worktrees via raw tooling (`bd worktree create`, `git worktree add`) instead of `mindspec next`
 
 ## Obligations
 
@@ -50,6 +64,7 @@ When the bead is done:
 2. Update documentation (doc-sync)
 3. Commit all changes (`git add` + `git commit`) — you MUST commit before completing
 4. Run `mindspec complete` — closes the bead, removes the worktree, and advances state automatically
+5. If more beads are ready, run `mindspec next` before implementing the next bead
 
 ## Next Action
 

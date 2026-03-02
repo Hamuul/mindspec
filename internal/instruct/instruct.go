@@ -23,6 +23,7 @@ type Context struct {
 	Mode             string   `json:"mode"`
 	ActiveSpec       string   `json:"active_spec"`
 	ActiveBead       string   `json:"active_bead"`
+	ActiveWorktree   string   `json:"active_worktree"`
 	SpecGoal         string   `json:"spec_goal,omitempty"`
 	PlanApproved     bool     `json:"plan_approved,omitempty"`
 	AvailableSpecs   []string `json:"available_specs,omitempty"`
@@ -46,9 +47,10 @@ type JSONOutput struct {
 // BuildContext creates a rendering context from focus state and project root.
 func BuildContext(root string, mc *state.Focus) *Context {
 	ctx := &Context{
-		Mode:       mc.Mode,
-		ActiveSpec: mc.ActiveSpec,
-		ActiveBead: mc.ActiveBead,
+		Mode:           mc.Mode,
+		ActiveSpec:     mc.ActiveSpec,
+		ActiveBead:     mc.ActiveBead,
+		ActiveWorktree: mc.ActiveWorktree,
 	}
 
 	// Load config for branch protection setting
@@ -88,6 +90,9 @@ func BuildContext(root string, mc *state.Focus) *Context {
 	warnings := state.CrossValidate(root, mc)
 	for _, w := range warnings {
 		ctx.Warnings = append(ctx.Warnings, fmt.Sprintf("[%s] %s", w.Field, w.Message))
+	}
+	if mc.Mode == state.ModeImplement && mc.ActiveBead != "" && mc.ActiveWorktree == "" {
+		ctx.Warnings = append(ctx.Warnings, "[worktree] no active implement worktree is set. Run `mindspec next` before coding or committing.")
 	}
 
 	return ctx
