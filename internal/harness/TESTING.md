@@ -218,6 +218,7 @@ Track each test run with: scenario, date, pass/fail, recorded events count, turn
 | 2026-03-01 | FAIL | 75 | 8 | 43.89s | Full-suite rerun: agent stayed in diagnostics/retry flow, never created `greeting.go` and never ran successful `mindspec complete`. |
 | 2026-03-02 | PASS | 107 | 4 | 29.16s | Full-suite rerun after guard tightening: scenario passes again with one retry in commit/complete flow. |
 | 2026-03-02 | PASS | 94 | 3 | 26.54s | Regression check after `approve impl` focus-write fix: still green, one expected commit/complete retry remains. |
+| 2026-03-02 | PASS | 102 | 3 | 27.61s | Regression check after `mindspec-ce5b` worktree-anchor fix: remains green with one expected retry before final `mindspec complete`. |
 
 ### TestLLM_SpecToIdle
 
@@ -235,6 +236,8 @@ Track each test run with: scenario, date, pass/fail, recorded events count, turn
 | 2026-03-01 | FAIL | 452 | 53 | 4m20s | **REGRESSION**: lifecycle advanced but cleanup assertions failed again (spec/* and bead/* branches + worktree left behind). |
 | 2026-03-01 | FAIL | 485 | 25 | 199.62s | Full-suite rerun: still no successful `spec-init`/`explore promote` milestone and cleanup assertions fail (`spec/*`, `bead/*`, and spec worktree remain). |
 | 2026-03-02 | FAIL | 430 | 22 | 2m48.19s | Full-suite rerun: lifecycle progressed, but cleanup assertions still fail (`spec/*`, `bead/*`, and spec worktree remain). |
+| 2026-03-02 | FAIL | 545 | 35 | 3m54.61s | Baseline for `mindspec-ce5b`: recursive bead worktree nesting from CWD-sensitive `mindspec next`, plus `approve impl` retries, left `spec/*`, `bead/*`, and worktrees behind. |
+| 2026-03-02 | PASS | 416 | 20 | 2m25.28s | Fix: `next.EnsureWorktree` now anchors worktree creation to spec worktree/main root (not caller CWD). Recursive nesting stopped and cleanup assertions passed. |
 
 ### TestLLM_AbandonSpec
 
@@ -356,6 +359,7 @@ Track each test run with: scenario, date, pass/fail, recorded events count, turn
 | 2026-03-01 | FAIL | - | - | 2.48s | Baseline in full-suite run: setup failed before agent run. `sandbox.Commit()` blocked on main in implement mode. |
 | 2026-03-01 | FAIL | 152 | 2 | 35.91s | Full-suite rerun: scenario progressed further, but never produced a successful `mindspec complete`. |
 | 2026-03-02 | PASS | 132 | 9 | 49.42s | Full-suite rerun pass: successful `mindspec complete` observed from spec-worktree context. |
+| 2026-03-02 | PASS | 127 | 6 | 36.92s | Regression check after worktree-anchor fix: still green; `mindspec complete` succeeds from spec-worktree context. |
 
 ### TestLLM_ApproveSpecFromWorktree
 
@@ -524,6 +528,6 @@ Haiku in `claude -p` mode tends to be conversational unless strongly directed. R
 **Status**: Product bug filed as mindspec-wpqg (P1). Not currently testable in LLM harness because sandbox has `agent_hooks: false` (enforcement hooks are no-op). Fix should go into hook logic: whitelist `mindspec state` in worktree-bash allowlist, and/or whitelist `.mindspec/focus` in workflow guard.
 **Related scenarios**: `TestLLM_MultipleActiveSpecs` tests the CLI `--spec` flag disambiguation (non-enforcement). Full enforcement testing requires `agent_hooks: true` scenarios.
 
-### Worktree CWD Sensitivity (mindspec-nh4f)
-**Problem**: Running `git worktree add` from inside an existing worktree creates the new worktree relative to CWD (e.g. `.worktrees/spec-044/.worktrees/new/`). Agent must use absolute paths or run from project root.
-**Status**: Product bug filed as mindspec-nh4f (P3). `mindspec next` should use absolute paths for worktree creation.
+### Worktree CWD Sensitivity (RESOLVED — 2026-03-02)
+**Problem**: Running `git worktree add` from inside an existing worktree can create the new worktree relative to CWD, causing recursive `.worktrees/.../.worktrees/...` nesting and cleanup leakage.
+**Status (2026-03-02)**: Fixed in `internal/next/beads.go`: `mindspec next` now anchors worktree creation to the spec worktree (when active) or main root, independent of caller CWD. Added deterministic unit coverage in `internal/next/next_test.go` and validated with LLM reruns (`SpecToIdle` pass, `CompleteFromSpecWorktree` regression check pass).
