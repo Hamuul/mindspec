@@ -459,8 +459,8 @@ func fileExists(path string) bool {
 // Shared across Codex and Copilot setup (both use .agents/skills/).
 func skillFiles() map[string]string {
 	return map[string]string{
-		"ms:explore": `---
-name: ms:explore
+		"ms-explore": `---
+name: ms-explore
 description: Enter, promote, or dismiss a MindSpec Explore Mode session
 ---
 
@@ -471,8 +471,8 @@ description: Enter, promote, or dismiss a MindSpec Explore Mode session
 - Dismiss: ` + "`mindspec explore dismiss`" + ` (optionally ` + "`--adr`" + ` to record decision)
 `,
 
-		"ms:spec-init": `---
-name: ms:spec-init
+		"ms-spec-init": `---
+name: ms-spec-init
 description: Initialize a new MindSpec specification
 ---
 
@@ -484,8 +484,8 @@ description: Initialize a new MindSpec specification
 4. On success: begin drafting the spec (the init output includes guidance)
 `,
 
-		"ms:spec-approve": `---
-name: ms:spec-approve
+		"ms-spec-approve": `---
+name: ms-spec-approve
 description: Approve a spec and transition to Plan Mode
 ---
 
@@ -497,8 +497,8 @@ description: Approve a spec and transition to Plan Mode
 4. On success: immediately begin planning (the approval is the authorization)
 `,
 
-		"ms:plan-approve": `---
-name: ms:plan-approve
+		"ms-plan-approve": `---
+name: ms-plan-approve
 description: Approve a plan and transition toward Implementation Mode
 ---
 
@@ -510,8 +510,8 @@ description: Approve a plan and transition toward Implementation Mode
 4. On success: run ` + "`mindspec next`" + ` to claim the first bead and enter Implementation Mode
 `,
 
-		"ms:impl-approve": `---
-name: ms:impl-approve
+		"ms-impl-approve": `---
+name: ms-impl-approve
 description: Approve implementation and close out the spec lifecycle
 ---
 
@@ -529,8 +529,8 @@ description: Approve implementation and close out the spec lifecycle
    - ` + "`git push`" + `
 `,
 
-		"ms:spec-status": `---
-name: ms:spec-status
+		"ms-spec-status": `---
+name: ms-spec-status
 description: Check the current MindSpec mode and active specification
 ---
 
@@ -559,12 +559,12 @@ Run ` + "`mindspec instruct`" + ` for mode-appropriate operating guidance. This 
 
 | Skill | Purpose |
 |:------|:--------|
-| ` + "`/ms:explore`" + ` | Enter, promote, or dismiss an Explore Mode session |
-| ` + "`/ms:spec-init`" + ` | Initialize a new specification (enters Spec Mode) |
-| ` + "`/ms:spec-approve`" + ` | Approve spec → Plan Mode |
-| ` + "`/ms:plan-approve`" + ` | Approve plan → Implementation Mode |
-| ` + "`/ms:impl-approve`" + ` | Approve implementation → Idle |
-| ` + "`/ms:spec-status`" + ` | Check current mode and active spec/bead state |
+| ` + "`/ms-explore`" + ` | Enter, promote, or dismiss an Explore Mode session |
+| ` + "`/ms-spec-init`" + ` | Initialize a new specification (enters Spec Mode) |
+| ` + "`/ms-spec-approve`" + ` | Approve spec → Plan Mode |
+| ` + "`/ms-plan-approve`" + ` | Approve plan → Implementation Mode |
+| ` + "`/ms-impl-approve`" + ` | Approve implementation → Idle |
+| ` + "`/ms-spec-status`" + ` | Check current mode and active spec/bead state |
 `
 
 // claudeMDFull is written when CLAUDE.md doesn't exist.

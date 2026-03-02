@@ -1,5 +1,5 @@
 ---
-name: ms:spec-approve
+name: ms-spec-approve
 description: Approve a spec and transition to Plan Mode
 ---
 

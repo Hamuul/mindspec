@@ -617,7 +617,7 @@ MindSpec's v1 workflow depends on strong, consistent operational guidance for ag
 - worktree-first execution and parallelism hygiene
 - Beads integration as the durable execution work graph (tracking substrate)
 
-In practice, agents are bootstrapped via tool-specific instruction files (e.g., repo-level markdowns), which creates several problems:
+In practice, agents are bootstrapped via tool-specific instruction files (e.g., repo-level markdowns), which creates several problems-
 
 - **Drift**: multiple instruction sources diverge over time.
 - **Tool coupling**: different agent runtimes prefer different file names and conventions.

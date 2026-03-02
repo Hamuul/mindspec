@@ -1,5 +1,5 @@
 ---
-name: ms:impl-approve
+name: ms-impl-approve
 description: Approve implementation and close out the spec lifecycle
 ---
 

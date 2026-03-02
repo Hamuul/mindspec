@@ -39,7 +39,7 @@ When `impl-approve` completes, the current behavior is:
 - **Direct merge**: silently merges `spec/<id>` → main, deletes worktree and branch, prints one line: `"Implementation for <id> approved. Mode: idle."`
 - **PR merge**: pushes the branch, creates a PR, prints the URL, then *returns without merging*. The worktree and branch are only cleaned up if merge succeeds — but for the PR path, merge never happens in the CLI, so the worktree persists.
 
-Problems:
+Problems-
 1. User is never told their work was on a worktree branch and what happened to it
 2. PR path creates a PR but doesn't wait for CI or offer to merge
 3. No interactive confirmation before creating PR

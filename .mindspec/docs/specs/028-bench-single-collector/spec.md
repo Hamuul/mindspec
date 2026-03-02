@@ -6,7 +6,7 @@ Replace bench's 3-collector-per-session architecture with a single shared OTLP c
 
 ## Background
 
-`bench run` currently starts 3 separate OTLP collectors — one per session (A, B, C) on ports 4318–4320. This causes two problems:
+`bench run` currently starts 3 separate OTLP collectors — one per session (A, B, C) on ports 4318–4320. This causes two problems-
 
 1. **Port conflict with recording**: The per-spec recording collector (spec 027) runs on port 4319. When bench claims 4318–4320, it collides with an active recording and/or with AgentMind's live viz port (4318).
 

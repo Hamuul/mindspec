@@ -6,7 +6,7 @@ Make the implementation happy path seamless: `mindspec next` claims work, create
 
 ## Background
 
-Spec 007 introduced bead lifecycle tooling (`mindspec bead spec/plan/worktree/hygiene`). While functional, it has two structural problems:
+Spec 007 introduced bead lifecycle tooling (`mindspec bead spec/plan/worktree/hygiene`). While functional, it has two structural problems-
 
 ### 1. Worktrees are manual, not implicit
 

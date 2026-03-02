@@ -101,10 +101,10 @@ mindspec setup claude   # Or: codex, copilot — configures hooks + skills
 Tell the agent what you want to build. It will walk you through the lifecycle:
 
 1. **Explore** — "I have an idea about X" (agent evaluates feasibility, you decide go/no-go)
-2. **Spec** — Agent drafts the spec, you approve with `/ms:spec-approve`
-3. **Plan** — Agent decomposes into work chunks, you approve with `/ms:plan-approve`
+2. **Spec** — Agent drafts the spec, you approve with `/ms-spec-approve`
+3. **Plan** — Agent decomposes into work chunks, you approve with `/ms-plan-approve`
 4. **Implement** — Agent codes in isolated worktrees, scoped to the plan
-5. **Review** — Agent verifies acceptance criteria, you approve with `/ms:impl-approve`
+5. **Review** — Agent verifies acceptance criteria, you approve with `/ms-impl-approve`
 
 ### Guides
 
@@ -132,7 +132,7 @@ your-project/
 ├── .claude/                    # Claude Code config (created by mindspec setup claude)
 │   ├── settings.json           # Hooks (SessionStart, PreToolUse gates)
 │   ├── commands/               # Custom slash commands
-│   └── skills/                 # Skills (/ms:spec-init, /ms:spec-approve, etc.)
+│   └── skills/                 # Skills (/ms-spec-init, /ms-spec-approve, etc.)
 ├── AGENTS.md                   # Cross-agent workflow conventions
 └── CLAUDE.md                   # Claude Code-specific config
 ```

@@ -18,7 +18,7 @@ func TestInstallShimsCreatesScripts(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "events.jsonl")
 
 	if err := InstallShims(binDir, logPath); err != nil {
-		t.Fatalf("InstallShims: %v", err)
+		t.Fatalf("InstallShims- %v", err)
 	}
 
 	// At least one shim should exist (git is usually available)

@@ -25,7 +25,7 @@ Replace all inline shell scripts in both Claude Code and Copilot hook configurat
 
 ## Background
 
-MindSpec installs hooks for two agent platforms:
+MindSpec installs hooks for two agent platforms-
 
 **Claude Code** (`mindspec setup claude`) writes inline shell commands into `.claude/settings.json`. Today there are 6 distinct hook scripts:
 
@@ -42,7 +42,7 @@ MindSpec installs hooks for two agent platforms:
 2. **mindspec-plan-gate.sh** — blocks file-writing tools during plan mode (inline shell with jq)
 3. **mindspec-worktree-guard.sh** — blocks file/bash operations outside active worktree (inline shell with jq)
 
-Both platforms suffer the same problems: long shell one-liners that read stdin JSON via `jq`, parse `.mindspec/state.json`, and emit platform-specific deny/context responses. They are hard to test, hard to read, depend on jq being installed, and change whenever logic is refined. Worse, the same guard logic is duplicated across two different shell scripts with different response formats:
+Both platforms suffer the same problems- long shell one-liners that read stdin JSON via `jq`, parse `.mindspec/state.json`, and emit platform-specific deny/context responses. They are hard to test, hard to read, depend on jq being installed, and change whenever logic is refined. Worse, the same guard logic is duplicated across two different shell scripts with different response formats:
 
 - **Claude Code** protocol: stdin has `tool_input.file_path`/`tool_input.command`; block = stderr message + exit 2; warn = `{"additionalContext": "..."}` on stdout + exit 0
 - **Copilot** protocol: stdin has `toolName`/`toolArgs.file_path`/`toolArgs.command`; block = `{"permissionDecision":"deny","permissionDecisionReason":"..."}` on stdout + exit 0
@@ -68,7 +68,7 @@ Additionally, there is no enforcement that prevents an agent from editing code f
    - If the JSON contains `tool_input` → Claude Code protocol (block = stderr + exit 2; warn = `{"additionalContext": "..."}` on stdout)
    - If the JSON contains `toolName` or `toolArgs` → Copilot protocol (block = `{"permissionDecision":"deny","permissionDecisionReason":"..."}` on stdout; warn = same format with a non-deny decision or additionalContext — Copilot doesn't have a native warn mechanism, so warnings are emitted as `permissionDecision: "allow"` with a `permissionDecisionReason` containing the warning text)
    - A `--format` flag (`claude` | `copilot`) can override auto-detection for testing or edge cases
-3. Support the following hook names, each replacing the corresponding inline shell scripts on both platforms:
+3. Support the following hook names, each replacing the corresponding inline shell scripts on both platforms-
    - `plan-gate-exit` — replaces ExitPlanMode inline script (Claude Code only, no Copilot equivalent)
    - `plan-gate-enter` — replaces EnterPlanMode inline script (Claude Code only, no Copilot equivalent)
    - `worktree-file` — replaces worktreeFileGuardScript (Claude) and worktree file guard in mindspec-worktree-guard.sh (Copilot)
