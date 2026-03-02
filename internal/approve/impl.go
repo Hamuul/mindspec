@@ -80,7 +80,7 @@ func ApproveImpl(root, specID string, opts ...ImplOpts) (*ImplResult, error) {
 	}
 
 	// Verify current state is review mode for this spec
-	mc, err := state.ReadFocus(localRoot)
+	mc, err := readApproveImplFocus(root, localRoot)
 	if err != nil {
 		return nil, fmt.Errorf("reading state: %w", err)
 	}
@@ -162,12 +162,30 @@ func ApproveImpl(root, specID string, opts ...ImplOpts) (*ImplResult, error) {
 		result.Warnings = append(result.Warnings, fmt.Sprintf("could not stop recording: %v", err))
 	}
 
-	// Transition to idle (per-worktree: write to local root)
+	// Transition to idle in both local and main roots so state is consistent
+	// regardless of whether this command runs from a worktree or repo root.
 	if err := state.WriteFocus(localRoot, &state.Focus{Mode: state.ModeIdle}); err != nil {
-		return nil, fmt.Errorf("writing focus: %w", err)
+		return nil, fmt.Errorf("writing local focus: %w", err)
+	}
+	if filepath.Clean(localRoot) != filepath.Clean(root) {
+		if err := state.WriteFocus(root, &state.Focus{Mode: state.ModeIdle}); err != nil {
+			return nil, fmt.Errorf("writing root focus: %w", err)
+		}
 	}
 
 	return result, nil
+}
+
+func readApproveImplFocus(root, localRoot string) (*state.Focus, error) {
+	mc, err := state.ReadFocus(localRoot)
+	if err != nil {
+		return nil, err
+	}
+	// When invoked from a worktree, focus may still exist only at main root.
+	if mc == nil && filepath.Clean(localRoot) != filepath.Clean(root) {
+		return state.ReadFocus(root)
+	}
+	return mc, nil
 }
 
 // cleanupBeadBranchesAndWorktrees removes lingering bead worktrees/branches for

@@ -217,6 +217,7 @@ Track each test run with: scenario, date, pass/fail, recorded events count, turn
 | 2026-03-01 | PASS | 141 | 5 | 45.10s | Fix: harness setup commits now use `MINDSPEC_ALLOW_MAIN=1` escape hatch. Setup regression resolved for this scenario. |
 | 2026-03-01 | FAIL | 75 | 8 | 43.89s | Full-suite rerun: agent stayed in diagnostics/retry flow, never created `greeting.go` and never ran successful `mindspec complete`. |
 | 2026-03-02 | PASS | 107 | 4 | 29.16s | Full-suite rerun after guard tightening: scenario passes again with one retry in commit/complete flow. |
+| 2026-03-02 | PASS | 94 | 3 | 26.54s | Regression check after `approve impl` focus-write fix: still green, one expected commit/complete retry remains. |
 
 ### TestLLM_SpecToIdle
 
@@ -317,6 +318,7 @@ Track each test run with: scenario, date, pass/fail, recorded events count, turn
 | 2026-03-01 | FAIL | - | - | 2.67s | **REGRESSION**: setup failed before agent run. `sandbox.Commit()` blocked on main in review mode. |
 | 2026-03-01 | PASS | 69 | 3 | 26.33s | Full-suite rerun pass: review-to-idle transition and merge assertions still hold. |
 | 2026-03-02 | FAIL | 101 | 5 | 31.75s | **REGRESSION**: `approve impl` command succeeded, but focus remained `review` instead of transitioning to `idle`. |
+| 2026-03-02 | PASS | 84 | 4 | 29.54s | Fixed `ApproveImpl` focus persistence: fallback to root focus when local missing and write idle focus to both local+root targets. |
 
 ### TestLLM_SpecStatus
 
@@ -501,10 +503,10 @@ Haiku in `claude -p` mode tends to be conversational unless strongly directed. R
 **Workaround**: N/A (fixed in CLI).
 **Status (2026-03-02)**: Fixed by treating missing focus as implicit idle in `internal/explore` mode checks. Targeted rerun passes (35 events, 3 turns, 13.18s).
 
-### ImplApprove Focus Transition Mismatch (REGRESSION — 2026-03-02)
-**Problem**: `mindspec approve impl` succeeds, but root `.mindspec/focus` remains `review`, failing expected `idle` transition in `TestLLM_ImplApprove`.
-**Workaround**: Manual `mindspec state set --mode=idle` can recover state, but this should not be required.
-**Status (2026-03-02)**: Reproduced in full-suite run (101 events, 5 turns, 31.75s). Likely write-root mismatch between local/worktree focus targets.
+### ImplApprove Focus Transition Mismatch (RESOLVED — 2026-03-02)
+**Problem**: `mindspec approve impl` could succeed while root `.mindspec/focus` stayed `review` if the command executed in a worktree.
+**Workaround**: N/A (fixed in workflow logic).
+**Status (2026-03-02)**: Fixed in `internal/approve/impl.go` by falling back to root focus when local focus is missing and writing idle focus to both local and root targets. Added deterministic coverage in `internal/approve/impl_test.go`. Targeted rerun passes (84 events, 4 turns, 29.54s).
 
 ### mindspec complete CWD Guard
 **Problem**: Agent runs from `sandbox.Root` (main repo) but `mindspec complete` requires CWD in the bead worktree.
