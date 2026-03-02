@@ -538,6 +538,70 @@ func TestEnsureWorktree_PropagatesFocus(t *testing.T) {
 	}
 }
 
+func TestEnsureWorktree_AnchorsCreationToSpecWorktree(t *testing.T) {
+	stubWorktreeHelpers(t)
+	root := t.TempDir()
+	specID := "051-test"
+	specWt := filepath.Join(root, ".worktrees", "worktree-spec-"+specID)
+	if err := os.MkdirAll(specWt, 0755); err != nil {
+		t.Fatalf("mkdir spec worktree: %v", err)
+	}
+
+	readFocusFn = func(root string) (*state.Focus, error) {
+		return &state.Focus{
+			Mode:       state.ModeImplement,
+			ActiveSpec: specID,
+			SpecBranch: "spec/" + specID,
+		}, nil
+	}
+
+	worktreeList = func() ([]bead.WorktreeListEntry, error) { return nil, nil }
+
+	var gitignoreRoot string
+	ensureGitignore = func(root, entry string) error {
+		gitignoreRoot = root
+		return nil
+	}
+
+	var createdName, createdBranch, createCWD string
+	worktreeCreate = func(name, branch string) error {
+		wd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		createCWD = wd
+		createdName = name
+		createdBranch = branch
+		return nil
+	}
+
+	path, err := EnsureWorktree(root, "bead-xyz")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expectedPath := filepath.Join(specWt, ".worktrees", "worktree-bead-xyz")
+	if path != expectedPath {
+		t.Errorf("path: got %q, want %q", path, expectedPath)
+	}
+	if gitignoreRoot != specWt {
+		t.Errorf("ensureGitignore root: got %q, want %q", gitignoreRoot, specWt)
+	}
+	if gotInfo, gotErr := os.Stat(createCWD); gotErr != nil {
+		t.Errorf("stat createCWD %q: %v", createCWD, gotErr)
+	} else if wantInfo, wantErr := os.Stat(specWt); wantErr != nil {
+		t.Errorf("stat specWt %q: %v", specWt, wantErr)
+	} else if !os.SameFile(gotInfo, wantInfo) {
+		t.Errorf("worktreeCreate cwd: got %q, want %q", createCWD, specWt)
+	}
+	if createdName != ".worktrees/worktree-bead-xyz" {
+		t.Errorf("created name: got %q, want %q", createdName, ".worktrees/worktree-bead-xyz")
+	}
+	if createdBranch != "bead/bead-xyz" {
+		t.Errorf("created branch: got %q, want %q", createdBranch, "bead/bead-xyz")
+	}
+}
+
 func contains(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {

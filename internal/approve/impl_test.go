@@ -323,6 +323,121 @@ func TestApproveImpl_CleanupRunsFromRoot(t *testing.T) {
 	}
 }
 
+func TestApproveImpl_WritesIdleFocusToRootAndLocalWorktree(t *testing.T) {
+	tmp := t.TempDir()
+	writeLifecycleSpec(t, tmp, "010-test")
+	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
+
+	specWorktreePath := filepath.Join(tmp, ".worktrees", "worktree-spec-010-test")
+	if err := os.MkdirAll(filepath.Join(specWorktreePath, ".mindspec"), 0755); err != nil {
+		t.Fatalf("mkdir spec worktree .mindspec: %v", err)
+	}
+
+	if err := state.WriteFocus(tmp, &state.Focus{
+		Mode:       state.ModeReview,
+		ActiveSpec: "010-test",
+		SpecBranch: "spec/010-test",
+	}); err != nil {
+		t.Fatalf("write root focus: %v", err)
+	}
+	if err := state.WriteFocus(specWorktreePath, &state.Focus{
+		Mode:       state.ModeReview,
+		ActiveSpec: "010-test",
+		SpecBranch: "spec/010-test",
+	}); err != nil {
+		t.Fatalf("write local focus: %v", err)
+	}
+
+	saveAndRestore(t)
+	findLocalRootFn = func() (string, error) { return specWorktreePath, nil }
+	implRunBDFn = func(args ...string) ([]byte, error) {
+		payload := []map[string]string{{"status": "open"}}
+		return json.Marshal(payload)
+	}
+	implRunBDCombinedFn = func(args ...string) ([]byte, error) { return []byte("ok"), nil }
+	loadConfigFn = func(root string) (*config.Config, error) {
+		cfg := config.DefaultConfig()
+		cfg.MergeStrategy = "direct"
+		return cfg, nil
+	}
+	mergeBranchFn = func(workdir, source, target string) error { return nil }
+	commitCountFn = func(workdir, base, head string) (int, error) { return 1, nil }
+	branchExistsFn = func(name string) bool { return false }
+	diffStatFn = func(workdir, base, head string) (string, error) { return "", nil }
+	worktreeRemoveFn = func(name string) error { return nil }
+	deleteBranchFn = func(name string) error { return nil }
+
+	if _, err := ApproveImpl(tmp, "010-test"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	rootFocus, err := state.ReadFocus(tmp)
+	if err != nil {
+		t.Fatalf("reading root focus: %v", err)
+	}
+	if rootFocus == nil || rootFocus.Mode != state.ModeIdle {
+		t.Fatalf("root focus mode = %v, want %q", rootFocus, state.ModeIdle)
+	}
+
+	localFocus, err := state.ReadFocus(specWorktreePath)
+	if err != nil {
+		t.Fatalf("reading local focus: %v", err)
+	}
+	if localFocus == nil || localFocus.Mode != state.ModeIdle {
+		t.Fatalf("local focus mode = %v, want %q", localFocus, state.ModeIdle)
+	}
+}
+
+func TestApproveImpl_UsesRootFocusWhenLocalFocusMissing(t *testing.T) {
+	tmp := t.TempDir()
+	writeLifecycleSpec(t, tmp, "010-test")
+	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
+
+	specWorktreePath := filepath.Join(tmp, ".worktrees", "worktree-spec-010-test")
+	if err := os.MkdirAll(specWorktreePath, 0755); err != nil {
+		t.Fatalf("mkdir spec worktree: %v", err)
+	}
+
+	if err := state.WriteFocus(tmp, &state.Focus{
+		Mode:       state.ModeReview,
+		ActiveSpec: "010-test",
+		SpecBranch: "spec/010-test",
+	}); err != nil {
+		t.Fatalf("write root focus: %v", err)
+	}
+
+	saveAndRestore(t)
+	findLocalRootFn = func() (string, error) { return specWorktreePath, nil }
+	implRunBDFn = func(args ...string) ([]byte, error) {
+		payload := []map[string]string{{"status": "open"}}
+		return json.Marshal(payload)
+	}
+	implRunBDCombinedFn = func(args ...string) ([]byte, error) { return []byte("ok"), nil }
+	loadConfigFn = func(root string) (*config.Config, error) {
+		cfg := config.DefaultConfig()
+		cfg.MergeStrategy = "direct"
+		return cfg, nil
+	}
+	mergeBranchFn = func(workdir, source, target string) error { return nil }
+	commitCountFn = func(workdir, base, head string) (int, error) { return 1, nil }
+	branchExistsFn = func(name string) bool { return false }
+	diffStatFn = func(workdir, base, head string) (string, error) { return "", nil }
+	worktreeRemoveFn = func(name string) error { return nil }
+	deleteBranchFn = func(name string) error { return nil }
+
+	if _, err := ApproveImpl(tmp, "010-test"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	rootFocus, err := state.ReadFocus(tmp)
+	if err != nil {
+		t.Fatalf("reading root focus: %v", err)
+	}
+	if rootFocus == nil || rootFocus.Mode != state.ModeIdle {
+		t.Fatalf("root focus mode = %v, want %q", rootFocus, state.ModeIdle)
+	}
+}
+
 func TestApproveImpl_PRWaitFlow(t *testing.T) {
 	tmp := t.TempDir()
 	writeLifecycleSpec(t, tmp, "010-test")

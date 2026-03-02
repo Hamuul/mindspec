@@ -252,6 +252,7 @@ func EnsureWorktree(root, beadID string) (string, error) {
 	if mcErr == nil && mc.SpecBranch != "" {
 		baseBranch = mc.SpecBranch
 	}
+	anchorRoot := resolveWorktreeAnchor(root, mc)
 
 	// Create the bead branch from the spec branch (or HEAD).
 	if !branchExistsFn(branchName) {
@@ -260,21 +261,26 @@ func EnsureWorktree(root, beadID string) (string, error) {
 		}
 	}
 
-	// Ensure .worktrees/ directory exists and is gitignored.
-	if err := os.MkdirAll(filepath.Join(root, cfg.WorktreeRoot), 0755); err != nil {
+	// Ensure .worktrees/ directory exists and is gitignored at the anchor root.
+	// In implement mode we anchor bead worktrees under the spec worktree so
+	// repeated `mindspec next` calls do not recurse from the current CWD.
+	if err := os.MkdirAll(filepath.Join(anchorRoot, cfg.WorktreeRoot), 0755); err != nil {
 		return "", fmt.Errorf("creating %s directory: %w", cfg.WorktreeRoot, err)
 	}
-	if err := ensureGitignore(root, cfg.WorktreeRoot); err != nil {
+	if err := ensureGitignore(anchorRoot, cfg.WorktreeRoot); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not update .gitignore: %v\n", err)
 	}
 
 	// Create new worktree via bd worktree create under .worktrees/
+	// from the anchor root (spec worktree or main root).
 	relWtPath := filepath.Join(cfg.WorktreeRoot, wtName)
-	if err := worktreeCreate(relWtPath, branchName); err != nil {
+	if err := withWorkingDir(anchorRoot, func() error {
+		return worktreeCreate(relWtPath, branchName)
+	}); err != nil {
 		return "", fmt.Errorf("creating worktree: %w", err)
 	}
 
-	wtPath := cfg.WorktreePath(root, wtName)
+	wtPath := cfg.WorktreePath(anchorRoot, wtName)
 
 	// Read back path from worktree list to confirm
 	entries, err = worktreeList()
@@ -299,4 +305,32 @@ func EnsureWorktree(root, beadID string) (string, error) {
 	}
 
 	return wtPath, nil
+}
+
+func resolveWorktreeAnchor(root string, mc *state.Focus) string {
+	if mc == nil || mc.ActiveSpec == "" {
+		return root
+	}
+	specWt := state.SpecWorktreePath(root, mc.ActiveSpec)
+	if fi, err := os.Stat(specWt); err == nil && fi.IsDir() {
+		return specWt
+	}
+	return root
+}
+
+func withWorkingDir(dir string, fn func() error) error {
+	wd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	if filepath.Clean(wd) == filepath.Clean(dir) {
+		return fn()
+	}
+	if err := os.Chdir(dir); err != nil {
+		return err
+	}
+	defer func() {
+		_ = os.Chdir(wd)
+	}()
+	return fn()
 }

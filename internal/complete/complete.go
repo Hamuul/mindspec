@@ -114,6 +114,12 @@ func Run(root, beadID, specIDHint string) (*Result, error) {
 		checkPath = root // No worktree — check main tree
 	}
 	if err := checkCleanWorktree(checkPath); err != nil {
+		if wtPath == "" {
+			if focus, ferr := state.ReadFocus(localRoot); ferr == nil && focus != nil &&
+				focus.Mode == state.ModeImplement && focus.ActiveWorktree == "" {
+				return nil, fmt.Errorf("%w\nhint: no active bead worktree is set. Run `mindspec next`, `cd` into the printed worktree path, then commit and rerun `mindspec complete`", err)
+			}
+		}
 		return nil, err
 	}
 
@@ -256,9 +262,39 @@ func checkCleanWorktree(path string) error {
 		}
 	}
 	if len(blocking) > 0 {
-		return fmt.Errorf("worktree has uncommitted changes — commit before completing:\n%s", strings.Join(blocking, "\n"))
+		msg := fmt.Sprintf("worktree has uncommitted changes — commit before completing:\n%s", strings.Join(blocking, "\n"))
+		if hasManualWorktreeMeta(path, blocking) {
+			msg += "\nhint: worktree metadata changes detected. If you created a worktree manually, clean those changes and use `mindspec next` to claim/switch work."
+		}
+		return fmt.Errorf("%s", msg)
 	}
 	return nil
+}
+
+func hasManualWorktreeMeta(basePath string, blocking []string) bool {
+	for _, line := range blocking {
+		statusPath := line
+		if len(statusPath) >= 3 {
+			statusPath = strings.TrimSpace(statusPath[3:])
+		}
+		if strings.Contains(statusPath, " -> ") {
+			parts := strings.Split(statusPath, " -> ")
+			statusPath = strings.TrimSpace(parts[len(parts)-1])
+		}
+		if strings.Contains(statusPath, ".gitignore") ||
+			strings.Contains(statusPath, ".worktrees/") ||
+			strings.Contains(strings.ToLower(statusPath), "worktree") {
+			return true
+		}
+
+		absPath := filepath.Join(basePath, statusPath)
+		if info, err := os.Stat(absPath); err == nil && info.IsDir() {
+			if _, err := os.Stat(filepath.Join(absPath, ".git")); err == nil {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func isIgnorableStateChange(statusLine string) bool {

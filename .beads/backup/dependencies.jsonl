@@ -9,6 +9,9 @@
 {"created_at":"2026-02-26T12:02:41Z","created_by":"Max Steel","depends_on_id":"mindspec-mol-9zt","issue_id":"mindspec-790r","type":"parent-child"}
 {"created_at":"2026-02-26T12:01:32Z","created_by":"Max Steel","depends_on_id":"mindspec-u7mk","issue_id":"mindspec-790r","type":"blocks"}
 {"created_at":"2026-03-01T08:54:29Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-ow1w","issue_id":"mindspec-8xi0","type":"blocks"}
+{"created_at":"2026-03-02T09:02:39Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-i0io","issue_id":"mindspec-ce5b","type":"blocks"}
+{"created_at":"2026-03-02T09:02:39Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-mn2w","issue_id":"mindspec-ce5b","type":"discovered-from"}
+{"created_at":"2026-03-02T09:02:39Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-mn2w","issue_id":"mindspec-cgp4","type":"discovered-from"}
 {"created_at":"2026-02-26T12:07:47Z","created_by":"Max Steel","depends_on_id":"mindspec-d6t8","issue_id":"mindspec-d6t8.1","type":"parent-child"}
 {"created_at":"2026-02-28T17:26:47Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-eo0u","issue_id":"mindspec-eo0u.1","type":"parent-child"}
 {"created_at":"2026-02-28T17:26:48Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-eo0u","issue_id":"mindspec-eo0u.2","type":"parent-child"}
@@ -19,6 +22,10 @@
 {"created_at":"2026-02-28T17:26:48Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-eo0u","issue_id":"mindspec-eo0u.6","type":"parent-child"}
 {"created_at":"2026-02-28T17:26:48Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-eo0u.2","issue_id":"mindspec-eo0u.6","type":"blocks"}
 {"created_at":"2026-02-28T17:26:48Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-eo0u.5","issue_id":"mindspec-eo0u.6","type":"blocks"}
+{"created_at":"2026-03-02T09:02:39Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-cgp4","issue_id":"mindspec-i0io","type":"blocks"}
+{"created_at":"2026-03-02T09:02:39Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-mn2w","issue_id":"mindspec-i0io","type":"discovered-from"}
+{"created_at":"2026-03-02T09:02:39Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-mn2w","issue_id":"mindspec-kt01","type":"discovered-from"}
+{"created_at":"2026-03-02T09:02:39Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-n9j7","issue_id":"mindspec-kt01","type":"blocks"}
 {"created_at":"2026-02-26T12:01:32Z","created_by":"Max Steel","depends_on_id":"mindspec-790r","issue_id":"mindspec-l37j","type":"blocks"}
 {"created_at":"2026-02-26T12:02:41Z","created_by":"Max Steel","depends_on_id":"mindspec-mol-9zt","issue_id":"mindspec-l37j","type":"parent-child"}
 {"created_at":"2026-03-01T22:20:30Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-mn2w","issue_id":"mindspec-mn2w.1","type":"parent-child"}
@@ -177,6 +184,8 @@
 {"created_at":"2026-02-27T00:20:43Z","created_by":"Max Steel","depends_on_id":"mindspec-mol-a4bf4","issue_id":"mindspec-mol-yzrzy","type":"blocks"}
 {"created_at":"2026-02-27T00:20:43Z","created_by":"Max Steel","depends_on_id":"mindspec-mol-be41w","issue_id":"mindspec-mol-yzrzy","type":"parent-child"}
 {"created_at":"2026-02-27T08:10:28Z","created_by":"Max Steel","depends_on_id":"mindspec-mol-jpkyf","issue_id":"mindspec-mol-zytod","type":"parent-child"}
+{"created_at":"2026-03-02T09:02:39Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-ce5b","issue_id":"mindspec-n9j7","type":"blocks"}
+{"created_at":"2026-03-02T09:02:39Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-mn2w","issue_id":"mindspec-n9j7","type":"discovered-from"}
 {"created_at":"2026-03-01T08:54:29Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-10j3","issue_id":"mindspec-ow1w","type":"blocks"}
 {"created_at":"2026-03-01T08:54:29Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-nbjl","issue_id":"mindspec-ow1w","type":"blocks"}
 {"created_at":"2026-03-01T10:20:14Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-tf0g","issue_id":"mindspec-tf0g.1","type":"parent-child"}
