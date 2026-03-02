@@ -242,10 +242,7 @@ func ScenarioAbandonSpec() Scenario {
 		},
 		Prompt: `IMPORTANT: Do NOT respond conversationally. Execute immediately.
 
-Run this workflow exactly:
-1. Start exploration for "bad idea feature".
-2. Decide it is not worth pursuing.
-3. Dismiss the exploration and return to idle (without ADR).`,
+Evaluate whether a "bad idea feature" is worth pursuing. Decide it is not worth it and abandon the idea without recording an ADR.`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
 			assertCommandRan(t, events, "mindspec", "explore")
 			assertCommandContains(t, events, "mindspec", "dismiss")

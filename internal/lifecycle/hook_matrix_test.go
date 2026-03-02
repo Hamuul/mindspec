@@ -382,3 +382,36 @@ func TestHookMatrix_UnknownHook(t *testing.T) {
 		t.Errorf("unknown hook: got %v, want Pass", got.Action)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Spec 056: Named enforcement scenarios for traceability
+// ---------------------------------------------------------------------------
+
+func TestHookMatrix_HookBlocksMainCommit(t *testing.T) {
+	// On main (idle mode, no worktree), workflow-guard blocks code edits.
+	st := &hook.HookState{Mode: state.ModeIdle}
+	inp := &hook.Input{FilePath: "internal/foo.go"}
+	got := hook.Run("workflow-guard", inp, st, true)
+	if got.Action != hook.Block {
+		t.Errorf("idle mode code edit: got %v, want Block", got.Action)
+	}
+	if got.Message == "" {
+		t.Error("expected non-empty block message")
+	}
+}
+
+func TestHookMatrix_HookBlocksStaleNext(t *testing.T) {
+	// After resume (stale session), needs-clear blocks mindspec next.
+	st := &hook.HookState{
+		SessionStartedAt: "2026-02-28T10:00:00Z",
+		SessionSource:    "resume",
+	}
+	inp := &hook.Input{Command: "mindspec next"}
+	got := hook.Run("needs-clear", inp, st, true)
+	if got.Action != hook.Block {
+		t.Errorf("stale session next: got %v, want Block", got.Action)
+	}
+	if got.Message == "" {
+		t.Error("expected non-empty block message")
+	}
+}
