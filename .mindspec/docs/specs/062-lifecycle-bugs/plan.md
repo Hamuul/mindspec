@@ -1,10 +1,10 @@
 ---
-approved_at: "2026-03-03T22:44:25Z"
+approved_at: "2026-03-03T22:46:03Z"
 approved_by: user
 bead_ids:
-    - mindspec-pwa1.1
-    - mindspec-pwa1.2
-    - mindspec-pwa1.3
+    - mindspec-pwa1.4
+    - mindspec-pwa1.5
+    - mindspec-pwa1.6
 spec_id: 062-lifecycle-bugs
 status: Approved
 version: "1"
