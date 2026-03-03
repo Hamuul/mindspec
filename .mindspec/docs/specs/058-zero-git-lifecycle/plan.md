@@ -44,55 +44,77 @@ version: 1
 | `TestLLM_SingleBead` passes without raw git | Bead 4 |
 | `TestLLM_SpecToIdle` passes full lifecycle | Bead 4 |
 
-## Bead 1: Auto-commit in `mindspec complete`
+## Bead 1: Auto-commit in mindspec complete
 
-Add optional commit message parameter to `complete.Run()`. Before the clean-tree check, if a commit message is provided, call `gitops.CommitAll()` to stage and commit all changes. Update the dirty-tree error hint to suggest `mindspec complete "describe what you did"`.
+Add optional commit message parameter to `complete.Run()`. Before the clean-tree check, if a commit message is provided, call `gitops.CommitAll()` to stage and commit all changes. Update the dirty-tree error hint.
 
-**Files:**
-- `internal/complete/complete.go` — add `commitMsg` param to `Run()`, insert auto-commit before clean-tree check
-- `cmd/mindspec/complete.go` — wire positional arg for commit message
+**Steps**
+1. Add `commitMsg` string parameter to `complete.Run()` signature
+2. Before `checkCleanWorktree()`, add auto-commit logic: resolve commit path (worktree or root), call `gitops.CommitAll(path, fmt.Sprintf("impl(%s): %s", beadID, commitMsg))` when commitMsg is non-empty
+3. Update the dirty-tree error message hint to suggest `mindspec complete "describe what you did"`
+4. In `cmd/mindspec/complete.go`, change `Args` to accept optional positional commit message, pass to `complete.Run()`
+5. Add `commitAllFn` function variable for testability, wire to `gitops.CommitAll`
 
-**Verification:** `go test ./internal/complete/ -v`
+**Verification**
+- [ ] `go test ./internal/complete/ -v` passes
+- [ ] `make build && make test` passes
+
+**Depends on**
+None
 
 ## Bead 2: CLI namespace reorganization
 
-Create `spec` parent command with `create` and `approve` subcommands. Simplify explore to not change state. Keep backward-compat aliases hidden.
+Create `spec`, `plan`, `impl` parent commands with subcommands. Simplify explore. Keep backward-compat aliases hidden.
 
-**Files:**
-- `cmd/mindspec/spec.go` (NEW) — `specCmd` parent with `create` + `approve` subcommands
-- `cmd/mindspec/plan.go` (NEW) — `planCmd` parent with `approve` subcommand
-- `cmd/mindspec/impl.go` (NEW) — `implCmd` parent with `approve` subcommand
-- `cmd/mindspec/spec_init.go` — mark hidden or remove (replaced by `spec create`)
-- `cmd/mindspec/approve.go` — mark subcommands as `Hidden: true`
-- `cmd/mindspec/explore.go` — `Enter()` no longer changes state, `promote` delegates to `spec create`
-- `internal/explore/explore.go` — remove state writes from `Enter()`, `Dismiss()`, `Promote()`
-- `cmd/mindspec/root.go` — register new command tree
-- `CLAUDE.md` — update managed section
+**Steps**
+1. Create `cmd/mindspec/spec.go` with `specCmd` parent, `specCreateCmd` (wraps `specinit.Run()`), `specApproveCmd` (wraps existing approve-spec logic)
+2. Create `cmd/mindspec/plan_cmd.go` with `planCmd` parent, `planApproveCmd` (wraps existing approve-plan logic)
+3. Create `cmd/mindspec/impl.go` with `implCmd` parent, `implApproveCmd` (wraps existing approve-impl logic)
+4. In `cmd/mindspec/approve.go`, mark all subcommands as `Hidden: true`; in `spec_init.go`, mark `specInitCmd` as `Hidden: true`
+5. In `cmd/mindspec/root.go`, register `specCmd`, `planCmd`, `implCmd` as top-level commands
+6. Simplify `internal/explore/explore.go`: `Enter()` removes state write (returns nil), `Dismiss()` removes mode check (returns nil), `Promote()` removes mode check
+7. Update `CLAUDE.md` managed section with new command surface
 
-**Verification:** `make build && make test`
+**Verification**
+- [ ] `make build && make test` passes
+- [ ] `mindspec spec create --help` shows usage
+- [ ] `mindspec spec-init --help` still works (hidden alias)
+
+**Depends on**
+None
 
 ## Bead 3: Instruct template updates
 
-Update all 6 instruct templates: add lifecycle map with phase-specific `>>>` marker, remove all raw git references, update command names.
+Update all 6 instruct templates with lifecycle map, remove raw git references, update command names.
 
-**Files:**
-- `internal/instruct/templates/idle.md` — merge explore guidance, add lifecycle map, remove session close git
-- `internal/instruct/templates/explore.md` — stub redirecting to idle or remove
-- `internal/instruct/templates/spec.md` — new command names, lifecycle map, no raw git
-- `internal/instruct/templates/plan.md` — new command names, lifecycle map, no raw git
-- `internal/instruct/templates/implement.md` — `mindspec complete "msg"`, lifecycle map, no raw git
-- `internal/instruct/templates/review.md` — new command names, lifecycle map, no raw git
+**Steps**
+1. Create lifecycle map block (common to all templates, with phase-specific `>>>` marker)
+2. Update `idle.md`: merge explore guidance into subsection, add lifecycle map, remove session close git instructions
+3. Update `explore.md`: simplify to guidance-only stub redirecting to idle
+4. Update `spec.md`, `plan.md`: replace old command names, add lifecycle map, remove session close git
+5. Update `implement.md`: replace commit convention with `mindspec complete "msg"`, add lifecycle map + git prohibition
+6. Update `review.md`: replace old command names, add lifecycle map, remove session close git
 
-**Verification:** `make build && mindspec instruct` in each mode
+**Verification**
+- [ ] `make build` passes
+- [ ] `make test` passes (template rendering tests)
+- [ ] No raw git commands in any template (grep verification)
 
-## Bead 4: Harness scenario updates + integration verification
+**Depends on**
+Bead 1, Bead 2
 
-Update LLM test scenarios for new command names and assertions. Run full test suite.
+## Bead 4: Harness scenario updates and integration verification
 
-**Files:**
-- `internal/harness/scenario.go` — update prompts and assertions for new commands
+Update LLM test scenario prompts and assertions for new command names. Run full test suite.
 
-**Verification:**
-- `make build && make test`
-- `go test ./internal/harness/ -short -v`
-- `env -u CLAUDECODE go test ./internal/harness/ -v -run TestLLM_SingleBead -timeout 10m -count=1`
+**Steps**
+1. Update `ScenarioSpecToIdle` prompt and assertions: `spec-init` → `spec create`, `approve spec` → `spec approve` (accept both forms)
+2. Update `ScenarioSingleBead` assertions for `mindspec complete "msg"` pattern
+3. Update `ScenarioAbandonSpec` for explore-without-mode-change behavior
+4. Update remaining scenarios (`ScenarioSpecInit`, `ScenarioSpecApprove`, etc.) for new command forms
+5. Run `make build && make test` and `go test ./internal/harness/ -short -v`
+
+**Verification**
+- [ ] `make build && make test` passes
+- [ ] `go test ./internal/harness/ -short -v` passes
+- [ ] `env -u CLAUDECODE go test ./internal/harness/ -v -run TestLLM_SingleBead -timeout 10m -count=1` passes
