@@ -280,21 +280,28 @@ func queryEpics() ([]EpicInfo, error) {
 }
 
 func queryChildren(epicID string) ([]ChildInfo, error) {
-	out, err := runBDFn("list", "--parent", epicID, "--json")
-	if err != nil {
-		return nil, fmt.Errorf("bd list --parent %s failed: %w", epicID, err)
+	// Query all statuses: bd list --parent defaults to open only,
+	// but phase derivation needs closed beads too.
+	var allChildren []ChildInfo
+	for _, status := range []string{"open", "in_progress", "closed"} {
+		out, err := runBDFn("list", "--parent", epicID, "--status="+status, "--json")
+		if err != nil {
+			continue
+		}
+		trimmed := strings.TrimSpace(string(out))
+		if trimmed == "" || trimmed == "[]" {
+			continue
+		}
+		var children []ChildInfo
+		if err := json.Unmarshal(out, &children); err != nil {
+			continue
+		}
+		allChildren = append(allChildren, children...)
 	}
-
-	trimmed := strings.TrimSpace(string(out))
-	if trimmed == "" || trimmed == "[]" {
+	if len(allChildren) == 0 {
 		return nil, nil
 	}
-
-	var children []ChildInfo
-	if err := json.Unmarshal(out, &children); err != nil {
-		return nil, fmt.Errorf("parsing children JSON: %w", err)
-	}
-	return children, nil
+	return allChildren, nil
 }
 
 // ExtractSpecMetadata gets spec_num and spec_title from epic metadata or title.
