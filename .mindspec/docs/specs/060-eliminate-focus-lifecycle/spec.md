@@ -26,13 +26,44 @@ MindSpec maintains two denormalized state files — `.mindspec/focus` (JSON) and
 - Modifying worktree path conventions (already correct per ADR-0022)
 - Removing spec artifacts (spec.md, plan.md) from the filesystem — these are documents, not state
 
+## Design
+
+### Phase derivation from beads
+
+The lifecycle phase for any spec is derived entirely from beads state:
+
+| Condition | Derived phase |
+|:----------|:-------------|
+| No epic with matching `metadata.spec_id` | **spec** (draft, still being written/discussed) |
+| Epic exists, no children | **plan** (spec approved, plan being drafted) |
+| Epic exists, all children open (none claimed) | **plan** (plan approved, beads ready to claim) |
+| Epic exists, some closed, some open, none in_progress | **plan** (next bead ready) |
+| Epic exists, any child in_progress | **implement** |
+| Epic exists, all children closed, epic open | **review** |
+| Epic closed | **done** |
+| No open epics at all | **idle** |
+
+The key gate: **epic creation = spec approval**. `spec approve` creates the epic with `metadata.spec_id`, making the epic's existence the durable approval record. `approved_by` and `approved_at` can be stored in epic metadata.
+
+### Spec number collision prevention
+
+`spec approve` must prevent two agents from independently claiming the same spec number:
+
+1. `bd dolt pull` — fetch latest epics from Dolt remote (all agents/machines)
+2. Query `bd list --type=epic --json`, check if any epic has `metadata.spec_id` with the same numeric prefix (e.g. `060`)
+3. If collision → reject: "Spec number 060 is already in use by epic \<id\>. Increment to 061."
+4. If clear → create epic with `--metadata='{"spec_id":"060-eliminate-focus-lifecycle", "approved_by":"...", "approved_at":"..."}'`
+5. `bd dolt push` — publish the new epic so other agents see it immediately
+
+This provides optimistic-locking semantics: pull-before-create ensures visibility of all previously published epics across the distributed Dolt database.
+
 ## Scope
 
 ### Production code changes
 
 - `internal/state/` — remove `Focus`, `Lifecycle`, `ReadFocus`, `WriteFocus`, `ReadLifecycle`, `WriteLifecycle` and related helpers
-- `internal/approve/spec.go` — remove focus write (lines 69-82) and lifecycle write (lines 43-50)
-- `internal/approve/plan.go` — remove focus write
+- `internal/approve/spec.go` — remove focus/lifecycle writes; add `bd dolt pull`, collision check, epic creation with metadata, `bd dolt push`
+- `internal/approve/plan.go` — remove focus write; epic already exists (created at spec approve), so plan approve only creates child beads
 - `internal/approve/impl.go` — remove focus reads/writes, lifecycle reads/writes; replace with beads queries
 - `internal/specinit/specinit.go` — remove focus write
 - `internal/complete/complete.go` — remove focus write
@@ -44,7 +75,8 @@ MindSpec maintains two denormalized state files — `.mindspec/focus` (JSON) and
 
 - `ResolveContext(root) → (specID, beadID, phase, worktreePath)` — combines beads query with path conventions
 - `DiscoverActiveSpecs() → []ActiveSpec` — queries `bd list --type=epic --status=open --json`, derives phase from bead statuses
-- `DerivePhase(epicID) → Phase` — implements the status-to-phase mapping from ADR-0023 §3
+- `DerivePhase(epicID) → Phase` — implements the status-to-phase mapping table above
+- `CheckSpecNumberCollision(specNum) → error` — pulls from Dolt remote, checks for existing epics with the same numeric prefix
 
 ### Test harness changes
 
@@ -63,11 +95,15 @@ MindSpec maintains two denormalized state files — `.mindspec/focus` (JSON) and
 
 1. `make test` passes with zero references to `ReadFocus`/`WriteFocus`/`ReadLifecycle`/`WriteLifecycle` in production code
 2. `mindspec instruct` correctly derives phase from beads without any focus file
-3. `mindspec approve spec/plan/impl` complete without writing focus or lifecycle.yaml
-4. `mindspec next` and `mindspec complete` work without reading/writing focus
-5. All LLM test assertions use beads-based state checks
-6. `grep -r "ReadFocus\|WriteFocus\|ReadLifecycle\|WriteLifecycle" internal/` returns only test cleanup code (if any)
-7. No `.mindspec/focus` or `lifecycle.yaml` files are created during a full spec lifecycle run
+3. `mindspec spec approve` creates an epic with `metadata.spec_id` (epic existence = approval gate)
+4. `mindspec spec approve` performs `bd dolt pull` before epic creation and rejects on spec number collision
+5. `mindspec plan approve` creates child beads under the existing epic (no new epic creation)
+6. `mindspec approve impl` completes without reading/writing focus or lifecycle.yaml
+7. `mindspec next` and `mindspec complete` work without reading/writing focus
+8. All LLM test assertions use beads-based state checks
+9. `grep -r "ReadFocus\|WriteFocus\|ReadLifecycle\|WriteLifecycle" internal/` returns only test cleanup code (if any)
+10. No `.mindspec/focus` or `lifecycle.yaml` files are created during a full spec lifecycle run
+11. Phase derivation matches the design table for all edge cases (tested)
 
 ## Dependencies
 
