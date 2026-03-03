@@ -541,3 +541,23 @@
 {"actor":"mrmaxsteel","comment":null,"created_at":"2026-03-03T23:05:20Z","event_type":"created","id":541,"issue_id":"mindspec-y9e7","new_value":"","old_value":""}
 {"actor":"mrmaxsteel","comment":null,"created_at":"2026-03-03T23:05:21Z","event_type":"created","id":542,"issue_id":"mindspec-oteo","new_value":"","old_value":""}
 {"actor":"mrmaxsteel","comment":null,"created_at":"2026-03-03T23:05:32Z","event_type":"closed","id":543,"issue_id":"mindspec-l8s9","new_value":"Closed","old_value":""}
+{"actor":"mrmaxsteel","comment":null,"created_at":"2026-03-03T23:26:00Z","event_type":"created","id":544,"issue_id":"mindspec-3y4t","new_value":"","old_value":""}
+{"actor":"mrmaxsteel","comment":null,"created_at":"2026-03-03T23:27:58Z","event_type":"created","id":545,"issue_id":"mindspec-3y4t.1","new_value":"","old_value":""}
+{"actor":"mrmaxsteel","comment":null,"created_at":"2026-03-03T23:27:58Z","event_type":"created","id":546,"issue_id":"mindspec-3y4t.2","new_value":"","old_value":""}
+{"actor":"mrmaxsteel","comment":null,"created_at":"2026-03-03T23:28:26Z","event_type":"status_changed","id":547,"issue_id":"mindspec-3y4t.1","new_value":"{\"status\":\"in_progress\"}","old_value":"{\"id\":\"mindspec-3y4t.1\",\"title\":\"[064-stale-lifecycle-cleanup] Bead 1: Delete stale lifecycle.yaml files\",\"status\":\"open\",\"priority\":2,\"issue_type\":\"task\",\"owner\":\"richardmaxsteel@gmail.com\",\"created_at\":\"2026-03-03T23:27:58Z\",\"created_by\":\"mrmaxsteel\",\"updated_at\":\"2026-03-03T23:27:58Z\"}"}
+{"actor":"mrmaxsteel","comment":null,"created_at":"2026-03-03T23:29:21Z","event_type":"created","id":548,"issue_id":"mindspec-o23d","new_value":"","old_value":""}
+{"actor":"mrmaxsteel","comment":null,"created_at":"2026-03-03T23:29:22Z","event_type":"created","id":549,"issue_id":"mindspec-8dss","new_value":"","old_value":""}
+{"actor":"mrmaxsteel","comment":null,"created_at":"2026-03-03T23:29:22Z","event_type":"created","id":550,"issue_id":"mindspec-fy08","new_value":"","old_value":""}
+{"actor":"mrmaxsteel","comment":null,"created_at":"2026-03-03T23:29:23Z","event_type":"created","id":551,"issue_id":"mindspec-3k1u","new_value":"","old_value":""}
+{"actor":"mrmaxsteel","comment":null,"created_at":"2026-03-03T23:29:23Z","event_type":"created","id":552,"issue_id":"mindspec-2gwt","new_value":"","old_value":""}
+{"actor":"mrmaxsteel","comment":null,"created_at":"2026-03-03T23:30:08Z","event_type":"closed","id":553,"issue_id":"mindspec-3y4t.1","new_value":"Closed","old_value":""}
+{"actor":"mrmaxsteel","comment":null,"created_at":"2026-03-03T23:30:27Z","event_type":"status_changed","id":554,"issue_id":"mindspec-3y4t.2","new_value":"{\"status\":\"in_progress\"}","old_value":"{\"id\":\"mindspec-3y4t.2\",\"title\":\"[064-stale-lifecycle-cleanup] Bead 2: Add \\\"done\\\" phase for closed epics\",\"status\":\"open\",\"priority\":2,\"issue_type\":\"task\",\"owner\":\"richardmaxsteel@gmail.com\",\"created_at\":\"2026-03-03T23:27:58Z\",\"created_by\":\"mrmaxsteel\",\"updated_at\":\"2026-03-03T23:27:58Z\"}"}
+{"actor":"mrmaxsteel","comment":null,"created_at":"2026-03-03T23:32:14Z","event_type":"created","id":555,"issue_id":"mindspec-wb33","new_value":"","old_value":""}
+{"actor":"mrmaxsteel","comment":null,"created_at":"2026-03-03T23:32:15Z","event_type":"created","id":556,"issue_id":"mindspec-hm0u","new_value":"","old_value":""}
+{"actor":"mrmaxsteel","comment":null,"created_at":"2026-03-03T23:32:15Z","event_type":"created","id":557,"issue_id":"mindspec-optj","new_value":"","old_value":""}
+{"actor":"mrmaxsteel","comment":null,"created_at":"2026-03-03T23:32:15Z","event_type":"created","id":558,"issue_id":"mindspec-w5h7","new_value":"","old_value":""}
+{"actor":"mrmaxsteel","comment":null,"created_at":"2026-03-03T23:32:16Z","event_type":"created","id":559,"issue_id":"mindspec-fvih","new_value":"","old_value":""}
+{"actor":"mrmaxsteel","comment":null,"created_at":"2026-03-03T23:35:01Z","event_type":"closed","id":560,"issue_id":"mindspec-3y4t.2","new_value":"Closed","old_value":""}
+{"actor":"mrmaxsteel","comment":null,"created_at":"2026-03-03T23:35:01Z","event_type":"closed","id":561,"issue_id":"mindspec-3y4t","new_value":"all steps complete","old_value":""}
+{"actor":"mrmaxsteel","comment":null,"created_at":"2026-03-03T23:37:42Z","event_type":"closed","id":562,"issue_id":"mindspec-3y4t","new_value":"Closed","old_value":""}
+{"actor":"mrmaxsteel","comment":null,"created_at":"2026-03-03T23:38:02Z","event_type":"closed","id":563,"issue_id":"mindspec-3y4t","new_value":"Closed","old_value":""}
