@@ -19,6 +19,17 @@ var (
 	runBDFn = bead.RunBD
 )
 
+// RunBDFunc is the function signature for bd command execution.
+type RunBDFunc func(args ...string) ([]byte, error)
+
+// SetRunBDForTest allows tests in other packages to stub the bd runner.
+// Returns a restore function that should be called in t.Cleanup.
+func SetRunBDForTest(fn RunBDFunc) func() {
+	orig := runBDFn
+	runBDFn = fn
+	return func() { runBDFn = orig }
+}
+
 // EpicInfo represents a beads epic with spec metadata.
 type EpicInfo struct {
 	ID        string                 `json:"id"`
