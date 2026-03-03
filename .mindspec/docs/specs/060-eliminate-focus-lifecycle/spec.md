@@ -1,9 +1,11 @@
 ---
-id: "060-eliminate-focus-lifecycle"
-title: "Eliminate Focus and Lifecycle Files — Beads as Single State Authority"
-status: Draft
 adr_citations:
-  - ADR-0023
+    - ADR-0023
+approved_at: "2026-03-03T20:39:55Z"
+approved_by: user
+id: 060-eliminate-focus-lifecycle
+status: Approved
+title: Eliminate Focus and Lifecycle Files — Beads as Single State Authority
 ---
 
 # Spec 060: Eliminate Focus and Lifecycle Files
@@ -148,4 +150,7 @@ The epic's own standard fields (`created_at`, `created_by`, `status`) provide th
 
 ## Approval
 
-- **Status**: Pending
+- **Status**: APPROVED
+- **Approved By**: user
+- **Approval Date**: 2026-03-03
+- **Notes**: Approved via mindspec approve spec
