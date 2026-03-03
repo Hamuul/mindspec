@@ -4,6 +4,13 @@ approved_by: user
 spec_id: 060-eliminate-focus-lifecycle
 status: Approved
 version: "1"
+bead_ids:
+  - mindspec-3zab
+  - mindspec-3076
+  - mindspec-u1l1
+  - mindspec-et59
+  - mindspec-9iz2
+  - mindspec-oqwm
 ---
 # Plan: 060-eliminate-focus-lifecycle
 
