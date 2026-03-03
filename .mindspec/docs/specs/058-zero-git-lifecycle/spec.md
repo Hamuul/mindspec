@@ -1,7 +1,7 @@
 ---
-status: Draft
-approved_at: ""
-approved_by: ""
+approved_at: "2026-03-03T09:20:31Z"
+approved_by: user
+status: Approved
 ---
 # Spec 058-zero-git-lifecycle: Zero Raw Git Lifecycle
 
@@ -104,7 +104,7 @@ None — all design decisions resolved during exploration.
 
 ## Approval
 
-- **Status**: DRAFT
-- **Approved By**: -
-- **Approval Date**: -
-- **Notes**: -
+- **Status**: APPROVED
+- **Approved By**: user
+- **Approval Date**: 2026-03-03
+- **Notes**: Approved via mindspec approve spec

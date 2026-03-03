@@ -1,7 +1,11 @@
 ---
 approved_at: ""
 approved_by: ""
-bead_ids: []
+bead_ids:
+    - mindspec-hyzh
+    - mindspec-u4lq
+    - mindspec-pfzp
+    - mindspec-1hki
 last_updated: 2026-03-03T00:00:00Z
 spec_id: 058-zero-git-lifecycle
 status: Approved
