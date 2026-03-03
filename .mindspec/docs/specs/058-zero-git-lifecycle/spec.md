@@ -128,7 +128,7 @@ The execution model:
 - `mindspec next` runs from a **spec worktree** → creates a bead worktree off the spec branch
 - `mindspec complete` runs from a **bead worktree** → auto-commits, merges bead→spec, cleans up bead worktree + branch
 
-This scoping is enforced via `workspace.DetectWorktreeContext()`. Running from the wrong context produces a helpful error. Both commands accept `--allow-main` for recovery scenarios.
+This scoping is enforced via `workspace.DetectWorktreeContext()`. Running from the wrong context produces a hard error — there is no escape hatch. `complete` will auto-redirect to the active bead worktree from focus before checking the guard.
 
 Parallel bead execution (multiple agents running `next`/`complete` in separate bead worktrees) works correctly by design: each bead worktree has its own focus file, and the DAG dependency graph ensures dependent beads cannot be claimed until prerequisites are closed.
 

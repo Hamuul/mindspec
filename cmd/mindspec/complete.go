@@ -36,7 +36,6 @@ The bead ID is auto-resolved from state if not provided.`,
 			return err
 		}
 		specID, _ := cmd.Flags().GetString("spec")
-		allowMain, _ := cmd.Flags().GetBool("allow-main")
 
 		// CWD auto-redirect: if not in a bead worktree, try to chdir to active worktree from focus.
 		cwd, _ := os.Getwd()
@@ -56,13 +55,11 @@ The bead ID is auto-resolved from state if not provided.`,
 		}
 
 		// Worktree scoping guard (checked after auto-redirect)
-		if !allowMain {
-			switch kind {
-			case workspace.WorktreeMain:
-				fmt.Fprintf(os.Stderr, "warning: mindspec complete should run from a bead worktree.\nUse `mindspec next` to claim a bead and create a worktree first.\n\n")
-			case workspace.WorktreeSpec:
-				return fmt.Errorf("you're in a spec worktree — run `mindspec next` to claim a bead first, then `mindspec complete` from the bead worktree")
-			}
+		switch kind {
+		case workspace.WorktreeMain:
+			return fmt.Errorf("mindspec complete must run from a bead worktree.\nUse `mindspec next` to claim a bead and create a worktree first, then cd into it")
+		case workspace.WorktreeSpec:
+			return fmt.Errorf("you're in a spec worktree — run `mindspec next` to claim a bead first, then `mindspec complete` from the bead worktree")
 		}
 
 		if err := bead.Preflight(root); err != nil {
@@ -103,5 +100,4 @@ The bead ID is auto-resolved from state if not provided.`,
 
 func init() {
 	completeCmd.Flags().String("spec", "", "Target spec ID when multiple specs are active")
-	completeCmd.Flags().Bool("allow-main", false, "Bypass the bead-worktree requirement (for recovery)")
 }

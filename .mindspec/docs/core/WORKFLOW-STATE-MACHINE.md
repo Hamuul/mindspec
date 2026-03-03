@@ -201,9 +201,9 @@ The intended behavior: `mindspec next` from idle should either (a) require `--sp
 
 `mindspec next` must run from a spec worktree (not main, not a bead worktree). It creates a bead worktree branched off the spec branch. Running from main or a bead worktree produces a helpful error.
 
-`mindspec complete` must run from a bead worktree. It auto-commits, returns to the spec worktree, merges the bead branch into the spec branch, and cleans up the bead worktree + branch — all deterministically. Running from main or a spec worktree produces a helpful error.
+`mindspec complete` must run from a bead worktree. It auto-commits, returns to the spec worktree, merges the bead branch into the spec branch, and cleans up the bead worktree + branch — all deterministically. Running from main or a spec worktree produces a helpful error. If the agent is not in a bead worktree but focus has an active worktree recorded, `complete` will auto-redirect to it before checking the guard.
 
-Both commands accept `--allow-main` to bypass the guard for recovery scenarios. Parallel bead execution (multiple agents each running `next`/`complete` in their own bead worktrees) works correctly by design: each bead worktree has its own focus file, and the DAG dependency graph ensures dependent beads cannot be claimed until their prerequisites are closed.
+There is no escape hatch — the guards are hard errors. Parallel bead execution (multiple agents each running `next`/`complete` in their own bead worktrees) works correctly by design: each bead worktree has its own focus file, and the DAG dependency graph ensures dependent beads cannot be claimed until their prerequisites are closed.
 
 ---
 
