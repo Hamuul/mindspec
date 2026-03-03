@@ -6,6 +6,8 @@
 {"created_at":"2026-03-03T21:03:20Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-36xf","issue_id":"mindspec-36xf.1","type":"parent-child"}
 {"created_at":"2026-03-03T21:03:20Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-36xf","issue_id":"mindspec-36xf.2","type":"parent-child"}
 {"created_at":"2026-03-03T21:03:20Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-36xf.1","issue_id":"mindspec-36xf.2","type":"blocks"}
+{"created_at":"2026-03-03T23:27:58Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-3y4t","issue_id":"mindspec-3y4t.1","type":"parent-child"}
+{"created_at":"2026-03-03T23:27:58Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-3y4t","issue_id":"mindspec-3y4t.2","type":"parent-child"}
 {"created_at":"2026-03-03T22:04:00Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-idho","issue_id":"mindspec-3zab","type":"parent-child"}
 {"created_at":"2026-03-03T21:03:22Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-47pu","issue_id":"mindspec-47pu.1","type":"parent-child"}
 {"created_at":"2026-03-03T21:03:22Z","created_by":"mrmaxsteel","depends_on_id":"mindspec-47pu","issue_id":"mindspec-47pu.2","type":"parent-child"}
