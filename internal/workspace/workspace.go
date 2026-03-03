@@ -214,22 +214,25 @@ func DetectWorktreeContext(dir string) (kind, specID, beadID string) {
 		return WorktreeMain, "", ""
 	}
 
-	// Walk up looking for a .worktrees parent
+	// Walk the path and use the LAST .worktrees match so that nested worktrees
+	// (bead worktree inside spec worktree) resolve to the innermost type.
 	parts := strings.Split(filepath.ToSlash(abs), "/")
+	lastKind := WorktreeMain
+	var lastSpecID, lastBeadID string
 	for i, part := range parts {
 		if part == ".worktrees" && i+1 < len(parts) {
 			wtDir := parts[i+1]
 			if strings.HasPrefix(wtDir, "worktree-spec-") {
-				sid := strings.TrimPrefix(wtDir, "worktree-spec-")
-				return WorktreeSpec, sid, ""
-			}
-			if strings.HasPrefix(wtDir, "worktree-") {
-				bid := strings.TrimPrefix(wtDir, "worktree-")
-				return WorktreeBead, "", bid
+				lastKind = WorktreeSpec
+				lastSpecID = strings.TrimPrefix(wtDir, "worktree-spec-")
+				lastBeadID = ""
+			} else if strings.HasPrefix(wtDir, "worktree-") {
+				lastKind = WorktreeBead
+				lastBeadID = strings.TrimPrefix(wtDir, "worktree-")
 			}
 		}
 	}
-	return WorktreeMain, "", ""
+	return lastKind, lastSpecID, lastBeadID
 }
 
 func exists(path string) bool {

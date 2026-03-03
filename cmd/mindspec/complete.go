@@ -41,8 +41,23 @@ The bead ID is auto-resolved from state if not provided.`,
 		cwd, _ := os.Getwd()
 		kind, _, _ := workspace.DetectWorktreeContext(cwd)
 		if kind != workspace.WorktreeBead {
-			if focus, ferr := state.ReadFocus(root); ferr == nil && focus != nil && focus.ActiveWorktree != "" {
-				wtPath := focus.ActiveWorktree
+			// Try focus from multiple locations: main repo root, then local root (spec worktree).
+			var activeWT string
+			for _, fr := range []string{root} {
+				if focus, ferr := state.ReadFocus(fr); ferr == nil && focus != nil && focus.ActiveWorktree != "" {
+					activeWT = focus.ActiveWorktree
+					break
+				}
+			}
+			if activeWT == "" {
+				if lr, lrErr := workspace.FindLocalRoot(cwd); lrErr == nil && lr != root {
+					if focus, ferr := state.ReadFocus(lr); ferr == nil && focus != nil && focus.ActiveWorktree != "" {
+						activeWT = focus.ActiveWorktree
+					}
+				}
+			}
+			if activeWT != "" {
+				wtPath := activeWT
 				if !filepath.IsAbs(wtPath) {
 					wtPath = filepath.Join(root, wtPath)
 				}

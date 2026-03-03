@@ -205,6 +205,11 @@ team lead spawns fresh agents per bead. Accepts an optional positional bead ID.`
 		if err := state.WriteFocus(focusRoot, mc); err != nil {
 			return fmt.Errorf("writing focus: %w", err)
 		}
+		// Also update the spec worktree's focus so `mindspec complete` can
+		// auto-redirect to the bead worktree if the agent forgets to cd.
+		if localRoot, lrErr := workspace.FindLocalRoot(cwd); lrErr == nil && localRoot != focusRoot {
+			_ = state.WriteFocus(localRoot, mc)
+		}
 
 		fmt.Printf("State updated: mode=%s, spec=%s, bead=%s\n", resolved.Mode, resolved.SpecID, selected.ID)
 		fmt.Println()
