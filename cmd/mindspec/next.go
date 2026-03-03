@@ -49,7 +49,19 @@ team lead spawns fresh agents per bead. Accepts an optional positional bead ID.`
 			return runEmitOnly(root, specFlag, args)
 		}
 
-		// Step 0: Session freshness gate
+		// Step 0a: Worktree scoping guard
+		allowMain, _ := cmd.Flags().GetBool("allow-main")
+		if !allowMain {
+			kind, _, _ := workspace.DetectWorktreeContext(cwd)
+			switch kind {
+			case workspace.WorktreeMain:
+				return fmt.Errorf("mindspec next must run from a spec worktree.\nUse `mindspec spec create <slug>` to start a new spec, or cd into an existing spec worktree.\nUse --allow-main to bypass this check for recovery.")
+			case workspace.WorktreeBead:
+				return fmt.Errorf("you're already in a bead worktree — run `mindspec complete \"msg\"` when done")
+			}
+		}
+
+		// Step 0b: Session freshness gate
 		if sess, readErr := state.ReadSession(root); readErr == nil && sess.SessionStartedAt != "" {
 			stale := false
 			reason := ""
@@ -308,4 +320,5 @@ func init() {
 	nextCmd.Flags().String("spec", "", "Target spec ID to filter ready work (auto-detected if exactly one active spec)")
 	nextCmd.Flags().Bool("force", false, "Bypass the context clear gate (use when you know your context is clean)")
 	nextCmd.Flags().Bool("emit-only", false, "Emit bead primer without claiming, creating worktree, or updating state (for multi-agent mode)")
+	nextCmd.Flags().Bool("allow-main", false, "Bypass the spec-worktree requirement (for recovery)")
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/mindspec/mindspec/internal/complete"
 	"github.com/mindspec/mindspec/internal/guard"
 	"github.com/mindspec/mindspec/internal/validate"
+	"github.com/mindspec/mindspec/internal/workspace"
 	"github.com/spf13/cobra"
 )
 
@@ -34,6 +35,19 @@ The bead ID is auto-resolved from state if not provided.`,
 			return err
 		}
 		specID, _ := cmd.Flags().GetString("spec")
+		allowMain, _ := cmd.Flags().GetBool("allow-main")
+
+		// Worktree scoping guard
+		if !allowMain {
+			cwd, _ := os.Getwd()
+			kind, _, _ := workspace.DetectWorktreeContext(cwd)
+			switch kind {
+			case workspace.WorktreeMain:
+				return fmt.Errorf("mindspec complete must run from a bead worktree.\nUse `mindspec next` to claim a bead and create a worktree first.\nUse --allow-main to bypass this check for recovery.")
+			case workspace.WorktreeSpec:
+				return fmt.Errorf("you're in a spec worktree — run `mindspec next` to claim a bead first, then `mindspec complete` from the bead worktree")
+			}
+		}
 
 		// CWD guard: prefer running from the bead worktree.
 		// If we're in main but an active worktree exists, auto-chdir there.
@@ -84,4 +98,5 @@ The bead ID is auto-resolved from state if not provided.`,
 
 func init() {
 	completeCmd.Flags().String("spec", "", "Target spec ID when multiple specs are active")
+	completeCmd.Flags().Bool("allow-main", false, "Bypass the bead-worktree requirement (for recovery)")
 }

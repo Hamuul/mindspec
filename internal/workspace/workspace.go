@@ -197,6 +197,41 @@ func LifecyclePath(root, specID string) string {
 	return filepath.Join(SpecDir(root, specID), "lifecycle.yaml")
 }
 
+// WorktreeKind describes the type of worktree context.
+const (
+	WorktreeMain = "main" // Main repository root
+	WorktreeSpec = "spec" // Spec worktree (.worktrees/worktree-spec-<id>)
+	WorktreeBead = "bead" // Bead worktree (.worktrees/worktree-<bead-id>)
+)
+
+// DetectWorktreeContext identifies the worktree context from a directory path.
+// It returns the kind (main/spec/bead) and any extracted spec or bead ID.
+// Detection is based on the path containing .worktrees/worktree-spec-<id> or
+// .worktrees/worktree-<bead-id>.
+func DetectWorktreeContext(dir string) (kind, specID, beadID string) {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return WorktreeMain, "", ""
+	}
+
+	// Walk up looking for a .worktrees parent
+	parts := strings.Split(filepath.ToSlash(abs), "/")
+	for i, part := range parts {
+		if part == ".worktrees" && i+1 < len(parts) {
+			wtDir := parts[i+1]
+			if strings.HasPrefix(wtDir, "worktree-spec-") {
+				sid := strings.TrimPrefix(wtDir, "worktree-spec-")
+				return WorktreeSpec, sid, ""
+			}
+			if strings.HasPrefix(wtDir, "worktree-") {
+				bid := strings.TrimPrefix(wtDir, "worktree-")
+				return WorktreeBead, "", bid
+			}
+		}
+	}
+	return WorktreeMain, "", ""
+}
+
 func exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
