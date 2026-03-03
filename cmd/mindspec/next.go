@@ -72,8 +72,8 @@ team lead spawns fresh agents per bead. Accepts an optional positional bead ID.`
 		if err := next.CheckCleanTree(); err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot claim work: %s\n\n", err)
 			fmt.Fprintln(os.Stderr, "Recovery steps:")
-			fmt.Fprintln(os.Stderr, "  1. Commit your changes: git add -A && git commit -m \"wip\"")
-			fmt.Fprintln(os.Stderr, "  2. Or discard them: git checkout -- .")
+			fmt.Fprintln(os.Stderr, "  1. Commit your changes: mindspec complete \"wip\"")
+			fmt.Fprintln(os.Stderr, "  2. Or discard them: git restore .")
 			fmt.Fprintln(os.Stderr, "  3. Then re-run: mindspec next")
 			return fmt.Errorf("dirty working tree")
 		}
@@ -127,7 +127,7 @@ team lead spawns fresh agents per bead. Accepts an optional positional bead ID.`
 			}
 			fmt.Println()
 			fmt.Println("Next steps:")
-			fmt.Println("  - Create a new spec: mindspec spec-init")
+			fmt.Println("  - Create a new spec: mindspec spec create <slug>")
 			fmt.Println("  - Check blocked items- bd blocked")
 			fmt.Println("  - List all open work: bd list --status=open")
 			return nil
