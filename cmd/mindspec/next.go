@@ -55,7 +55,7 @@ team lead spawns fresh agents per bead. Accepts an optional positional bead ID.`
 			kind, _, _ := workspace.DetectWorktreeContext(cwd)
 			switch kind {
 			case workspace.WorktreeMain:
-				return fmt.Errorf("mindspec next must run from a spec worktree.\nUse `mindspec spec create <slug>` to start a new spec, or cd into an existing spec worktree.\nUse --allow-main to bypass this check for recovery.")
+				fmt.Fprintf(os.Stderr, "warning: mindspec next should run from a spec worktree.\nUse `mindspec spec create <slug>` or cd into an existing spec worktree.\nUse --allow-main to suppress this warning.\n\n")
 			case workspace.WorktreeBead:
 				return fmt.Errorf("you're already in a bead worktree — run `mindspec complete \"msg\"` when done")
 			}

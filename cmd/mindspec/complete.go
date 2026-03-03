@@ -3,11 +3,12 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/mindspec/mindspec/internal/bead"
 	"github.com/mindspec/mindspec/internal/complete"
-	"github.com/mindspec/mindspec/internal/guard"
+	"github.com/mindspec/mindspec/internal/state"
 	"github.com/mindspec/mindspec/internal/validate"
 	"github.com/mindspec/mindspec/internal/workspace"
 	"github.com/spf13/cobra"
@@ -37,26 +38,30 @@ The bead ID is auto-resolved from state if not provided.`,
 		specID, _ := cmd.Flags().GetString("spec")
 		allowMain, _ := cmd.Flags().GetBool("allow-main")
 
-		// Worktree scoping guard
-		if !allowMain {
-			cwd, _ := os.Getwd()
-			kind, _, _ := workspace.DetectWorktreeContext(cwd)
-			switch kind {
-			case workspace.WorktreeMain:
-				return fmt.Errorf("mindspec complete must run from a bead worktree.\nUse `mindspec next` to claim a bead and create a worktree first.\nUse --allow-main to bypass this check for recovery.")
-			case workspace.WorktreeSpec:
-				return fmt.Errorf("you're in a spec worktree — run `mindspec next` to claim a bead first, then `mindspec complete` from the bead worktree")
+		// CWD auto-redirect: if not in a bead worktree, try to chdir to active worktree from focus.
+		cwd, _ := os.Getwd()
+		kind, _, _ := workspace.DetectWorktreeContext(cwd)
+		if kind != workspace.WorktreeBead {
+			if focus, ferr := state.ReadFocus(root); ferr == nil && focus != nil && focus.ActiveWorktree != "" {
+				wtPath := focus.ActiveWorktree
+				if !filepath.IsAbs(wtPath) {
+					wtPath = filepath.Join(root, wtPath)
+				}
+				if err := os.Chdir(wtPath); err == nil {
+					fmt.Fprintf(os.Stderr, "note: switched to worktree %s\n", wtPath)
+					cwd, _ = os.Getwd()
+					kind, _, _ = workspace.DetectWorktreeContext(cwd)
+				}
 			}
 		}
 
-		// CWD guard: prefer running from the bead worktree.
-		// If we're in main but an active worktree exists, auto-chdir there.
-		if guard.IsMainCWD(root) {
-			if wtPath := guard.ActiveWorktreePath(root); wtPath != "" {
-				if err := os.Chdir(wtPath); err != nil {
-					return fmt.Errorf("could not switch to active worktree %s: %w", wtPath, err)
-				}
-				fmt.Fprintf(os.Stderr, "note: switched to worktree %s\n", wtPath)
+		// Worktree scoping guard (checked after auto-redirect)
+		if !allowMain {
+			switch kind {
+			case workspace.WorktreeMain:
+				fmt.Fprintf(os.Stderr, "warning: mindspec complete should run from a bead worktree.\nUse `mindspec next` to claim a bead and create a worktree first.\n\n")
+			case workspace.WorktreeSpec:
+				return fmt.Errorf("you're in a spec worktree — run `mindspec next` to claim a bead first, then `mindspec complete` from the bead worktree")
 			}
 		}
 
