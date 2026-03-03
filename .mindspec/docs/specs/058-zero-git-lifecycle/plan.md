@@ -9,7 +9,7 @@ bead_ids:
 last_updated: 2026-03-03T00:00:00Z
 spec_id: 058-zero-git-lifecycle
 status: Approved
-version: 1
+version: 3
 ---
 
 # Plan: Spec 058 — Zero Raw Git Lifecycle
@@ -31,20 +31,26 @@ version: 1
 
 | Acceptance Criterion | Bead |
 |---------------------|------|
-| `mindspec complete "msg"` auto-commits dirty worktree | Bead 1 |
-| `mindspec complete` with dirty tree fails with hint | Bead 1 |
-| `mindspec spec create` creates branch + worktree + template | Bead 2 |
-| `spec-init` still works as hidden alias | Bead 2 |
-| `mindspec explore` does NOT change mode | Bead 2 |
-| `mindspec explore promote` delegates to `spec create` | Bead 2 |
-| All templates contain lifecycle map with `>>>` marker | Bead 3 |
-| No template contains raw git command instructions | Bead 3 |
-| Harness scenarios updated for new commands | Bead 4 |
-| `make test` passes | Bead 4 |
-| `TestLLM_SingleBead` passes without raw git | Bead 4 |
-| `TestLLM_SpecToIdle` passes full lifecycle | Bead 4 |
+| `mindspec complete "msg"` auto-commits dirty worktree | Bead 1 (done) |
+| `mindspec complete` with dirty tree fails with hint | Bead 1 (done) |
+| `mindspec spec create` creates branch + worktree + template | Bead 2 (done) |
+| `spec-init` still works as hidden alias | Bead 2 (done) |
+| Phase-first commands (`spec approve`, `plan approve`, `impl approve`) | Bead 2 (done) |
+| Old command forms remain as hidden aliases | Bead 2 (done) |
+| All templates contain lifecycle map with `>>>` marker | Bead 3 (done) |
+| No template references raw git as normal workflow | Bead 3 (done) |
+| Explore mode fully removed (command, package, template, constant) | Bead 3 (done) |
+| Harness scenarios updated for new commands | Bead 4 (done) |
+| WORKFLOW-STATE-MACHINE.md updated | Bead 4 (done) |
+| Spec updated to reflect actual implementation | Bead 4 (done) |
+| `make test` passes | Bead 4 (done) |
+| Stale CLI messages updated (spec-init refs, raw git in recovery hints) | Bead 5 |
+| `mindspec next` enforces spec worktree scoping | Bead 6 |
+| `mindspec complete` enforces bead worktree scoping | Bead 6 |
+| `TestLLM_SingleBead` passes without raw git | Bead 7 |
+| `TestLLM_SpecToIdle` passes full lifecycle | Bead 7 |
 
-## Bead 1: Auto-commit in mindspec complete
+## Bead 1: Auto-commit in mindspec complete (DONE)
 
 Add optional commit message parameter to `complete.Run()`. Before the clean-tree check, if a commit message is provided, call `gitops.CommitAll()` to stage and commit all changes. Update the dirty-tree error hint.
 
@@ -56,65 +62,121 @@ Add optional commit message parameter to `complete.Run()`. Before the clean-tree
 5. Add `commitAllFn` function variable for testability, wire to `gitops.CommitAll`
 
 **Verification**
-- [ ] `go test ./internal/complete/ -v` passes
-- [ ] `make build && make test` passes
+- [x] `go test ./internal/complete/ -v` passes
+- [x] `make build && make test` passes
 
 **Depends on**
 None
 
-## Bead 2: CLI namespace reorganization
+## Bead 2: CLI namespace reorganization (DONE)
 
-Create `spec`, `plan`, `impl` parent commands with subcommands. Simplify explore. Keep backward-compat aliases hidden.
+Create `spec`, `plan`, `impl` parent commands with subcommands. Keep backward-compat aliases hidden.
 
 **Steps**
-1. Create `cmd/mindspec/spec.go` with `specCmd` parent, `specCreateCmd` (wraps `specinit.Run()`), `specApproveCmd` (wraps existing approve-spec logic)
-2. Create `cmd/mindspec/plan_cmd.go` with `planCmd` parent, `planApproveCmd` (wraps existing approve-plan logic)
-3. Create `cmd/mindspec/impl.go` with `implCmd` parent, `implApproveCmd` (wraps existing approve-impl logic)
-4. In `cmd/mindspec/approve.go`, mark all subcommands as `Hidden: true`; in `spec_init.go`, mark `specInitCmd` as `Hidden: true`
-5. In `cmd/mindspec/root.go`, register `specCmd`, `planCmd`, `implCmd` as top-level commands
-6. Simplify `internal/explore/explore.go`: `Enter()` removes state write (returns nil), `Dismiss()` removes mode check (returns nil), `Promote()` removes mode check
-7. Update `CLAUDE.md` managed section with new command surface
+1. Create `cmd/mindspec/spec.go` with `specCmd` parent, `specCreateCmd`, `specApproveCmd`
+2. Create `cmd/mindspec/plan_cmd.go` with `planCmd` parent, `planApproveCmd`
+3. Create `cmd/mindspec/impl.go` with `implCmd` parent, `implApproveCmd`
+4. Rewrite `cmd/mindspec/approve.go` to use shared RunE functions, mark as `Hidden: true`
+5. Mark `specInitCmd` as `Hidden: true`
+6. Register new commands in `root.go`
+7. Update `CLAUDE.md` managed section
 
 **Verification**
-- [ ] `make build && make test` passes
-- [ ] `mindspec spec create --help` shows usage
-- [ ] `mindspec spec-init --help` still works (hidden alias)
+- [x] `make build && make test` passes
+- [x] `mindspec spec create --help` shows usage
 
 **Depends on**
 None
 
-## Bead 3: Instruct template updates
+## Bead 3: Instruct template updates and explore removal (DONE)
 
-Update all 6 instruct templates with lifecycle map, remove raw git references, update command names.
+Update all instruct templates with lifecycle map. Soften raw git references to convention. Remove explore entirely.
 
 **Steps**
-1. Create lifecycle map block (common to all templates, with phase-specific `>>>` marker)
-2. Update `idle.md`: merge explore guidance into subsection, add lifecycle map, remove session close git instructions
-3. Update `explore.md`: simplify to guidance-only stub redirecting to idle
-4. Update `spec.md`, `plan.md`: replace old command names, add lifecycle map, remove session close git
-5. Update `implement.md`: replace commit convention with `mindspec complete "msg"`, add lifecycle map + git prohibition
-6. Update `review.md`: replace old command names, add lifecycle map, remove session close git
+1. Add lifecycle map with phase-specific `>>>` marker and git convention to all 5 templates
+2. Delete explore template, command, package, state constant
+3. Remove all explore references from hooks, instruct, bootstrap, setup, tests
+4. Update idle template: remove `state set`, use `mindspec next` for resume
 
 **Verification**
-- [ ] `make build` passes
-- [ ] `make test` passes (template rendering tests)
-- [ ] No raw git commands in any template (grep verification)
+- [x] `make build && make test` passes
+- [x] No explore references in any `.go` source file
 
 **Depends on**
 Bead 1, Bead 2
 
-## Bead 4: Harness scenario updates and integration verification
+## Bead 4: Harness scenario updates, docs, and spec (DONE)
 
-Update LLM test scenario prompts and assertions for new command names. Run full test suite.
+Update LLM test scenarios, WORKFLOW-STATE-MACHINE.md, and spec for new commands and explore removal.
 
 **Steps**
-1. Update `ScenarioSpecToIdle` prompt and assertions: `spec-init` → `spec create`, `approve spec` → `spec approve` (accept both forms)
-2. Update `ScenarioSingleBead` assertions for `mindspec complete "msg"` pattern
-3. Update `ScenarioAbandonSpec` for explore-without-mode-change behavior
-4. Update remaining scenarios (`ScenarioSpecInit`, `ScenarioSpecApprove`, etc.) for new command forms
-5. Run `make build && make test` and `go test ./internal/harness/ -short -v`
+1. Remove `ScenarioAbandonSpec` and `TestLLM_AbandonSpec`
+2. Update remaining scenario assertions to accept both old and new command forms
+3. Rewrite WORKFLOW-STATE-MACHINE.md: remove explore, add known gaps, soften git policy
+4. Update 058 spec.md to reflect actual implementation
 
 **Verification**
+- [x] `make build && make test` passes
+
+**Depends on**
+Bead 1, Bead 2, Bead 3
+
+## Bead 5: Stale CLI message cleanup
+
+Several CLI error/help messages still reference `spec-init` and raw git commands. Update them to use the new command names and mindspec-native recovery paths.
+
+**Steps**
+1. `cmd/mindspec/next.go:75-76` — dirty tree recovery: replace `git add -A && git commit -m "wip"` / `git checkout -- .` with `mindspec complete "wip"` to auto-commit, or `git restore .` for discard (git restore is a repair action, acceptable)
+2. `cmd/mindspec/next.go:130` — no-work message: replace `mindspec spec-init` with `mindspec spec create`
+3. `cmd/mindspec/bead.go:21,25` — deprecated bead command: replace `mindspec spec-init` with `mindspec spec create`
+4. `cmd/mindspec/instruct.go:157` — no-state fallback: replace `mindspec spec-init` with `mindspec spec create`
+5. `cmd/mindspec/setup.go:31,75,115` — help text: replace `explore, spec-init` references with current command names
+
+**Verification**
+- [ ] `grep -r 'spec-init' cmd/mindspec/` only shows the hidden alias definition in `spec_init.go`
+- [ ] `grep -r 'git add\|git commit\|git checkout' cmd/mindspec/` returns no results (except git restore for discard)
 - [ ] `make build && make test` passes
-- [ ] `go test ./internal/harness/ -short -v` passes
-- [ ] `env -u CLAUDECODE go test ./internal/harness/ -v -run TestLLM_SingleBead -timeout 10m -count=1` passes
+
+**Depends on**
+Bead 2
+
+## Bead 6: Enforce worktree scoping for next and complete
+
+`mindspec next` should only run from a spec worktree. `mindspec complete` should only run from a bead worktree. Add guards that detect the current worktree context and fail with a helpful message if run from the wrong location.
+
+**Steps**
+1. Add a `DetectWorktreeContext(cwd string) (kind string, specID string, beadID string)` helper that identifies whether the CWD is: main repo, spec worktree, or bead worktree (by path pattern matching against `.worktrees/worktree-spec-*` and `.worktrees/worktree-*`)
+2. In `cmd/mindspec/next.go`, before step 1 (clean tree check), verify CWD is a spec worktree. If on main, error: "mindspec next must run from a spec worktree. Use `mindspec spec create <slug>` first." If in a bead worktree, error: "you're already in a bead worktree — run `mindspec complete "msg"` when done."
+3. In `cmd/mindspec/complete.go` (or `internal/complete/complete.go`), verify CWD is a bead worktree. If on main or spec worktree, error with guidance.
+4. Add `--allow-main` or similar escape hatch for recovery scenarios
+5. Update tests to mock CWD where needed
+
+**Verification**
+- [ ] `mindspec next` from main repo fails with helpful error
+- [ ] `mindspec next` from spec worktree succeeds
+- [ ] `mindspec complete` from bead worktree succeeds
+- [ ] `mindspec complete` from spec worktree fails with helpful error
+- [ ] `make build && make test` passes
+
+**Depends on**
+Bead 5
+
+## Bead 7: LLM harness integration verification
+
+Run LLM harness tests to validate the full lifecycle works end-to-end with only mindspec commands.
+
+**Steps**
+1. `make build` to ensure binary is current
+2. Run `env -u CLAUDECODE go test ./internal/harness/ -v -run TestLLM_SingleBead -timeout 10m -count=1`
+3. If failures, diagnose and fix (per ADR-0021: fixes go into guidance, not test prompts)
+4. Run `env -u CLAUDECODE go test ./internal/harness/ -v -run TestLLM_SpecToIdle -timeout 15m -count=1`
+5. If failures, iterate
+6. Run full suite: `env -u CLAUDECODE go test ./internal/harness/ -v -run '^TestLLM_' -timeout 180m -count=1`
+
+**Verification**
+- [ ] `TestLLM_SingleBead` passes
+- [ ] `TestLLM_SpecToIdle` passes
+- [ ] No agent runs raw git commands in successful test runs
+
+**Depends on**
+Bead 5, Bead 6

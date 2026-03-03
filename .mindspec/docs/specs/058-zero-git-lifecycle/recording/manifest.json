@@ -18,7 +18,10 @@
     },
     {
       "phase": "plan-approved",
-      "started_at": "2026-03-03T09:21:20Z"
+      "started_at": "2026-03-03T09:21:20Z",
+      "beads": [
+        "mindspec-d5lm.4"
+      ]
     }
   ]
 }
