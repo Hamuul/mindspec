@@ -34,7 +34,7 @@ The lifecycle phase for any spec is derived entirely from beads state:
 
 | Condition | Derived phase |
 |:----------|:-------------|
-| No epic with matching `metadata.spec_id` | **spec** (draft, still being written/discussed) |
+| No epic with matching `metadata.spec_num` | **spec** (draft, still being written/discussed) |
 | Epic exists, no children | **plan** (spec approved, plan being drafted) |
 | Epic exists, all children open (none claimed) | **plan** (plan approved, beads ready to claim) |
 | Epic exists, some closed, some open, none in_progress | **plan** (next bead ready) |
@@ -88,9 +88,9 @@ This provides optimistic-locking semantics: pull-before-create ensures visibilit
 - `internal/approve/spec.go` — remove focus/lifecycle writes; add `bd dolt pull`, `spec_num` collision check, epic creation with `spec_num`/`spec_title` metadata, `bd dolt push`
 - `internal/approve/plan.go` — remove focus write; epic already exists (created at spec approve), so plan approve only creates child beads
 - `internal/approve/impl.go` — remove focus reads/writes, lifecycle reads/writes; replace with beads queries
-- `internal/specinit/specinit.go` — remove focus write
+- `internal/specinit/specinit.go` — remove focus write, lifecycle.yaml write, and epic creation (epic moves to `spec approve`)
 - `internal/complete/complete.go` — remove focus write
-- `internal/next/` — remove focus reads; derive context from beads + path conventions
+- `internal/next/` — remove focus reads/writes and lifecycle reads; derive context from beads + path conventions
 - `internal/instruct/` — replace `ReadFocus()` with beads-derived context resolution
 - `cmd/mindspec/state.go` — update `state show` to derive from beads; remove `state set` or repoint it
 
