@@ -1,6 +1,8 @@
 ---
-status: Draft
+approved_at: "2026-03-03T20:44:23Z"
+approved_by: user
 spec_id: 060-eliminate-focus-lifecycle
+status: Approved
 version: "1"
 ---
 # Plan: 060-eliminate-focus-lifecycle
