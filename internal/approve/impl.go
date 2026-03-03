@@ -9,6 +9,7 @@ import (
 
 	"github.com/mindspec/mindspec/internal/bead"
 	"github.com/mindspec/mindspec/internal/gitops"
+	"github.com/mindspec/mindspec/internal/phase"
 	"github.com/mindspec/mindspec/internal/recording"
 	"github.com/mindspec/mindspec/internal/state"
 	"github.com/mindspec/mindspec/internal/validate"
@@ -57,43 +58,38 @@ func ApproveImpl(root, specID string, opts ...ImplOpts) (*ImplResult, error) {
 	}
 	result := &ImplResult{SpecID: specID}
 
-	// Determine local root for per-worktree focus reads.
+	// Derive context from beads (ADR-0023).
 	localRoot := root
 	if lr, err := findLocalRootFn(); err == nil {
 		localRoot = lr
 	}
 
-	// Verify current state is review mode for this spec
-	mc, err := readApproveImplFocus(root, localRoot)
-	if err != nil {
-		return nil, fmt.Errorf("reading state: %w", err)
-	}
-	if mc == nil {
-		mc = &state.Focus{}
-	}
-	if mc.Mode != state.ModeReview {
-		return nil, fmt.Errorf("expected review mode, got %q", mc.Mode)
-	}
-	if mc.ActiveSpec != specID {
-		return nil, fmt.Errorf("active spec is %q, not %q", mc.ActiveSpec, specID)
+	ctx, ctxErr := phase.ResolveContextFromDir(root, localRoot)
+	if ctxErr != nil {
+		return nil, fmt.Errorf("resolving context: %w", ctxErr)
 	}
 
-	// Close lifecycle epic (best-effort).
-	specDir := workspace.SpecDir(root, specID)
-	lc, lcErr := state.ReadLifecycle(specDir)
-	if lcErr == nil && lc != nil && lc.EpicID != "" {
-		if _, err := implRunBDCombinedFn("close", lc.EpicID); err != nil {
-			if !isAlreadyClosedErr(err) {
-				result.Warnings = append(result.Warnings, fmt.Sprintf("could not close lifecycle epic %s: %v", lc.EpicID, err))
-			}
+	// Verify state is review mode for this spec
+	if ctx.Phase != state.ModeReview {
+		return nil, fmt.Errorf("expected review mode, got %q", ctx.Phase)
+	}
+	if ctx.SpecID != "" && ctx.SpecID != specID {
+		return nil, fmt.Errorf("active spec is %q, not %q", ctx.SpecID, specID)
+	}
+
+	// Close lifecycle epic via beads (ADR-0023).
+	epicID := ctx.EpicID
+	if epicID == "" {
+		// Fallback: query for epic by spec ID
+		if eid, err := phase.FindEpicBySpecID(specID); err == nil {
+			epicID = eid
 		}
 	}
-
-	// Transition lifecycle to done.
-	if lcErr == nil && lc != nil {
-		lc.Phase = "done"
-		if err := state.WriteLifecycle(specDir, lc); err != nil {
-			result.Warnings = append(result.Warnings, fmt.Sprintf("could not update lifecycle.yaml: %v", err))
+	if epicID != "" {
+		if _, err := implRunBDCombinedFn("close", epicID); err != nil {
+			if !isAlreadyClosedErr(err) {
+				result.Warnings = append(result.Warnings, fmt.Sprintf("could not close lifecycle epic %s: %v", epicID, err))
+			}
 		}
 	}
 
@@ -155,30 +151,9 @@ func ApproveImpl(root, specID string, opts ...ImplOpts) (*ImplResult, error) {
 		result.Warnings = append(result.Warnings, fmt.Sprintf("could not stop recording: %v", err))
 	}
 
-	// Transition to idle in both local and main roots so state is consistent
-	// regardless of whether this command runs from a worktree or repo root.
-	if err := state.WriteFocus(localRoot, &state.Focus{Mode: state.ModeIdle}); err != nil {
-		return nil, fmt.Errorf("writing local focus: %w", err)
-	}
-	if filepath.Clean(localRoot) != filepath.Clean(root) {
-		if err := state.WriteFocus(root, &state.Focus{Mode: state.ModeIdle}); err != nil {
-			return nil, fmt.Errorf("writing root focus: %w", err)
-		}
-	}
+	// No focus file written per ADR-0023 — beads is the single state authority.
 
 	return result, nil
-}
-
-func readApproveImplFocus(root, localRoot string) (*state.Focus, error) {
-	mc, err := state.ReadFocus(localRoot)
-	if err != nil {
-		return nil, err
-	}
-	// When invoked from a worktree, focus may still exist only at main root.
-	if mc == nil && filepath.Clean(localRoot) != filepath.Clean(root) {
-		return state.ReadFocus(root)
-	}
-	return mc, nil
 }
 
 // cleanupBeadBranchesAndWorktrees removes lingering bead worktrees/branches for

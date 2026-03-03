@@ -310,17 +310,20 @@ func canonicalPath(path string) string {
 	return filepath.Clean(resolved)
 }
 
-// WriteFocus writes a focus file to the sandbox .mindspec/focus.
+// WriteFocus is deprecated. Focus files are no longer used (ADR-0023).
+// Kept as a no-op for backward compatibility with scenario setup code.
 func (s *Sandbox) WriteFocus(content string) {
 	s.t.Helper()
-	s.WriteFile(".mindspec/focus", content)
+	// No-op: focus files are no longer written (ADR-0023).
+	// State is derived from beads.
 }
 
-// WriteLifecycle writes a lifecycle.yaml to the given spec directory.
+// WriteLifecycle is deprecated. Lifecycle files are no longer used (ADR-0023).
+// Kept as a no-op for backward compatibility with scenario setup code.
 func (s *Sandbox) WriteLifecycle(specID, content string) {
 	s.t.Helper()
-	relPath := fmt.Sprintf(".mindspec/docs/specs/%s/lifecycle.yaml", specID)
-	s.WriteFile(relPath, content)
+	// No-op: lifecycle.yaml is no longer written (ADR-0023).
+	// State is derived from beads.
 }
 
 // initBeads runs bd init in sandbox mode within the given root directory.

@@ -267,46 +267,6 @@ func TestLLM_BlockedBeadTransition(t *testing.T) {
 
 // --- Assertion helper unit tests ---
 
-func TestAssertFocusFields(t *testing.T) {
-	sandbox := newMinimalSandbox(t)
-
-	// Write a focus file with known fields.
-	focus := `{"mode":"plan","activeSpec":"042-auth","specBranch":"spec/042-auth","timestamp":"2026-01-01T00:00:00Z"}`
-	sandbox.WriteFile(".mindspec/focus", focus)
-
-	t.Run("matching fields pass", func(t *testing.T) {
-		ft := &fakeTB{}
-		assertFocusFields(ft, sandbox, map[string]string{
-			"mode":       "plan",
-			"activeSpec": "042-auth",
-			"specBranch": "spec/042-auth",
-		})
-		if ft.failed {
-			t.Errorf("expected no failure, got: %v", ft.errors)
-		}
-	})
-
-	t.Run("mismatched field fails", func(t *testing.T) {
-		ft := &fakeTB{}
-		assertFocusFields(ft, sandbox, map[string]string{
-			"mode": "implement",
-		})
-		if !ft.failed {
-			t.Error("expected failure for mismatched mode")
-		}
-	})
-
-	t.Run("missing field reports empty", func(t *testing.T) {
-		ft := &fakeTB{}
-		assertFocusFields(ft, sandbox, map[string]string{
-			"activeBead": "bead-123",
-		})
-		if !ft.failed {
-			t.Error("expected failure for missing activeBead")
-		}
-	})
-}
-
 func TestAssertMergeTopology(t *testing.T) {
 	sandbox := newMinimalSandbox(t)
 

@@ -1,7 +1,6 @@
 # MindSpec local runtime files — not version-controlled.
-# Phase is stored per-spec in lifecycle.yaml (committed). These are transient.
+# Phase is derived from beads (ADR-0023). These are transient.
 .mindspec/session.json
-.mindspec/focus
 .mindspec/current-spec.json
 
 # Beads runtime artifacts are handled by .beads/.gitignore

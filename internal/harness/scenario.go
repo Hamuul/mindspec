@@ -4,13 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/mindspec/mindspec/internal/hooks"
 )
@@ -135,14 +133,6 @@ Create greeting.go with a Greet function.
 			beadWtDir := ".worktrees/worktree-" + beadID
 			mustRunGit(sandbox, "worktree", "add", beadWtDir, beadBranch)
 
-			sandbox.WriteFocus(mustJSON(map[string]string{
-				"mode":           "implement",
-				"activeSpec":     specID,
-				"activeBead":     beadID,
-				"specBranch":     specBranch,
-				"activeWorktree": beadWtDir,
-				"timestamp":      time.Now().UTC().Format(time.RFC3339),
-			}))
 			sandbox.Commit("setup: implement mode with active worktree")
 			return nil
 		},
@@ -235,14 +225,6 @@ Create formatter_test.go with tests.
 			beadWtDir := ".worktrees/worktree-" + bead1
 			mustRunGit(sandbox, "worktree", "add", beadWtDir, beadBranch)
 
-			sandbox.WriteFocus(mustJSON(map[string]string{
-				"mode":           "implement",
-				"activeSpec":     specID,
-				"activeBead":     bead1,
-				"specBranch":     specBranch,
-				"activeWorktree": beadWtDir,
-				"timestamp":      time.Now().UTC().Format(time.RFC3339),
-			}))
 			sandbox.Commit("setup: implement mode with active worktree")
 			return nil
 		},
@@ -307,14 +289,6 @@ func main() {
 			beadWtDir := ".worktrees/worktree-" + beadID
 			mustRunGit(sandbox, "worktree", "add", beadWtDir, beadBranch)
 
-			sandbox.WriteFocus(mustJSON(map[string]string{
-				"mode":           "implement",
-				"activeSpec":     specID,
-				"activeBead":     beadID,
-				"specBranch":     specBranch,
-				"activeWorktree": beadWtDir,
-				"timestamp":      time.Now().UTC().Format(time.RFC3339),
-			}))
 			sandbox.Commit("setup: implement mode with active worktree")
 			return nil
 		},
@@ -397,14 +371,6 @@ func Process() {
 			mustRunGit(sandbox, "-C", beadWtDir, "add", "-A")
 			mustRunGit(sandbox, "-C", beadWtDir, "commit", "-m", "wip: partial process")
 
-			sandbox.WriteFocus(mustJSON(map[string]string{
-				"mode":           "implement",
-				"activeSpec":     specID,
-				"activeBead":     beadID,
-				"specBranch":     specBranch,
-				"activeWorktree": beadWtDir,
-				"timestamp":      time.Now().UTC().Format(time.RFC3339),
-			}))
 			sandbox.Commit("setup: implement mode with partial work")
 			return nil
 		},
@@ -462,13 +428,6 @@ func ScenarioSpecInit() Scenario {
 			// Git state: main branch still exists (CWD is main repo root)
 			assertBranchIs(t, sandbox, "main")
 
-			// Focus transitioned to spec mode with expected fields
-			assertFocusMode(t, sandbox, "spec")
-			assertFocusFields(t, sandbox, map[string]string{
-				"mode":       "spec",
-				"activeSpec": "001-calculator",
-				"specBranch": "spec/001-calculator",
-			})
 		},
 	}
 }
@@ -547,13 +506,6 @@ Pending.
 			mustRunGit(sandbox, "-C", wtDir, "commit", "-m", "setup: draft spec")
 
 			// Set focus to spec mode (in main repo)
-			sandbox.WriteFocus(mustJSON(map[string]string{
-				"mode":           "spec",
-				"activeSpec":     specID,
-				"specBranch":     specBranch,
-				"activeWorktree": wtDir,
-				"timestamp":      time.Now().UTC().Format(time.RFC3339),
-			}))
 			sandbox.Commit("setup: spec mode focus")
 
 			// Verify preconditions
@@ -579,13 +531,6 @@ Pending.
 			// Git state: spec worktree still exists (persists through plan mode)
 			assertHasWorktrees(t, sandbox)
 
-			// Focus transitioned to plan mode with correct spec fields
-			assertFocusMode(t, sandbox, "plan")
-			assertFocusFields(t, sandbox, map[string]string{
-				"mode":       "plan",
-				"activeSpec": "001-calc",
-				"specBranch": "spec/001-calc",
-			})
 		},
 	}
 }
@@ -682,13 +627,6 @@ Unit tests via `+"`go test`"+` covering the Plan() function and edge cases.
 				fmt.Sprintf("phase: plan\nepic_id: %s\n", epicID))
 
 			// Set focus to plan mode
-			sandbox.WriteFocus(mustJSON(map[string]string{
-				"mode":           "plan",
-				"activeSpec":     specID,
-				"specBranch":     specBranch,
-				"activeWorktree": wtDir,
-				"timestamp":      time.Now().UTC().Format(time.RFC3339),
-			}))
 
 			// Commit in worktree
 			mustRunGit(sandbox, "-C", wtDir, "add", "-A")
@@ -725,14 +663,6 @@ Unit tests via `+"`go test`"+` covering the Plan() function and edge cases.
 
 			// Git state: bead worktree created by mindspec next
 			assertHasWorktrees(t, sandbox)
-
-			// Focus transitioned to implement mode with full fields
-			assertFocusMode(t, sandbox, "implement")
-			assertFocusFields(t, sandbox, map[string]string{
-				"mode":       "implement",
-				"activeSpec": "001-planner",
-				"specBranch": "spec/001-planner",
-			})
 
 			// Agent CWD moved to bead worktree (instruct emits worktree redirect)
 			assertEventCWDContains(t, events, ".worktrees/")
@@ -803,13 +733,6 @@ func Done() string { return "done" }
 			mustRunGit(sandbox, "-C", wtDir, "commit", "-m", "impl: implement feature")
 
 			// Set focus to review mode with activeWorktree (as mindspec complete would)
-			sandbox.WriteFocus(mustJSON(map[string]string{
-				"mode":           "review",
-				"activeSpec":     specID,
-				"specBranch":     specBranch,
-				"activeWorktree": wtDir,
-				"timestamp":      time.Now().UTC().Format(time.RFC3339),
-			}))
 			sandbox.Commit("setup: review mode focus")
 
 			// Verify preconditions
@@ -847,12 +770,6 @@ func Done() string { return "done" }
 				t.Error("expected done.go to be merged to main")
 			}
 
-			// Focus transitioned to idle with cleared spec fields
-			assertFocusMode(t, sandbox, "idle")
-			assertFocusFields(t, sandbox, map[string]string{
-				"mode":       "idle",
-				"activeSpec": "",
-			})
 		},
 	}
 }
@@ -903,14 +820,6 @@ status: Approved
 			mustRunGit(sandbox, "worktree", "add", beadWtDir, beadBranch)
 
 			// Set focus to implement mode with bead worktree
-			sandbox.WriteFocus(mustJSON(map[string]string{
-				"mode":           "implement",
-				"activeSpec":     specID,
-				"activeBead":     beadID,
-				"specBranch":     specBranch,
-				"activeWorktree": beadWtDir,
-				"timestamp":      time.Now().UTC().Format(time.RFC3339),
-			}))
 			sandbox.Commit("setup: implement mode with active bead")
 			mainCount := mustRun(sandbox.t, sandbox.Root, "git", "rev-list", "--count", "main")
 			sandbox.WriteFile(".harness/main_commit_count", strings.TrimSpace(mainCount))
@@ -956,7 +865,6 @@ status: Approved
 			}
 
 			// Read-only: no state changes — still implement mode
-			assertFocusMode(t, sandbox, "implement")
 
 			// Read-only: worktrees still exist (status is read-only)
 			assertHasWorktrees(t, sandbox)
@@ -1049,13 +957,6 @@ TBD
 			// Focus: implement mode with activeBead but NO activeSpec.
 			// This forces disambiguation across multiple active specs so the
 			// agent must use --spec on complete.
-			sandbox.WriteFocus(mustJSON(map[string]string{
-				"mode":           "implement",
-				"activeBead":     beadAlpha,
-				"specBranch":     specBranch,
-				"activeWorktree": beadWtDir,
-				"timestamp":      time.Now().UTC().Format(time.RFC3339),
-			}))
 			sandbox.Commit("setup: two active specs with active worktree")
 			return nil
 		},
@@ -1141,14 +1042,6 @@ Create widget.go with a Widget function.
 			mustRunGit(sandbox, "branch", beadBranch, specBranch)
 
 			// Focus references a worktree that does NOT exist on disk
-			sandbox.WriteFocus(mustJSON(map[string]string{
-				"mode":           "implement",
-				"activeSpec":     specID,
-				"activeBead":     beadID,
-				"specBranch":     specBranch,
-				"activeWorktree": ".worktrees/worktree-" + beadID,
-				"timestamp":      time.Now().UTC().Format(time.RFC3339),
-			}))
 			sandbox.Commit("setup: stale worktree reference")
 
 			// Verify the worktree does NOT exist (that's the point of this test)
@@ -1266,14 +1159,6 @@ func Greet(name string) string { return "Hello, " + name + "!" }
 
 			// Set focus: implement mode, activeWorktree points to BEAD worktree,
 			// but the bug is that the agent's CWD ends up at the SPEC worktree.
-			sandbox.WriteFocus(mustJSON(map[string]string{
-				"mode":           "implement",
-				"activeSpec":     specID,
-				"activeBead":     beadID,
-				"specBranch":     specBranch,
-				"activeWorktree": beadWtDir,
-				"timestamp":      time.Now().UTC().Format(time.RFC3339),
-			}))
 			sandbox.Commit("setup: implement mode focus")
 
 			return nil
@@ -1370,13 +1255,6 @@ None.
 			mustRunGit(sandbox, "-C", specWtDir, "commit", "-m", "setup: spec files")
 
 			// Set focus: spec mode, CWD is main repo
-			sandbox.WriteFocus(mustJSON(map[string]string{
-				"mode":           "spec",
-				"activeSpec":     specID,
-				"specBranch":     specBranch,
-				"activeWorktree": specWtDir,
-				"timestamp":      time.Now().UTC().Format(time.RFC3339),
-			}))
 			sandbox.Commit("setup: spec mode focus")
 
 			return nil
@@ -1484,13 +1362,6 @@ None
 			mustRunGit(sandbox, "-C", specWtDir, "commit", "-m", "setup: spec+plan files")
 
 			// Set focus: plan mode
-			sandbox.WriteFocus(mustJSON(map[string]string{
-				"mode":           "plan",
-				"activeSpec":     specID,
-				"specBranch":     specBranch,
-				"activeWorktree": specWtDir,
-				"timestamp":      time.Now().UTC().Format(time.RFC3339),
-			}))
 			sandbox.Commit("setup: plan mode focus")
 
 			return nil
@@ -1688,14 +1559,6 @@ Create extension.go that uses Core().
 			beadWtDir := ".worktrees/worktree-" + bead1
 			mustRunGit(sandbox, "worktree", "add", beadWtDir, beadBranch)
 
-			sandbox.WriteFocus(mustJSON(map[string]string{
-				"mode":           "implement",
-				"activeSpec":     specID,
-				"activeBead":     bead1,
-				"specBranch":     specBranch,
-				"activeWorktree": beadWtDir,
-				"timestamp":      time.Now().UTC().Format(time.RFC3339),
-			}))
 			sandbox.Commit("setup: implement mode with blocked bead-2")
 			return nil
 		},
@@ -1708,12 +1571,6 @@ Then finish the currently claimed bead using mindspec complete.`,
 			assertCommandRan(t, events, "mindspec", "complete")
 
 			// Focus should be plan (not implement) because bead-2 is blocked
-			assertFocusMode(t, sandbox, "plan")
-			assertFocusFields(t, sandbox, map[string]string{
-				"mode":       "plan",
-				"activeSpec": "001-blocker",
-				"specBranch": "spec/001-blocker",
-			})
 
 			// Bead-1 closed, bead-2 still open
 			assertBeadsState(t, sandbox, epicID, map[string]string{
@@ -1745,14 +1602,6 @@ func fileExistsInWorktrees(root, fileName string) bool {
 		return nil
 	})
 	return found
-}
-
-func mustJSON(v interface{}) string {
-	data, err := json.Marshal(v)
-	if err != nil {
-		panic(fmt.Sprintf("mustJSON: %v", err))
-	}
-	return string(data)
 }
 
 func assertCommandRan(t *testing.T, events []ActionEvent, command string, argSubstr ...string) { //nolint:unparam // command kept for call-site clarity
@@ -2019,68 +1868,6 @@ func assertNoUserFilesModified(t *testing.T, sandbox *Sandbox) {
 	}
 }
 
-func assertFocusMode(t *testing.T, sandbox *Sandbox, expectedMode string) {
-	t.Helper()
-	focusPaths := []string{
-		filepath.Join(sandbox.Root, ".mindspec", "focus"),
-	}
-
-	// If root focus points at an active worktree, include its focus file.
-	if rootData, err := os.ReadFile(focusPaths[0]); err == nil {
-		var rootFocus map[string]interface{}
-		if json.Unmarshal(rootData, &rootFocus) == nil {
-			if wt, _ := rootFocus["activeWorktree"].(string); wt != "" {
-				wtPath := wt
-				if !filepath.IsAbs(wtPath) {
-					wtPath = filepath.Join(sandbox.Root, wtPath)
-				}
-				focusPaths = append(focusPaths, filepath.Join(wtPath, ".mindspec", "focus"))
-			}
-		}
-	}
-
-	// Also include all worktree focus files (including nested bead worktrees)
-	// as fallback. This covers per-worktree focus flows in plan/implement mode.
-	worktreeRoot := filepath.Join(sandbox.Root, ".worktrees")
-	_ = filepath.WalkDir(worktreeRoot, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d == nil || d.IsDir() {
-			return nil
-		}
-		if filepath.Base(path) == "focus" && strings.Contains(path, string(filepath.Separator)+".mindspec"+string(filepath.Separator)+"focus") {
-			focusPaths = append(focusPaths, path)
-		}
-		return nil
-	})
-
-	seenModes := map[string]string{} // path -> mode
-	seenPath := map[string]bool{}
-	for _, p := range focusPaths {
-		if seenPath[p] {
-			continue
-		}
-		seenPath[p] = true
-		data, err := os.ReadFile(p)
-		if err != nil {
-			continue
-		}
-		var focus map[string]interface{}
-		if err := json.Unmarshal(data, &focus); err != nil {
-			continue
-		}
-		mode, _ := focus["mode"].(string)
-		seenModes[p] = mode
-		if mode == expectedMode {
-			return
-		}
-	}
-
-	if len(seenModes) == 0 {
-		t.Errorf("expected focus mode %q, but no parseable focus files were found", expectedMode)
-		return
-	}
-	t.Errorf("expected focus mode %q, found modes: %v", expectedMode, seenModes)
-}
-
 // assertHasNonMainBranch checks that at least one branch besides "main" exists.
 func assertHasNonMainBranch(t *testing.T, sandbox *Sandbox) {
 	t.Helper()
@@ -2151,30 +1938,6 @@ func assertMainCommitCountUnchanged(t *testing.T, sandbox *Sandbox) {
 	fmt.Sscanf(expected, "%d", &expectedInt)
 	if userCommits != expectedInt {
 		t.Errorf("main branch user commit count changed: expected %d, got %d (agent committed directly to main)", expectedInt, userCommits)
-	}
-}
-
-// assertFocusFields reads .mindspec/focus and asserts that each key in expected
-// matches the corresponding value. Unlike assertFocusMode (which checks only mode
-// across multiple focus files), this asserts the full field set on a specific focus.
-func assertFocusFields(t testing.TB, sandbox *Sandbox, expected map[string]string) {
-	t.Helper()
-	focusPath := filepath.Join(sandbox.Root, ".mindspec", "focus")
-	data, err := os.ReadFile(focusPath)
-	if err != nil {
-		t.Errorf("reading focus file: %v", err)
-		return
-	}
-	var focus map[string]interface{}
-	if err := json.Unmarshal(data, &focus); err != nil {
-		t.Errorf("parsing focus file: %v", err)
-		return
-	}
-	for key, want := range expected {
-		got, _ := focus[key].(string)
-		if got != want {
-			t.Errorf("focus field %q: got %q, want %q", key, got, want)
-		}
 	}
 }
 

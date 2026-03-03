@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mindspec/mindspec/internal/state"
+	"github.com/mindspec/mindspec/internal/phase"
 )
 
 // ErrAmbiguousTarget is returned when multiple active specs exist and no --spec was provided.
@@ -25,9 +25,7 @@ func (e *ErrAmbiguousTarget) Error() string {
 //
 // Resolution order:
 //  1. If specFlag is provided (from --spec), use it directly.
-//  2. Check focus file — if activeSpec is set, use it (the focus tracks
-//     which spec the agent is currently working on, disambiguating
-//     multi-spec scenarios).
+//  2. Derive from beads context (worktree path + beads query).
 //  3. Query active specs; if exactly one, auto-select it.
 //  4. If multiple active specs exist, return ErrAmbiguousTarget.
 //  5. If nothing found, return an error.
@@ -37,13 +35,13 @@ func ResolveTarget(root, specFlag string) (string, error) {
 		return specFlag, nil
 	}
 
-	// Focus file: the agent's current working context.
-	focus, _ := state.ReadFocus(root)
-	if focus != nil && focus.ActiveSpec != "" {
-		return focus.ActiveSpec, nil
+	// Beads-derived context: resolve from root directory + beads query.
+	ctx, err := phase.ResolveContextFromDir(root, root)
+	if err == nil && ctx != nil && ctx.SpecID != "" {
+		return ctx.SpecID, nil
 	}
 
-	// Query active specs (no focus available)
+	// Query active specs (no context available)
 	active, err := ActiveSpecs(root)
 	if err == nil {
 		switch len(active) {

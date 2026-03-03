@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mindspec/mindspec/internal/phase"
 	"github.com/mindspec/mindspec/internal/state"
 	"github.com/mindspec/mindspec/internal/workspace"
 )
@@ -166,16 +167,23 @@ func ReadState() *HookState {
 
 	hs := &HookState{}
 
-	// Read focus for mode/worktree/spec
-	f, err := state.ReadFocus(root)
-	if err == nil && f != nil {
-		hs.Mode = f.Mode
-		hs.ActiveSpec = f.ActiveSpec
-		// Only trust ActiveWorktree if the path still exists on disk.
-		// A stale worktree path (deleted but focus not cleared) would
-		// cause hooks to block ALL operations — deadlocking the agent.
-		if f.ActiveWorktree != "" && dirExists(f.ActiveWorktree) {
-			hs.ActiveWorktree = f.ActiveWorktree
+	// ADR-0023: derive mode/spec/worktree from beads, not focus file.
+	ctx, ctxErr := phase.ResolveContext(root)
+	if ctxErr == nil && ctx != nil {
+		hs.Mode = ctx.Phase
+		hs.ActiveSpec = ctx.SpecID
+		// Derive worktree path from context
+		if ctx.BeadID != "" && ctx.SpecID != "" {
+			specWt := state.SpecWorktreePath(root, ctx.SpecID)
+			wt := state.BeadWorktreePath(specWt, ctx.BeadID)
+			if dirExists(wt) {
+				hs.ActiveWorktree = wt
+			}
+		} else if ctx.SpecID != "" {
+			wt := state.SpecWorktreePath(root, ctx.SpecID)
+			if dirExists(wt) {
+				hs.ActiveWorktree = wt
+			}
 		}
 	}
 

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/mindspec/mindspec/internal/config"
+	"github.com/mindspec/mindspec/internal/phase"
 	"github.com/mindspec/mindspec/internal/state"
 )
 
@@ -24,17 +25,21 @@ var (
 )
 
 func defaultReadGuardState(root string) (*guardState, error) {
-	mc, err := state.ReadFocus(root)
-	if err != nil {
-		return nil, err
-	}
-	if mc == nil {
+	ctx, err := phase.ResolveContext(root)
+	if err != nil || ctx == nil {
 		return &guardState{}, nil
 	}
-	return &guardState{
-		ActiveWorktree: mc.ActiveWorktree,
-		ActiveSpec:     mc.ActiveSpec,
-	}, nil
+	gs := &guardState{
+		ActiveSpec: ctx.SpecID,
+	}
+	// Derive worktree path from context
+	if ctx.BeadID != "" && ctx.SpecID != "" {
+		specWt := state.SpecWorktreePath(root, ctx.SpecID)
+		gs.ActiveWorktree = state.BeadWorktreePath(specWt, ctx.BeadID)
+	} else if ctx.SpecID != "" {
+		gs.ActiveWorktree = state.SpecWorktreePath(root, ctx.SpecID)
+	}
+	return gs, nil
 }
 
 // CheckCWD verifies the current working directory matches the active worktree.
@@ -92,7 +97,7 @@ func IsMainCWD(root string) bool {
 	return CheckCWD(root) != nil
 }
 
-// ActiveWorktreePath returns the active worktree path from focus, or empty string.
+// ActiveWorktreePath returns the active worktree path from beads context, or empty string.
 func ActiveWorktreePath(root string) string {
 	gs, err := readGuardStateFn(root)
 	if err != nil {

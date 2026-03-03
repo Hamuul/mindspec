@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mindspec/mindspec/internal/state"
+	"github.com/mindspec/mindspec/internal/phase"
 )
 
-func writeLifecycleSpec(t *testing.T, root, specID string) {
+func writeSpecDir(t *testing.T, root, specID string) {
 	t.Helper()
 	specDir := filepath.Join(root, "docs", "specs", specID)
 	if err := os.MkdirAll(specDir, 0755); err != nil {
@@ -22,24 +22,13 @@ func writeLifecycleSpec(t *testing.T, root, specID string) {
 	if err := os.WriteFile(filepath.Join(specDir, "spec.md"), []byte(spec), 0644); err != nil {
 		t.Fatalf("write spec: %v", err)
 	}
-	// Write lifecycle.yaml with epic_id
-	lc := &state.Lifecycle{Phase: state.ModeReview, EpicID: "epic-parent"}
-	if err := state.WriteLifecycle(specDir, lc); err != nil {
-		t.Fatalf("write lifecycle: %v", err)
-	}
 }
 
 func TestApproveImpl_HappyPath(t *testing.T) {
 	tmp := t.TempDir()
-	writeLifecycleSpec(t, tmp, "010-test")
+	writeSpecDir(t, tmp, "010-test")
 
 	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
-
-	// Set state to review mode
-	state.WriteFocus(tmp, &state.Focus{
-		Mode:       state.ModeReview,
-		ActiveSpec: "010-test",
-	})
 
 	saveAndRestore(t)
 
@@ -69,46 +58,42 @@ func TestApproveImpl_HappyPath(t *testing.T) {
 	if result.SpecID != "010-test" {
 		t.Errorf("SpecID: got %q, want %q", result.SpecID, "010-test")
 	}
-	// Should close only the epic
+	// Should close the epic
 	if len(closed) != 1 || closed[0] != "epic-parent" {
 		t.Errorf("expected to close epic-parent, got: %v", closed)
 	}
 
-	// Verify focus is now idle
-	mc, mcErr := state.ReadFocus(tmp)
-	if mcErr != nil {
-		t.Fatalf("reading focus: %v", mcErr)
-	}
-	if mc.Mode != state.ModeIdle {
-		t.Errorf("mode: got %q, want %q", mc.Mode, state.ModeIdle)
-	}
-
-	// Verify lifecycle.yaml is now "done"
-	specDir := filepath.Join(tmp, "docs", "specs", "010-test")
-	lc, lcErr := state.ReadLifecycle(specDir)
-	if lcErr != nil {
-		t.Fatalf("reading lifecycle: %v", lcErr)
-	}
-	if lc.Phase != "done" {
-		t.Errorf("lifecycle phase: got %q, want %q", lc.Phase, "done")
-	}
+	// Per ADR-0023: no focus file is written (beads is single state authority).
+	// No lifecycle.yaml is updated.
 }
 
 func TestApproveImpl_WrongMode(t *testing.T) {
 	tmp := t.TempDir()
 
-	writeLifecycleSpec(t, tmp, "010-test")
+	writeSpecDir(t, tmp, "010-test")
 	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
 
 	origFindLocalRoot := findLocalRootFn
 	findLocalRootFn = func() (string, error) { return "", fmt.Errorf("test") }
 	t.Cleanup(func() { findLocalRootFn = origFindLocalRoot })
 
-	state.WriteFocus(tmp, &state.Focus{
-		Mode:       state.ModeImplement,
-		ActiveSpec: "010-test",
-		ActiveBead: "bead-1",
+	// Stub phase to return implement mode (not review)
+	restore := phase.SetRunBDForTest(func(args ...string) ([]byte, error) {
+		if len(args) >= 2 && args[0] == "list" && args[1] == "--type=epic" {
+			epics := []phase.EpicInfo{{
+				ID: "epic-parent", Title: "[SPEC 010-test] Test", Status: "open",
+				IssueType: "epic", Metadata: map[string]interface{}{"spec_num": float64(10), "spec_title": "test"},
+			}}
+			return json.Marshal(epics)
+		}
+		if len(args) >= 2 && args[0] == "list" && contains(args, "--parent") {
+			// One child in_progress → implement mode
+			children := []phase.ChildInfo{{ID: "bead-1", Status: "in_progress", IssueType: "task"}}
+			return json.Marshal(children)
+		}
+		return []byte("[]"), nil
 	})
+	t.Cleanup(restore)
 
 	_, err := ApproveImpl(tmp, "010-test")
 	if err == nil {
@@ -122,17 +107,15 @@ func TestApproveImpl_WrongMode(t *testing.T) {
 func TestApproveImpl_WrongSpec(t *testing.T) {
 	tmp := t.TempDir()
 
-	writeLifecycleSpec(t, tmp, "010-test")
+	writeSpecDir(t, tmp, "010-test")
 	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
-
-	state.WriteFocus(tmp, &state.Focus{
-		Mode:       state.ModeReview,
-		ActiveSpec: "010-test",
-	})
 
 	origFindLocalRoot := findLocalRootFn
 	findLocalRootFn = func() (string, error) { return "", fmt.Errorf("test") }
 	t.Cleanup(func() { findLocalRootFn = origFindLocalRoot })
+
+	// Phase stub returns review mode for spec 010-test (not 011-other)
+	stubPhaseForReview(t)
 
 	_, err := ApproveImpl(tmp, "011-other")
 	if err == nil {
@@ -145,13 +128,8 @@ func TestApproveImpl_WrongSpec(t *testing.T) {
 
 func TestApproveImpl_EpicCloseFailureWarns(t *testing.T) {
 	tmp := t.TempDir()
-	writeLifecycleSpec(t, tmp, "010-test")
+	writeSpecDir(t, tmp, "010-test")
 	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
-
-	state.WriteFocus(tmp, &state.Focus{
-		Mode:       state.ModeReview,
-		ActiveSpec: "010-test",
-	})
 
 	saveAndRestore(t)
 
@@ -183,14 +161,8 @@ func TestApproveImpl_EpicCloseFailureWarns(t *testing.T) {
 
 func TestApproveImpl_PushAndCleanup(t *testing.T) {
 	tmp := t.TempDir()
-	writeLifecycleSpec(t, tmp, "010-test")
+	writeSpecDir(t, tmp, "010-test")
 	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
-
-	state.WriteFocus(tmp, &state.Focus{
-		Mode:       state.ModeReview,
-		ActiveSpec: "010-test",
-		SpecBranch: "spec/010-test",
-	})
 
 	saveAndRestore(t)
 
@@ -240,14 +212,8 @@ func TestApproveImpl_PushAndCleanup(t *testing.T) {
 
 func TestApproveImpl_NoRemoteSkipsPush(t *testing.T) {
 	tmp := t.TempDir()
-	writeLifecycleSpec(t, tmp, "010-test")
+	writeSpecDir(t, tmp, "010-test")
 	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
-
-	state.WriteFocus(tmp, &state.Focus{
-		Mode:       state.ModeReview,
-		ActiveSpec: "010-test",
-		SpecBranch: "spec/010-test",
-	})
 
 	saveAndRestore(t)
 
@@ -270,14 +236,8 @@ func TestApproveImpl_NoRemoteSkipsPush(t *testing.T) {
 
 func TestApproveImpl_CleanupRunsFromRoot(t *testing.T) {
 	tmp := t.TempDir()
-	writeLifecycleSpec(t, tmp, "010-test")
+	writeSpecDir(t, tmp, "010-test")
 	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
-
-	state.WriteFocus(tmp, &state.Focus{
-		Mode:       state.ModeReview,
-		ActiveSpec: "010-test",
-		SpecBranch: "spec/010-test",
-	})
 
 	specWorktreePath := filepath.Join(tmp, ".worktrees", "worktree-spec-010-test")
 	if err := os.MkdirAll(specWorktreePath, 0755); err != nil {
@@ -337,109 +297,6 @@ func TestApproveImpl_CleanupRunsFromRoot(t *testing.T) {
 	}
 }
 
-func TestApproveImpl_WritesIdleFocusToRootAndLocalWorktree(t *testing.T) {
-	tmp := t.TempDir()
-	writeLifecycleSpec(t, tmp, "010-test")
-	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
-
-	specWorktreePath := filepath.Join(tmp, ".worktrees", "worktree-spec-010-test")
-	if err := os.MkdirAll(filepath.Join(specWorktreePath, ".mindspec"), 0755); err != nil {
-		t.Fatalf("mkdir spec worktree .mindspec: %v", err)
-	}
-
-	if err := state.WriteFocus(tmp, &state.Focus{
-		Mode:       state.ModeReview,
-		ActiveSpec: "010-test",
-		SpecBranch: "spec/010-test",
-	}); err != nil {
-		t.Fatalf("write root focus: %v", err)
-	}
-	if err := state.WriteFocus(specWorktreePath, &state.Focus{
-		Mode:       state.ModeReview,
-		ActiveSpec: "010-test",
-		SpecBranch: "spec/010-test",
-	}); err != nil {
-		t.Fatalf("write local focus: %v", err)
-	}
-
-	saveAndRestore(t)
-	findLocalRootFn = func() (string, error) { return specWorktreePath, nil }
-	implRunBDFn = func(args ...string) ([]byte, error) {
-		payload := []map[string]string{{"status": "open"}}
-		return json.Marshal(payload)
-	}
-	implRunBDCombinedFn = func(args ...string) ([]byte, error) { return []byte("ok"), nil }
-	commitCountFn = func(workdir, base, head string) (int, error) { return 1, nil }
-	branchExistsFn = func(name string) bool { return false }
-	diffStatFn = func(workdir, base, head string) (string, error) { return "", nil }
-	worktreeRemoveFn = func(name string) error { return nil }
-	deleteBranchFn = func(name string) error { return nil }
-
-	if _, err := ApproveImpl(tmp, "010-test"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	rootFocus, err := state.ReadFocus(tmp)
-	if err != nil {
-		t.Fatalf("reading root focus: %v", err)
-	}
-	if rootFocus == nil || rootFocus.Mode != state.ModeIdle {
-		t.Fatalf("root focus mode = %v, want %q", rootFocus, state.ModeIdle)
-	}
-
-	localFocus, err := state.ReadFocus(specWorktreePath)
-	if err != nil {
-		t.Fatalf("reading local focus: %v", err)
-	}
-	if localFocus == nil || localFocus.Mode != state.ModeIdle {
-		t.Fatalf("local focus mode = %v, want %q", localFocus, state.ModeIdle)
-	}
-}
-
-func TestApproveImpl_UsesRootFocusWhenLocalFocusMissing(t *testing.T) {
-	tmp := t.TempDir()
-	writeLifecycleSpec(t, tmp, "010-test")
-	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
-
-	specWorktreePath := filepath.Join(tmp, ".worktrees", "worktree-spec-010-test")
-	if err := os.MkdirAll(specWorktreePath, 0755); err != nil {
-		t.Fatalf("mkdir spec worktree: %v", err)
-	}
-
-	if err := state.WriteFocus(tmp, &state.Focus{
-		Mode:       state.ModeReview,
-		ActiveSpec: "010-test",
-		SpecBranch: "spec/010-test",
-	}); err != nil {
-		t.Fatalf("write root focus: %v", err)
-	}
-
-	saveAndRestore(t)
-	findLocalRootFn = func() (string, error) { return specWorktreePath, nil }
-	implRunBDFn = func(args ...string) ([]byte, error) {
-		payload := []map[string]string{{"status": "open"}}
-		return json.Marshal(payload)
-	}
-	implRunBDCombinedFn = func(args ...string) ([]byte, error) { return []byte("ok"), nil }
-	commitCountFn = func(workdir, base, head string) (int, error) { return 1, nil }
-	branchExistsFn = func(name string) bool { return false }
-	diffStatFn = func(workdir, base, head string) (string, error) { return "", nil }
-	worktreeRemoveFn = func(name string) error { return nil }
-	deleteBranchFn = func(name string) error { return nil }
-
-	if _, err := ApproveImpl(tmp, "010-test"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	rootFocus, err := state.ReadFocus(tmp)
-	if err != nil {
-		t.Fatalf("reading root focus: %v", err)
-	}
-	if rootFocus == nil || rootFocus.Mode != state.ModeIdle {
-		t.Fatalf("root focus mode = %v, want %q", rootFocus, state.ModeIdle)
-	}
-}
-
 // writePlanWithBeads creates a plan.md with bead_ids in frontmatter.
 func writePlanWithBeads(t *testing.T, root, specID string, beadIDs []string) {
 	t.Helper()
@@ -453,6 +310,40 @@ func writePlanWithBeads(t *testing.T, root, specID string, beadIDs []string) {
 	if err := os.WriteFile(filepath.Join(specDir, "plan.md"), []byte(content), 0644); err != nil {
 		t.Fatalf("write plan: %v", err)
 	}
+}
+
+// stubPhaseForReview sets up the phase package to return review mode for "010-test".
+func stubPhaseForReview(t *testing.T) {
+	t.Helper()
+	restore := phase.SetRunBDForTest(func(args ...string) ([]byte, error) {
+		// bd list --type=epic --json → return epic for 010-test
+		if len(args) >= 2 && args[0] == "list" && args[1] == "--type=epic" {
+			epics := []phase.EpicInfo{{
+				ID:        "epic-parent",
+				Title:     "[SPEC 010-test] Test",
+				Status:    "open",
+				IssueType: "epic",
+				Metadata:  map[string]interface{}{"spec_num": float64(10), "spec_title": "test"},
+			}}
+			return json.Marshal(epics)
+		}
+		// bd list --parent epic-parent --json → all children closed (review)
+		if len(args) >= 2 && args[0] == "list" && contains(args, "--parent") {
+			children := []phase.ChildInfo{{ID: "bead-1", Status: "closed", IssueType: "task"}}
+			return json.Marshal(children)
+		}
+		return []byte("[]"), nil
+	})
+	t.Cleanup(restore)
+}
+
+func contains(args []string, s string) bool {
+	for _, a := range args {
+		if a == s || strings.HasPrefix(a, s+"=") || strings.Contains(a, s) {
+			return true
+		}
+	}
+	return false
 }
 
 // saveAndRestore saves the current values of all impl function variables and
@@ -489,6 +380,9 @@ func saveAndRestore(t *testing.T) {
 	// Default: findLocalRoot falls back to the root arg passed to ApproveImpl.
 	findLocalRootFn = func() (string, error) { return "", fmt.Errorf("test: no local root") }
 
+	// Stub phase package for review mode by default
+	stubPhaseForReview(t)
+
 	// Deterministic defaults for tests that don't care about specifics.
 	mergeBranchFn = func(workdir, source, target string) error { return nil }
 	deleteBranchFn = func(name string) error { return nil }
@@ -503,14 +397,8 @@ func saveAndRestore(t *testing.T) {
 
 func TestVerifyImplContent_NoCommits(t *testing.T) {
 	tmp := t.TempDir()
-	writeLifecycleSpec(t, tmp, "010-test")
+	writeSpecDir(t, tmp, "010-test")
 	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
-
-	state.WriteFocus(tmp, &state.Focus{
-		Mode:       state.ModeReview,
-		ActiveSpec: "010-test",
-		SpecBranch: "spec/010-test",
-	})
 
 	saveAndRestore(t)
 
@@ -532,15 +420,9 @@ func TestVerifyImplContent_NoCommits(t *testing.T) {
 
 func TestVerifyImplContent_NoCommitsButClosedBeads_AllowsCleanup(t *testing.T) {
 	tmp := t.TempDir()
-	writeLifecycleSpec(t, tmp, "010-test")
+	writeSpecDir(t, tmp, "010-test")
 	writePlanWithBeads(t, tmp, "010-test", []string{"bead-aaa"})
 	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
-
-	state.WriteFocus(tmp, &state.Focus{
-		Mode:       state.ModeReview,
-		ActiveSpec: "010-test",
-		SpecBranch: "spec/010-test",
-	})
 
 	saveAndRestore(t)
 
@@ -565,15 +447,9 @@ func TestVerifyImplContent_NoCommitsButClosedBeads_AllowsCleanup(t *testing.T) {
 
 func TestVerifyImplContent_OpenBeads(t *testing.T) {
 	tmp := t.TempDir()
-	writeLifecycleSpec(t, tmp, "010-test")
+	writeSpecDir(t, tmp, "010-test")
 	writePlanWithBeads(t, tmp, "010-test", []string{"bead-aaa", "bead-bbb"})
 	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
-
-	state.WriteFocus(tmp, &state.Focus{
-		Mode:       state.ModeReview,
-		ActiveSpec: "010-test",
-		SpecBranch: "spec/010-test",
-	})
 
 	saveAndRestore(t)
 
@@ -603,15 +479,9 @@ func TestVerifyImplContent_OpenBeads(t *testing.T) {
 
 func TestVerifyImplContent_BeadBranchAutoMerged(t *testing.T) {
 	tmp := t.TempDir()
-	writeLifecycleSpec(t, tmp, "010-test")
+	writeSpecDir(t, tmp, "010-test")
 	writePlanWithBeads(t, tmp, "010-test", []string{"bead-aaa"})
 	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
-
-	state.WriteFocus(tmp, &state.Focus{
-		Mode:       state.ModeReview,
-		ActiveSpec: "010-test",
-		SpecBranch: "spec/010-test",
-	})
 
 	saveAndRestore(t)
 
@@ -657,15 +527,9 @@ func TestVerifyImplContent_BeadBranchAutoMerged(t *testing.T) {
 
 func TestVerifyImplContent_BeadBranchMergeFails(t *testing.T) {
 	tmp := t.TempDir()
-	writeLifecycleSpec(t, tmp, "010-test")
+	writeSpecDir(t, tmp, "010-test")
 	writePlanWithBeads(t, tmp, "010-test", []string{"bead-aaa"})
 	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
-
-	state.WriteFocus(tmp, &state.Focus{
-		Mode:       state.ModeReview,
-		ActiveSpec: "010-test",
-		SpecBranch: "spec/010-test",
-	})
 
 	saveAndRestore(t)
 
@@ -692,15 +556,9 @@ func TestVerifyImplContent_BeadBranchMergeFails(t *testing.T) {
 
 func TestVerifyImplContent_AllGood(t *testing.T) {
 	tmp := t.TempDir()
-	writeLifecycleSpec(t, tmp, "010-test")
+	writeSpecDir(t, tmp, "010-test")
 	writePlanWithBeads(t, tmp, "010-test", []string{"bead-aaa", "bead-bbb"})
 	os.MkdirAll(filepath.Join(tmp, ".mindspec"), 0755)
-
-	state.WriteFocus(tmp, &state.Focus{
-		Mode:       state.ModeReview,
-		ActiveSpec: "010-test",
-		SpecBranch: "spec/010-test",
-	})
 
 	saveAndRestore(t)
 

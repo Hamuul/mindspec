@@ -7,6 +7,7 @@ import (
 
 	"github.com/mindspec/mindspec/internal/bead"
 	"github.com/mindspec/mindspec/internal/gitops"
+	"github.com/mindspec/mindspec/internal/phase"
 	"github.com/mindspec/mindspec/internal/state"
 	"github.com/mindspec/mindspec/internal/workspace"
 )
@@ -40,17 +41,17 @@ func Run(root, specID string, force bool) (*Result, error) {
 	specWtName := "worktree-spec-" + specID
 
 	if force {
-		return forceCleanup(root, result, specWtName, specBranch)
+		return forceCleanup(result, specWtName, specBranch)
 	}
 
-	// If focus still has activeSpec matching, check mode (per-worktree focus).
+	// Derive context from beads to check if spec is still active (ADR-0023).
 	localRoot := root
 	if lr, err := findLocalRootFn(); err == nil {
 		localRoot = lr
 	}
-	mc, _ := state.ReadFocus(localRoot)
-	if mc != nil && mc.ActiveSpec == specID && mc.Mode != state.ModeIdle {
-		return nil, fmt.Errorf("spec %s is still active (mode: %s). Run `mindspec impl approve %s` first", specID, mc.Mode, specID)
+	ctx, _ := phase.ResolveContextFromDir(root, localRoot)
+	if ctx != nil && ctx.SpecID == specID && ctx.Phase != state.ModeIdle && ctx.Phase != "" {
+		return nil, fmt.Errorf("spec %s is still active (phase: %s). Run `mindspec impl approve %s` first", specID, ctx.Phase, specID)
 	}
 
 	// Check if branch still exists locally.
@@ -67,9 +68,6 @@ func Run(root, specID string, force bool) (*Result, error) {
 		result.WorktreeRemoved = true
 	}
 
-	// Clear focus if it still points to this spec (prevent stale worktree deadlock).
-	clearFocusIfStale(localRoot, specID)
-
 	// Delete branch (best-effort).
 	if gitops.BranchExists(specBranch) {
 		if err := deleteBranchFn(specBranch); err != nil {
@@ -83,7 +81,7 @@ func Run(root, specID string, force bool) (*Result, error) {
 }
 
 // forceCleanup removes worktree and branch without checking state.
-func forceCleanup(root string, result *Result, wtName, branch string) (*Result, error) {
+func forceCleanup(result *Result, wtName, branch string) (*Result, error) {
 	if err := worktreeRemoveFn(wtName); err != nil {
 		if !strings.Contains(err.Error(), "not found") && !strings.Contains(err.Error(), "does not exist") {
 			result.Warnings = append(result.Warnings, fmt.Sprintf("could not remove worktree: %v", err))
@@ -91,13 +89,6 @@ func forceCleanup(root string, result *Result, wtName, branch string) (*Result, 
 	} else {
 		result.WorktreeRemoved = true
 	}
-
-	// Clear focus if it still points to this spec (per-worktree).
-	forceLocalRoot := root
-	if lr, err := findLocalRootFn(); err == nil {
-		forceLocalRoot = lr
-	}
-	clearFocusIfStale(forceLocalRoot, result.SpecID)
 
 	if gitops.BranchExists(branch) {
 		if err := deleteBranchFn(branch); err != nil {
@@ -108,15 +99,4 @@ func forceCleanup(root string, result *Result, wtName, branch string) (*Result, 
 	}
 
 	return result, nil
-}
-
-// clearFocusIfStale resets focus to idle if it still references the given spec.
-func clearFocusIfStale(root, specID string) {
-	f, err := state.ReadFocus(root)
-	if err != nil || f == nil {
-		return
-	}
-	if f.ActiveSpec == specID {
-		_ = state.WriteFocus(root, &state.Focus{Mode: state.ModeIdle})
-	}
 }
