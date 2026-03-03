@@ -234,36 +234,11 @@ func TestRenderJSON_Structure(t *testing.T) {
 	}
 }
 
-func TestRender_ExploreMode(t *testing.T) {
-	mockPrimeUnavailable(t)
-	root := setupTestProject(t)
-	s := &state.Focus{Mode: state.ModeExplore}
-	ctx := BuildContext(root, s)
-
-	output, err := Render(ctx)
-	if err != nil {
-		t.Fatalf("Render failed: %v", err)
-	}
-
-	if !strings.Contains(output, "Explore Mode") {
-		t.Error("expected explore mode heading")
-	}
-	if !strings.Contains(output, "prior art") {
-		t.Error("expected prior art check guidance")
-	}
-	if !strings.Contains(output, "explore dismiss") {
-		t.Error("expected dismiss exit path")
-	}
-	if !strings.Contains(output, "explore promote") {
-		t.Error("expected promote exit path")
-	}
-}
-
 func TestRenderJSON_AllModes(t *testing.T) {
 	mockPrimeUnavailable(t)
 	root := setupTestProject(t)
 
-	modes := []string{state.ModeIdle, state.ModeExplore, state.ModeSpec, state.ModePlan, state.ModeImplement}
+	modes := []string{state.ModeIdle, state.ModeSpec, state.ModePlan, state.ModeImplement}
 	for _, mode := range modes {
 		t.Run(mode, func(t *testing.T) {
 			s := &state.Focus{Mode: mode, ActiveSpec: "004-instruct", ActiveBead: "beads-001"}
@@ -292,7 +267,6 @@ func TestGatesForMode(t *testing.T) {
 		wantCount int
 	}{
 		{state.ModeIdle, 0},
-		{state.ModeExplore, 2},
 		{state.ModeSpec, 1},
 		{state.ModePlan, 2},
 		{state.ModeImplement, 2},

@@ -16,7 +16,7 @@ make test     # Run all tests
 
 ## Lifecycle Commands
 
-All git operations are handled internally by mindspec — do NOT run raw git commands.
+All git operations are handled internally by mindspec — no raw git needed for the normal workflow.
 
 ```bash
 mindspec spec create <slug>      # Create spec (idle → spec)
@@ -27,19 +27,10 @@ mindspec complete "message"      # Auto-commit, close bead, merge, cleanup
 mindspec impl approve <id>       # Approve impl (review → idle)
 ```
 
-### Evaluating Ideas
-
-```bash
-mindspec explore "short description"   # Lightweight exploration (no state change)
-mindspec explore promote <spec-id>     # Promote to spec (same as spec create)
-mindspec explore dismiss [--adr]       # Exit (optionally record decision as ADR)
-```
-
 ## Skills
 
 | Skill | Purpose |
 |:------|:--------|
-| `/ms-explore` | Enter, promote, or dismiss an exploration session |
 | `/ms-spec-init` | Initialize a new specification (enters Spec Mode) |
 | `/ms-spec-approve` | Approve spec → Plan Mode |
 | `/ms-plan-approve` | Approve plan → Implementation Mode |

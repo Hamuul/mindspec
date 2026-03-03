@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/mindspec/mindspec/internal/approve"
-	"github.com/mindspec/mindspec/internal/explore"
 	"github.com/mindspec/mindspec/internal/state"
 	"github.com/mindspec/mindspec/internal/validate"
 	"github.com/mindspec/mindspec/internal/workspace"
@@ -312,18 +311,11 @@ func TestScenario_HappyPath(t *testing.T) {
 	root := testRepo(t)
 	specID := "001-test-feature"
 
-	// Phase 1: Explore (no state change — explore is now a no-op)
-	if err := explore.Enter(root, "testing lifecycle"); err != nil {
-		t.Fatalf("explore.Enter: %v", err)
-	}
-	// Enter is a no-op, state stays idle
-	assertState(t, root, "", state.ModeIdle, "")
-
-	// Phase 2: Spec Init (simulated — specinit.Run needs bd + worktree mocks)
+	// Phase 1: Spec Init (simulated — specinit.Run needs bd + worktree mocks)
 	simulateSpecInit(t, root, specID)
 	assertState(t, root, specID, state.ModeSpec, "spec")
 
-	// Phase 3: Approve Spec (called directly — no bd needed)
+	// Phase 2: Approve Spec (called directly — no bd needed)
 	result, err := approve.ApproveSpec(root, specID, "test-user")
 	if err != nil {
 		t.Fatalf("ApproveSpec: %v", err)
@@ -338,7 +330,7 @@ func TestScenario_HappyPath(t *testing.T) {
 	gitRun(t, root, "add", "-A")
 	gitRun(t, root, "commit", "-m", "add plan")
 
-	// Phase 4: Approve Plan (called directly — no epic_id means bead creation skipped)
+	// Phase 3: Approve Plan (called directly — no epic_id means bead creation skipped)
 	planResult, err := approve.ApprovePlan(root, specID, "test-user")
 	if err != nil {
 		t.Fatalf("ApprovePlan: %v", err)
@@ -350,47 +342,24 @@ func TestScenario_HappyPath(t *testing.T) {
 	// user needs to run `mindspec next` to move to implement)
 	assertState(t, root, specID, state.ModePlan, state.ModeImplement)
 
-	// Phase 5: Next / Claim bead (simulated — needs bd mocking)
+	// Phase 4: Next / Claim bead (simulated — needs bd mocking)
 	simulateNext(t, root, specID, "test-bead-001")
 	assertState(t, root, specID, state.ModeImplement, state.ModeImplement)
 
-	// Phase 6: Complete (simulated — needs bd mocking)
+	// Phase 5: Complete (simulated — needs bd mocking)
 	simulateComplete(t, root, specID)
 	assertState(t, root, specID, state.ModeReview, state.ModeReview)
 
-	// Phase 7: Approve Impl (simulated — needs bd + git mocking)
+	// Phase 6: Approve Impl (simulated — needs bd + git mocking)
 	simulateApproveImpl(t, root, specID)
 	assertState(t, root, specID, state.ModeIdle, "done")
 }
 
-func TestScenario_Abandon(t *testing.T) {
+func TestScenario_IdleStartsClean(t *testing.T) {
 	root := testRepo(t)
 
-	// Enter explore (no state change — explore is a no-op)
-	if err := explore.Enter(root, "abandoned idea"); err != nil {
-		t.Fatalf("explore.Enter: %v", err)
-	}
-	// State stays idle since explore is no longer a mode
+	// Fresh repo should be in idle state
 	assertState(t, root, "", state.ModeIdle, "")
-
-	// Dismiss — also a no-op, state stays idle
-	if err := explore.Dismiss(root); err != nil {
-		t.Fatalf("explore.Dismiss: %v", err)
-	}
-	assertState(t, root, "", state.ModeIdle, "")
-}
-
-func TestScenario_MultipleEnterSucceeds(t *testing.T) {
-	root := testRepo(t)
-
-	if err := explore.Enter(root, "first"); err != nil {
-		t.Fatalf("explore.Enter: %v", err)
-	}
-
-	// Entering explore again should succeed (no state check)
-	if err := explore.Enter(root, "second"); err != nil {
-		t.Fatalf("second explore.Enter should succeed: %v", err)
-	}
 }
 
 func TestScenario_InterruptForBug(t *testing.T) {
@@ -517,14 +486,8 @@ func TestScenario_ResumeAfterCrash(t *testing.T) {
 func TestScenario_InvalidTransition(t *testing.T) {
 	root := testRepo(t)
 
-	// Dismiss is now a no-op — should succeed from any state
-	err := explore.Dismiss(root)
-	if err != nil {
-		t.Fatalf("Dismiss should be a no-op: %v", err)
-	}
-
 	// Attempting approve-spec when no spec exists should fail
-	_, err = approve.ApproveSpec(root, "999-nonexistent", "test-user")
+	_, err := approve.ApproveSpec(root, "999-nonexistent", "test-user")
 	if err == nil {
 		t.Fatal("expected error approving nonexistent spec")
 	}

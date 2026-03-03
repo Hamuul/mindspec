@@ -90,7 +90,6 @@ func init() {
 	rootCmd.AddCommand(contextCmd)
 	rootCmd.AddCommand(domainCmd)
 	rootCmd.AddCommand(doctorCmd)
-	rootCmd.AddCommand(exploreCmd)
 	rootCmd.AddCommand(implCmd)
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(instructCmd)

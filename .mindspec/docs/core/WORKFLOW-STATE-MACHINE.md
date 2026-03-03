@@ -37,13 +37,13 @@ And one execution substrate:
 
 `.mindspec/focus` carries the active session context:
 
-- `mode`: `idle | explore | spec | plan | implement | review`
+- `mode`: `idle | spec | plan | implement | review`
 - `activeSpec`
 - `activeBead`
 - `activeWorktree`
 - `specBranch`
 
-`idle` and `explore` are focus modes (not per-spec lifecycle phases).  
+`idle` is a focus mode (not a per-spec lifecycle phase).
 `done` is a lifecycle phase (not a focus mode).
 
 ### 3) Beads Execution Graph
@@ -61,12 +61,13 @@ During implementation, state advancement depends on Beads child status under the
 | State | Layer | Meaning |
 |:------|:------|:--------|
 | `idle` | focus | No active working context selected |
-| `explore` | focus | Pre-spec idea evaluation |
 | `spec` | lifecycle + focus | Spec authoring and refinement |
 | `plan` | lifecycle + focus | Plan authoring and decomposition |
 | `implement` | lifecycle + focus | Bead execution in worktrees |
 | `review` | lifecycle + focus | Human review/acceptance gate |
 | `done` | lifecycle | Spec lifecycle complete |
+
+Note: `explore` is not a workflow state. `mindspec explore` is a guidance-only command that does not change mode or focus. It provides lightweight idea evaluation without entering the spec lifecycle.
 
 ---
 
@@ -75,17 +76,14 @@ During implementation, state advancement depends on Beads child status under the
 ```mermaid
 stateDiagram-v2
     [*] --> idle
-    idle --> explore: mindspec explore
-    explore --> idle: mindspec explore dismiss
-    explore --> spec: mindspec explore promote
-    idle --> spec: mindspec spec-init
+    idle --> spec: mindspec spec create
 
-    spec --> plan: mindspec approve spec
-    plan --> implement: mindspec approve plan (+ mindspec next to claim bead)
+    spec --> plan: mindspec spec approve
+    plan --> implement: mindspec plan approve (+ mindspec next to claim bead)
     implement --> implement: mindspec complete (more ready beads)
     implement --> plan: mindspec complete (blocked beads remain)
     implement --> review: mindspec complete (all beads closed)
-    review --> done: mindspec approve impl
+    review --> done: mindspec impl approve
     done --> idle: focus cleared after approve impl
 ```
 
@@ -95,33 +93,29 @@ stateDiagram-v2
 
 | ID | From | To | Trigger | Required Preconditions | Main Effects |
 |:---|:-----|:---|:--------|:-----------------------|:-------------|
-| T01 | `idle` | `explore` | `mindspec explore "..."` | Focus must be idle/absent | Focus mode set to `explore` |
-| T02 | `explore` | `idle` | `mindspec explore dismiss [--adr]` | Must currently be in `explore` | Focus mode set to `idle`; optional ADR for dismissal |
-| T03 | `explore` | `spec` | `mindspec explore promote <spec-id>` | Must currently be in `explore`; valid spec ID | Delegates to `spec-init` |
-| T04 | `idle` | `spec` | `mindspec spec-init <spec-id>` | Valid spec ID format; worktree setup succeeds | Creates `spec/<id>` branch + worktree, writes `spec.md`, writes `lifecycle.yaml` (`phase: spec`), focus to `spec` |
-| T05 | `spec` | `plan` | `mindspec approve spec <spec-id>` | `validate spec` passes | Spec approval written, lifecycle phase -> `plan`, focus -> `plan` |
-| T06 | `plan` | `implement` | `mindspec approve plan <spec-id>` then `mindspec next` | `validate plan` passes; implementation beads exist/are created; clean tree for `next` | Lifecycle phase -> `implement`; first bead claimed; bead worktree created; focus -> `implement` |
-| T07 | `implement` | `implement` | `mindspec complete` | Active bead resolved; clean tree; bead close succeeds; more ready beads exist | Current bead closed; worktree removed; next bead selected |
-| T08 | `implement` | `plan` | `mindspec complete` | Active bead resolved; clean tree; remaining children exist but all blocked | Current bead closed; focus returns to planning context to resolve blockers/scope |
-| T09 | `implement` | `review` | `mindspec complete` | Active bead resolved; clean tree; no open implementation beads remain | Current bead closed; focus enters review gate |
-| T10 | `review` | `done` (+ focus `idle`) | `mindspec approve impl <spec-id>` | Focus must be `review`; `activeSpec` must match target spec | Lifecycle phase -> `done`; spec branch integration/cleanup; focus cleared to `idle` |
+| T01 | `idle` | `spec` | `mindspec spec create <spec-id>` | Valid spec ID format; worktree setup succeeds | Creates `spec/<id>` branch + worktree, writes `spec.md`, writes `lifecycle.yaml` (`phase: spec`), focus to `spec` |
+| T02 | `spec` | `plan` | `mindspec spec approve <spec-id>` | `validate spec` passes | Spec approval written, lifecycle phase -> `plan`, focus -> `plan` |
+| T03 | `plan` | `implement` | `mindspec plan approve <spec-id>` then `mindspec next` | `validate plan` passes; implementation beads exist/are created; clean tree for `next` | Lifecycle phase -> `implement`; first bead claimed; bead worktree created; focus -> `implement` |
+| T04 | `implement` | `implement` | `mindspec complete "message"` | Active bead resolved; auto-commit succeeds (or tree already clean); bead close succeeds; more ready beads exist | Current bead closed; worktree removed; next bead selected |
+| T05 | `implement` | `plan` | `mindspec complete "message"` | Active bead resolved; auto-commit succeeds; remaining children exist but all blocked | Current bead closed; focus returns to planning context to resolve blockers/scope |
+| T06 | `implement` | `review` | `mindspec complete "message"` | Active bead resolved; auto-commit succeeds; no open implementation beads remain | Current bead closed; focus enters review gate |
+| T07 | `review` | `done` (+ focus `idle`) | `mindspec impl approve <spec-id>` | Focus must be `review`; `activeSpec` must match target spec | Lifecycle phase -> `done`; spec branch merged to main; worktree + branch cleaned up; focus cleared to `idle` |
 
 ---
 
 ## Full Direct-Transition Matrix (Same-Spec Intent) {#matrix}
 
-This matrix is exhaustive for **direct same-spec transitions**.  
+This matrix is exhaustive for **direct same-spec transitions**.
 If a destination is not listed as allowed, that direct transition is disallowed.
 
 | From | Allowed Direct Next States | Disallowed Direct Next States |
 |:-----|:---------------------------|:------------------------------|
-| `idle` | `idle`, `explore`, `spec` | `plan`, `implement`, `review`, `done` |
-| `explore` | `explore`, `idle`, `spec` | `plan`, `implement`, `review`, `done` |
-| `spec` | `spec`, `plan` | `idle`, `explore`, `implement`, `review`, `done` |
-| `plan` | `plan`, `implement` | `idle`, `explore`, `spec`, `review`, `done` |
-| `implement` | `implement`, `plan`, `review` | `idle`, `explore`, `spec`, `done` |
-| `review` | `review`, `done` | `idle`, `explore`, `spec`, `plan`, `implement` |
-| `done` | `done` | `explore`, `spec`, `plan`, `implement`, `review` |
+| `idle` | `idle`, `spec` | `plan`, `implement`, `review`, `done` |
+| `spec` | `spec`, `plan` | `idle`, `implement`, `review`, `done` |
+| `plan` | `plan`, `implement` | `idle`, `spec`, `review`, `done` |
+| `implement` | `implement`, `plan`, `review` | `idle`, `spec`, `done` |
+| `review` | `review`, `done` | `idle`, `spec`, `plan`, `implement` |
+| `done` | `done` | `spec`, `plan`, `implement`, `review` |
 
 Notes:
 - `done -> idle` is not a lifecycle phase change; it is focus clearing after completion.
@@ -139,15 +133,10 @@ Notes:
 - `implement -> done` (review + impl approval required)
 - `review -> implement` on the same spec as a direct mode jump (requires explicit new scope/beads or review-driven follow-up flow)
 
-### Explore-Mode Misuse (Disallowed)
-
-- Entering explore while not idle
-- Dismissing/promoting when not in explore
-
 ### Completion/Claim Misuse (Disallowed)
 
 - Running `mindspec next` with a dirty tree
-- Running `mindspec complete` with uncommitted bead changes
+- Running `mindspec complete` with no commit message and uncommitted changes (use `mindspec complete "message"` to auto-commit)
 - Completing without a resolvable active bead/spec
 
 ### Multi-Spec Ambiguity (Disallowed Without Targeting)
@@ -162,21 +151,23 @@ Notes:
 - File writes outside the active worktree in enforced contexts
 - Protected-branch commit paths that bypass lifecycle/worktree guards
 
+### Git Policy (Convention)
+
+- The happy path does not require any raw git commands — all git operations (commit, merge, branch, worktree) are handled internally by mindspec commands
+- Raw git commands (`git commit`, `git merge`, `git pull`, etc.) are not blocked, but should only be needed for repair or recovery scenarios
+
 ---
 
 ## Command Guard Map {#guard-map}
 
 | Command | Guard Rule(s) | Typical Rejection Condition |
 |:--------|:--------------|:----------------------------|
-| `mindspec explore` | Must start from idle | Focus already in non-idle mode |
-| `mindspec explore dismiss` | Must be in explore | Current mode is not explore |
-| `mindspec explore promote` | Must be in explore | Current mode is not explore |
-| `mindspec spec-init` | Spec ID format + worktree/branch creation | Invalid ID or worktree setup failure |
-| `mindspec approve spec` | `validate spec` must pass | Missing required sections/quality failures |
-| `mindspec approve plan` | `validate plan` must pass | Invalid/missing plan structure, missing required sections |
+| `mindspec spec create` | Spec ID format + worktree/branch creation | Invalid ID or worktree setup failure |
+| `mindspec spec approve` | `validate spec` must pass | Missing required sections/quality failures |
+| `mindspec plan approve` | `validate plan` must pass | Invalid/missing plan structure, missing required sections |
 | `mindspec next` | Session freshness gate + clean tree + target disambiguation | Resume/compact session without `--force`, dirty tree, ambiguous active specs |
-| `mindspec complete` | Active spec/bead resolution + clean tree | Dirty tree, unresolved bead/spec, close/remove failures |
-| `mindspec approve impl` | Must be in review for target spec | Wrong mode or wrong active spec |
+| `mindspec complete` | Active spec/bead resolution + auto-commit (if message provided) + clean tree | No commit message with dirty tree, unresolved bead/spec, close/remove failures |
+| `mindspec impl approve` | Must be in review for target spec | Wrong mode or wrong active spec |
 
 ---
 
@@ -188,7 +179,7 @@ Example:
 
 - `implement` (spec A) -> `spec` (spec B) can be valid when you intentionally interrupt to start a hotfix/new spec in another worktree.
 
-This does **not** mean spec A regressed from implement to spec.  
+This does **not** mean spec A regressed from implement to spec.
 It means focus moved from spec A to spec B.
 
 Use this rule:
@@ -198,9 +189,27 @@ Use this rule:
 
 ---
 
+## Known Gaps {#known-gaps}
+
+### `mindspec next` from idle does not enforce spec lifecycle
+
+`mindspec next` queries all ready beads across all specs. If Spec B is already in the implement phase (beads created via prior `plan approve`), running `mindspec next` from idle with no `--spec` flag will claim a Spec B bead and jump directly from idle → implement — bypassing the matrix constraint that each spec must progress through its own lifecycle gates.
+
+The intended behavior: `mindspec next` from idle should either (a) require `--spec` and verify the target spec is in implement phase, or (b) only surface beads for the spec that was most recently in-progress.
+
+### `mindspec next` and `mindspec complete` worktree scoping
+
+`mindspec next` should only run from a spec worktree (not main, not a bead worktree). It creates a bead worktree branched off the spec branch.
+
+`mindspec complete` should only run from a bead worktree. It auto-commits, returns to the spec worktree, merges the bead branch into the spec branch, and cleans up the bead worktree + branch — all deterministically.
+
+This scoping is not fully enforced today. Parallel bead execution (multiple agents each running `next`/`complete` in their own bead worktrees) works correctly by design: each bead worktree has its own focus file, and the DAG dependency graph ensures dependent beads cannot be claimed until their prerequisites are closed.
+
+---
+
 ## Recovery and Escape Hatch Behavior {#recovery}
 
-`mindspec state set --mode=...` can force focus to arbitrary values.  
+`mindspec state set --mode=...` can force focus to arbitrary values.
 This is a recovery tool, not a normal lifecycle transition mechanism.
 
 Use it only when:
@@ -215,15 +224,13 @@ Do not use it to bypass human gates or skip required commands.
 ## Reference Commands (Happy Path) {#happy-path}
 
 ```bash
-mindspec explore "idea"                  # optional
-mindspec explore promote 123-my-spec     # optional, else spec-init directly
-mindspec spec-init 123-my-spec           # if skipping explore
-mindspec approve spec 123-my-spec
-mindspec approve plan 123-my-spec
-mindspec next --spec 123-my-spec
-# implement + commit
-mindspec complete --spec 123-my-spec     # loop until review
-mindspec approve impl 123-my-spec
+mindspec spec create 123-my-spec         # idle → spec
+mindspec spec approve 123-my-spec        # spec → plan
+mindspec plan approve 123-my-spec        # plan → implement (creates beads)
+mindspec next --spec 123-my-spec         # claims bead, creates worktree
+# implement
+mindspec complete "what I did"           # auto-commits, closes bead, loops or → review
+mindspec impl approve 123-my-spec        # review → idle (merges to main, cleans up)
 ```
 
 ---

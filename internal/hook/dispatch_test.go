@@ -333,7 +333,7 @@ func TestWorkflowGuard_EnforcementDisabled(t *testing.T) {
 
 func TestWorkflowGuard_BashPassesAllModes(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{state.ModeIdle, "", state.ModeExplore, state.ModeSpec, state.ModePlan, state.ModeReview} {
+	for _, mode := range []string{state.ModeIdle, "", state.ModeSpec, state.ModePlan, state.ModeReview} {
 		st := &HookState{Mode: mode}
 		r := WorkflowGuard(&Input{Command: "git status"}, st, true)
 		if r.Action != Pass {
@@ -366,15 +366,6 @@ func TestWorkflowGuard_Idle_EmptyMode(t *testing.T) {
 	r := WorkflowGuard(&Input{FilePath: "internal/foo.go"}, st, true)
 	if r.Action != Block {
 		t.Errorf("empty mode should block like idle, got %d", r.Action)
-	}
-}
-
-func TestWorkflowGuard_Explore(t *testing.T) {
-	t.Parallel()
-	st := &HookState{Mode: state.ModeExplore}
-	r := WorkflowGuard(&Input{FilePath: "internal/foo.go"}, st, true)
-	if r.Action != Warn {
-		t.Errorf("explore mode should warn, got %d", r.Action)
 	}
 }
 
@@ -629,22 +620,12 @@ func TestWorkflowGuard_IdleBlock_ContainsEscapePaths(t *testing.T) {
 	st := &HookState{Mode: state.ModeIdle}
 	r := WorkflowGuard(&Input{FilePath: "internal/foo.go"}, st, true)
 	for _, phrase := range []string{
-		"spec-init",
+		"spec create",
 		"mindspec next",
-		"git checkout -b",
 	} {
 		if !contains(r.Message, phrase) {
 			t.Errorf("idle block message should contain %q", phrase)
 		}
-	}
-}
-
-func TestWorkflowGuard_ExploreWarning_ContainsPromote(t *testing.T) {
-	t.Parallel()
-	st := &HookState{Mode: state.ModeExplore}
-	r := WorkflowGuard(&Input{FilePath: "internal/foo.go"}, st, true)
-	if !contains(r.Message, "/ms-explore promote") {
-		t.Error("explore warning should mention /ms-explore promote")
 	}
 }
 

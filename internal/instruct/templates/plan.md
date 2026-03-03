@@ -21,8 +21,8 @@ idle ── spec ──── >>> plan ── implement ── review ── idl
 | review → idle | `mindspec impl approve <id>` | Merges spec→main, removes all worktrees + branches |
 
 ### Git rules
-- Do NOT run any raw git commands — all git operations are handled by mindspec
-- This includes: `git commit`, `git merge`, `git pull`, `git rebase`, `git branch`, `git checkout`
+- You should not need any raw git commands — all git operations are handled by mindspec
+- Raw git is available for repair/recovery but the happy path never requires it
 
 ## Objective
 

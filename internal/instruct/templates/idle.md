@@ -18,8 +18,8 @@ You are not currently working on any spec or bead.
 | review → idle | `mindspec impl approve <id>` | Merges spec→main, removes all worktrees + branches |
 
 ### Git rules
-- Do NOT run any raw git commands — all git operations are handled by mindspec
-- This includes: `git commit`, `git merge`, `git pull`, `git rebase`, `git branch`, `git checkout`
+- You should not need any raw git commands — all git operations are handled by mindspec
+- Raw git is available for repair/recovery but the happy path never requires it
 {{- if .BranchProtection}}
 
 ## Branch Protection
@@ -31,18 +31,9 @@ All new features and non-trivial changes MUST go through `mindspec spec create`.
 
 ## Available Actions
 
-- `mindspec explore "idea"` — evaluate whether an idea is worth pursuing
 - `mindspec spec create <slug>` — start a new specification (creates branch + worktree)
-- `mindspec state set --mode=spec --spec=<id>` — resume work on an existing spec
+- `mindspec next` — resume work on an existing spec (claims next ready bead)
 - `mindspec doctor` — check project health
-
-### Evaluating Ideas
-
-Use `mindspec explore "idea"` to start a lightweight, conversational exploration. This does NOT change mode — it simply helps you evaluate whether an idea is worth pursuing.
-
-When exploration reaches a conclusion:
-- **Worth pursuing**: Run `mindspec explore promote <NNN-slug>` to create a spec
-- **Not worth pursuing**: Run `mindspec explore dismiss` to exit. Use `--adr` flag to capture the decision as an ADR.
 
 ## Available Specs
 
@@ -64,8 +55,7 @@ If the user did NOT give a concrete task, do this in your first message:
 
 1. Greet the user
 2. Suggest these options directly:
-   - `mindspec explore "idea"` to explore whether an idea is worth pursuing
-   - `mindspec spec create <slug>` to draft a new specification (if they already know what to build)
-   - Resuming an existing spec (if any are listed above)
+   - `mindspec spec create <slug>` to draft a new specification
+   - `mindspec next` to resume an in-progress spec (if any are listed above)
    - `mindspec doctor` to check project health
 3. Ask what they'd like to work on
