@@ -3,3 +3,5 @@
 {"ts":"2026-03-03T23:27:58.488954Z","event":"lifecycle.phase","data":{"from":"plan","spec_id":"064-stale-lifecycle-cleanup","to":"plan-approved"}}
 {"ts":"2026-03-03T23:28:27.784416Z","event":"lifecycle.bead.start","data":{"bead_id":"mindspec-3y4t.1","spec_id":"064-stale-lifecycle-cleanup"}}
 {"ts":"2026-03-03T23:30:08.220124Z","event":"lifecycle.bead.complete","data":{"bead_id":"mindspec-3y4t.1","spec_id":"064-stale-lifecycle-cleanup"}}
+{"ts":"2026-03-03T23:30:28.249806Z","event":"lifecycle.bead.start","data":{"bead_id":"mindspec-3y4t.2","spec_id":"064-stale-lifecycle-cleanup"}}
+{"ts":"2026-03-03T23:35:01.493387Z","event":"lifecycle.bead.complete","data":{"bead_id":"mindspec-3y4t.2","spec_id":"064-stale-lifecycle-cleanup"}}
