@@ -66,15 +66,16 @@ func ScenarioSpecToIdle() Scenario {
 You are in a MindSpec project with no active work. Your task: add a simple "greeting" feature — a hello.go program that prints "Hello!". Take it from idea all the way through to a completed implementation using the mindspec workflow.
 Finish only when the project is back in idle with cleanup complete.`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
-			// Agent may use explore+promote or go straight to spec-init — both are valid paths.
+			// Agent may use explore+promote, spec-init, or spec create — all are valid paths.
 			assertCommandRanEither(t, events, "mindspec",
-				[]string{"spec-init"}, []string{"explore", "promote"})
+				[]string{"spec", "create"}, []string{"spec-init"}, []string{"explore", "promote"})
 			assertCommandRan(t, events, "mindspec", "next")
 			assertCommandRan(t, events, "mindspec", "complete")
 			assertNoPreApproveImplMainMergeOrPR(t, events)
 
-			// Approve commands ran during lifecycle
-			assertCommandRan(t, events, "mindspec", "approve")
+			// Approve commands ran during lifecycle (accept both old and new forms)
+			assertCommandRanEither(t, events, "mindspec",
+				[]string{"approve"}, []string{"spec", "approve"}, []string{"plan", "approve"}, []string{"impl", "approve"})
 
 			// Git state after full lifecycle
 			assertBranchIs(t, sandbox, "main")
@@ -375,8 +376,9 @@ func ScenarioSpecInit() Scenario {
 
 /ms-spec-init 001-calculator --title "Calculator"`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
-			// Command ran
-			assertCommandRan(t, events, "mindspec", "spec-init")
+			// Command ran (accept both old and new forms)
+			assertCommandRanEither(t, events, "mindspec",
+				[]string{"spec-init"}, []string{"spec", "create"})
 
 			// Git state: spec branch created
 			assertHasBranches(t, sandbox, "spec/")

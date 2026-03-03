@@ -27,6 +27,7 @@ var (
 	execCommandFn       = exec.Command
 	mergeBranchFn       = gitops.MergeBranch
 	deleteBranchFn      = gitops.DeleteBranch
+	commitAllFn         = gitops.CommitAll
 	resolveTargetFn     = resolve.ResolveTarget
 	resolveActiveBeadFn = next.ResolveActiveBead
 	findLocalRootFn     = defaultFindLocalRoot
@@ -50,7 +51,7 @@ func defaultFindLocalRoot() (string, error) {
 // root is the main repo root (for spec dirs, lifecycle, merges).
 // Focus is read from localRoot (per-worktree focus).
 // specIDHint is optional and typically comes from --spec for disambiguation.
-func Run(root, beadID, specIDHint string) (*Result, error) {
+func Run(root, beadID, specIDHint, commitMsg string) (*Result, error) {
 	// Backward-compatible UX: `mindspec complete <spec-id>` should behave like
 	// `mindspec complete --spec=<spec-id>`, not treat the spec ID as a bead ID.
 	if beadID != "" && specIDHint == "" && validate.SpecID(beadID) == nil {
@@ -108,6 +109,18 @@ func Run(root, beadID, specIDHint string) (*Result, error) {
 		}
 	}
 
+	// 2.5. Auto-commit if commit message provided
+	commitPath := wtPath
+	if commitPath == "" {
+		commitPath = root
+	}
+	if commitMsg != "" {
+		msg := fmt.Sprintf("impl(%s): %s", beadID, commitMsg)
+		if err := commitAllFn(commitPath, msg); err != nil {
+			return nil, fmt.Errorf("auto-commit failed: %w", err)
+		}
+	}
+
 	// 3. Check clean tree
 	checkPath := wtPath
 	if checkPath == "" {
@@ -120,7 +133,7 @@ func Run(root, beadID, specIDHint string) (*Result, error) {
 				return nil, fmt.Errorf("%w\nhint: no active bead worktree is set. Run `mindspec next`, `cd` into the printed worktree path, then commit and rerun `mindspec complete`", err)
 			}
 		}
-		return nil, err
+		return nil, fmt.Errorf("%w\nhint: use `mindspec complete \"describe what you did\"` to auto-commit", err)
 	}
 
 	// 4. Close bead

@@ -379,7 +379,10 @@ func TestWorkflowGuard_Explore(t *testing.T) {
 }
 
 func TestWorkflowGuard_Spec_CodeEdit(t *testing.T) {
-	t.Parallel()
+	origGetCwd := getCwd
+	t.Cleanup(func() { getCwd = origGetCwd })
+	getCwd = func() (string, error) { return "/repo", nil }
+
 	st := &HookState{Mode: state.ModeSpec}
 	r := WorkflowGuard(&Input{FilePath: "internal/foo.go"}, st, true)
 	if r.Action != Block {
@@ -406,7 +409,10 @@ func TestWorkflowGuard_Spec_MarkdownFile(t *testing.T) {
 }
 
 func TestWorkflowGuard_Plan_CodeEdit(t *testing.T) {
-	t.Parallel()
+	origGetCwd := getCwd
+	t.Cleanup(func() { getCwd = origGetCwd })
+	getCwd = func() (string, error) { return "/repo", nil }
+
 	st := &HookState{Mode: state.ModePlan}
 	r := WorkflowGuard(&Input{FilePath: "cmd/main.go"}, st, true)
 	if r.Action != Block {
@@ -498,7 +504,10 @@ func TestWorkflowGuard_Spec_CodeEdit_OutsideWorktree(t *testing.T) {
 }
 
 func TestWorkflowGuard_Plan_NoWorktree_StillBlocks(t *testing.T) {
-	t.Parallel()
+	origGetCwd := getCwd
+	t.Cleanup(func() { getCwd = origGetCwd })
+	getCwd = func() (string, error) { return "/repo", nil }
+
 	st := &HookState{Mode: state.ModePlan}
 	r := WorkflowGuard(&Input{FilePath: "cmd/main.go"}, st, true)
 	if r.Action != Block {
@@ -656,14 +665,20 @@ func findSubstr(s, sub string) bool {
 // --- outsideActiveWorktree ---
 
 func TestOutsideActiveWorktree_NilState(t *testing.T) {
-	t.Parallel()
+	origGetCwd := getCwd
+	t.Cleanup(func() { getCwd = origGetCwd })
+	getCwd = func() (string, error) { return "/repo", nil }
+
 	if outsideActiveWorktree(nil) {
 		t.Error("nil state should return false (conservative)")
 	}
 }
 
 func TestOutsideActiveWorktree_NoWorktree(t *testing.T) {
-	t.Parallel()
+	origGetCwd := getCwd
+	t.Cleanup(func() { getCwd = origGetCwd })
+	getCwd = func() (string, error) { return "/repo", nil }
+
 	if outsideActiveWorktree(&HookState{Mode: state.ModePlan}) {
 		t.Error("no active worktree should return false")
 	}

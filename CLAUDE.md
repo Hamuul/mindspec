@@ -14,13 +14,24 @@ make build    # Build binary to ./bin/mindspec
 make test     # Run all tests
 ```
 
-## Explore Mode
+## Lifecycle Commands
 
-Before committing to a full spec, evaluate whether an idea is worth pursuing:
+All git operations are handled internally by mindspec — do NOT run raw git commands.
 
 ```bash
-mindspec explore "short description"   # Enter Explore Mode
-mindspec explore promote <spec-id>     # Promote to spec (enters Spec Mode)
+mindspec spec create <slug>      # Create spec (idle → spec)
+mindspec spec approve <id>       # Approve spec (spec → plan)
+mindspec plan approve <id>       # Approve plan (plan → implement)
+mindspec next                    # Claim bead, create worktree
+mindspec complete "message"      # Auto-commit, close bead, merge, cleanup
+mindspec impl approve <id>       # Approve impl (review → idle)
+```
+
+### Evaluating Ideas
+
+```bash
+mindspec explore "short description"   # Lightweight exploration (no state change)
+mindspec explore promote <spec-id>     # Promote to spec (same as spec create)
 mindspec explore dismiss [--adr]       # Exit (optionally record decision as ADR)
 ```
 
@@ -28,7 +39,7 @@ mindspec explore dismiss [--adr]       # Exit (optionally record decision as ADR
 
 | Skill | Purpose |
 |:------|:--------|
-| `/ms-explore` | Enter, promote, or dismiss an Explore Mode session |
+| `/ms-explore` | Enter, promote, or dismiss an exploration session |
 | `/ms-spec-init` | Initialize a new specification (enters Spec Mode) |
 | `/ms-spec-approve` | Approve spec → Plan Mode |
 | `/ms-plan-approve` | Approve plan → Implementation Mode |

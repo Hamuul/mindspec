@@ -312,12 +312,12 @@ func TestScenario_HappyPath(t *testing.T) {
 	root := testRepo(t)
 	specID := "001-test-feature"
 
-	// Phase 1: Explore → Spec
-	// Enter explore mode
+	// Phase 1: Explore (no state change — explore is now a no-op)
 	if err := explore.Enter(root, "testing lifecycle"); err != nil {
 		t.Fatalf("explore.Enter: %v", err)
 	}
-	assertState(t, root, "", state.ModeExplore, "")
+	// Enter is a no-op, state stays idle
+	assertState(t, root, "", state.ModeIdle, "")
 
 	// Phase 2: Spec Init (simulated — specinit.Run needs bd + worktree mocks)
 	simulateSpecInit(t, root, specID)
@@ -366,33 +366,30 @@ func TestScenario_HappyPath(t *testing.T) {
 func TestScenario_Abandon(t *testing.T) {
 	root := testRepo(t)
 
-	// Enter explore mode
+	// Enter explore (no state change — explore is a no-op)
 	if err := explore.Enter(root, "abandoned idea"); err != nil {
 		t.Fatalf("explore.Enter: %v", err)
 	}
-	assertState(t, root, "", state.ModeExplore, "")
+	// State stays idle since explore is no longer a mode
+	assertState(t, root, "", state.ModeIdle, "")
 
-	// Dismiss — return to idle
+	// Dismiss — also a no-op, state stays idle
 	if err := explore.Dismiss(root); err != nil {
 		t.Fatalf("explore.Dismiss: %v", err)
 	}
 	assertState(t, root, "", state.ModeIdle, "")
 }
 
-func TestScenario_AbandonRejectsDoubleEnter(t *testing.T) {
+func TestScenario_MultipleEnterSucceeds(t *testing.T) {
 	root := testRepo(t)
 
 	if err := explore.Enter(root, "first"); err != nil {
 		t.Fatalf("explore.Enter: %v", err)
 	}
 
-	// Attempting to enter explore again should fail
-	err := explore.Enter(root, "second")
-	if err == nil {
-		t.Fatal("expected error entering explore while already in explore")
-	}
-	if !strings.Contains(err.Error(), "explore") {
-		t.Errorf("error should mention explore mode, got: %v", err)
+	// Entering explore again should succeed (no state check)
+	if err := explore.Enter(root, "second"); err != nil {
+		t.Fatalf("second explore.Enter should succeed: %v", err)
 	}
 }
 
@@ -520,11 +517,10 @@ func TestScenario_ResumeAfterCrash(t *testing.T) {
 func TestScenario_InvalidTransition(t *testing.T) {
 	root := testRepo(t)
 
-	// Attempting to dismiss when not in explore mode should fail, even
-	// when focus is absent (implicit idle).
+	// Dismiss is now a no-op — should succeed from any state
 	err := explore.Dismiss(root)
-	if err == nil {
-		t.Fatal("expected error dismissing when not in explore mode")
+	if err != nil {
+		t.Fatalf("Dismiss should be a no-op: %v", err)
 	}
 
 	// Attempting approve-spec when no spec exists should fail

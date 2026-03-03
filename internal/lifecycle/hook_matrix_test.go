@@ -12,6 +12,12 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestHookMatrix_WorkflowGuard(t *testing.T) {
+	// Mock getCwd to a non-worktree path so outsideActiveWorktree doesn't
+	// interfere with spec/plan code-edit tests.
+	origGetCwd := hook.ExportGetCwd()
+	t.Cleanup(func() { hook.SetGetCwd(origGetCwd) })
+	hook.SetGetCwd(func() (string, error) { return "/repo", nil })
+
 	tests := []struct {
 		name     string
 		mode     string

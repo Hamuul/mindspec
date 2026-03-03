@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/mindspec/mindspec/internal/bead"
 	"github.com/mindspec/mindspec/internal/complete"
 	"github.com/mindspec/mindspec/internal/guard"
+	"github.com/mindspec/mindspec/internal/validate"
 	"github.com/spf13/cobra"
 )
 
@@ -14,13 +16,18 @@ var completeCmd = &cobra.Command{
 	Use:   "complete [bead-id]",
 	Short: "Close a bead, remove its worktree, and advance state",
 	Long: `Orchestrates the full bead close-out:
-  1. Validates all changes are committed (clean worktree)
-  2. Closes the bead via bd close
-  3. Removes the worktree via bd worktree remove
-  4. Advances state (next bead, plan, or idle)
+  1. Auto-commits changes if a commit message is provided
+  2. Validates all changes are committed (clean worktree)
+  3. Closes the bead via bd close
+  4. Removes the worktree via bd worktree remove
+  5. Advances state (next bead, plan, or idle)
+
+Usage:
+  mindspec complete "describe what you did"    # auto-commit + close
+  mindspec complete                            # close (tree must be clean)
 
 The bead ID is auto-resolved from state if not provided.`,
-	Args: cobra.MaximumNArgs(1),
+	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		root, err := findRoot()
 		if err != nil {
@@ -44,12 +51,21 @@ The bead ID is auto-resolved from state if not provided.`,
 			os.Exit(1)
 		}
 
-		var beadID string
+		// Parse args: first arg may be a bead ID or part of a commit message.
+		// If it looks like a spec/bead ID, treat as bead ID; otherwise treat all args as commit message.
+		var beadID, commitMsg string
 		if len(args) > 0 {
-			beadID = args[0]
+			if validate.SpecID(args[0]) == nil || strings.HasPrefix(args[0], "mindspec-") {
+				beadID = args[0]
+				if len(args) > 1 {
+					commitMsg = strings.Join(args[1:], " ")
+				}
+			} else {
+				commitMsg = strings.Join(args, " ")
+			}
 		}
 
-		result, err := complete.Run(root, beadID, specID)
+		result, err := complete.Run(root, beadID, specID, commitMsg)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
