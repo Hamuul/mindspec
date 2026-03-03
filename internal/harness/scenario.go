@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -1933,4 +1934,107 @@ func assertMainCommitCountUnchanged(t *testing.T, sandbox *Sandbox) {
 	if userCommits != expectedInt {
 		t.Errorf("main branch user commit count changed: expected %d, got %d (agent committed directly to main)", expectedInt, userCommits)
 	}
+}
+
+// assertFocusFields reads .mindspec/focus and asserts that each key in expected
+// matches the corresponding value. Unlike assertFocusMode (which checks only mode
+// across multiple focus files), this asserts the full field set on a specific focus.
+func assertFocusFields(t testing.TB, sandbox *Sandbox, expected map[string]string) {
+	t.Helper()
+	focusPath := filepath.Join(sandbox.Root, ".mindspec", "focus")
+	data, err := os.ReadFile(focusPath)
+	if err != nil {
+		t.Errorf("reading focus file: %v", err)
+		return
+	}
+	var focus map[string]interface{}
+	if err := json.Unmarshal(data, &focus); err != nil {
+		t.Errorf("parsing focus file: %v", err)
+		return
+	}
+	for key, want := range expected {
+		got, _ := focus[key].(string)
+		if got != want {
+			t.Errorf("focus field %q: got %q, want %q", key, got, want)
+		}
+	}
+}
+
+// beadStatus is the minimal structure returned by `bd list --json`.
+type beadStatus struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
+	Title  string `json:"title"`
+}
+
+// assertBeadsState runs `bd list --json --parent <epicID>` in the sandbox and
+// asserts that each bead ID in expectedStatuses has the expected status.
+func assertBeadsState(t testing.TB, sandbox *Sandbox, epicID string, expectedStatuses map[string]string) {
+	t.Helper()
+	out, err := sandbox.runBD("list", "--json", "--parent", epicID)
+	if err != nil {
+		t.Errorf("bd list --json --parent %s: %v\n%s", epicID, err, out)
+		return
+	}
+	var beads []beadStatus
+	if err := json.Unmarshal([]byte(out), &beads); err != nil {
+		t.Errorf("parsing bd list output: %v\n%s", err, out)
+		return
+	}
+	statusMap := make(map[string]string)
+	for _, b := range beads {
+		statusMap[b.ID] = b.Status
+	}
+	for id, want := range expectedStatuses {
+		got, ok := statusMap[id]
+		if !ok {
+			t.Errorf("bead %q not found in bd list output (have: %v)", id, statusMap)
+			continue
+		}
+		if got != want {
+			t.Errorf("bead %q status: got %q, want %q", id, got, want)
+		}
+	}
+}
+
+// assertMergeTopology checks that at least one merge commit from a bead/ branch
+// exists on the given specBranch after a bead→spec merge.
+func assertMergeTopology(t testing.TB, sandbox *Sandbox, specBranch string) {
+	t.Helper()
+	cmd := exec.Command("git", "log", "--merges", "--oneline", specBranch)
+	cmd.Dir = sandbox.Root
+	out, err := cmd.Output()
+	if err != nil {
+		t.Errorf("git log --merges on %s: %v", specBranch, err)
+		return
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if strings.Contains(line, "bead/") {
+			return
+		}
+	}
+	t.Errorf("no merge commit from a bead/ branch found on %s; merges: %s", specBranch, strings.TrimSpace(string(out)))
+}
+
+// assertCommitMessage checks that at least one commit in git log --oneline matches
+// the given regex pattern (e.g. `impl\(bead-id\):`).
+func assertCommitMessage(t testing.TB, sandbox *Sandbox, pattern string) {
+	t.Helper()
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		t.Fatalf("invalid pattern %q: %v", pattern, err)
+	}
+	cmd := exec.Command("git", "log", "--oneline", "--all")
+	cmd.Dir = sandbox.Root
+	out, err := cmd.Output()
+	if err != nil {
+		t.Errorf("git log --oneline: %v", err)
+		return
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if re.MatchString(line) {
+			return
+		}
+	}
+	t.Errorf("no commit message matching %q found in git log", pattern)
 }
