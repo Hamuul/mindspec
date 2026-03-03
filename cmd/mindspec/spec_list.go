@@ -44,9 +44,7 @@ var specListCmd = &cobra.Command{
 		for _, s := range specs {
 			fmt.Fprintf(w, "%s\t%s\t%s\n", s.SpecID, s.Status, s.Phase)
 		}
-		w.Flush()
-
-		return nil
+		return w.Flush()
 	},
 }
 
