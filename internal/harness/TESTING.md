@@ -225,6 +225,8 @@ Track each test run with: scenario, date, pass/fail, recorded events count, turn
 | 2026-03-02 | PASS | 141 | 4 | 54.12s | Final full-suite verification after setup hardening remains green. |
 | 2026-03-02 | FAIL | 32 | 2 | 15.27s | De-tautologized prompt (no explicit complete command) was too open: agent used `bd close` directly instead of lifecycle completion. |
 | 2026-03-02 | PASS | 173 | 3 | 44.90s | Prompt revised to require lifecycle end-state (review mode) without naming commands; agent discovered completion path and passed. |
+| 2026-03-03 | PASS | 167 | 5 | 52.10s | Spec 058 fixes (DetectWorktreeContext last-match, focus propagation, plan scaffold). 100% fwd ratio. |
+| 2026-03-03 | PASS | 120 | 11 | 56.92s | After sandbox .gitignore fix (added .mindspec/focus + session.json). 100% fwd ratio, clean bead→spec merge at [92]. |
 
 ### TestLLM_SpecToIdle
 
@@ -248,6 +250,8 @@ Track each test run with: scenario, date, pass/fail, recorded events count, turn
 | 2026-03-02 | PASS | 675 | 28 | 4m10.23s | Increased MaxTurns 75->100 and clarified prompt end-state; targeted rerun completed cleanup and returned to idle. |
 | 2026-03-02 | PASS | 530 | 33 | 4m02.18s | Final full-suite verification remains green under the higher turn budget. |
 | 2026-03-02 | FAIL | 437 | 34 | 3m28.77s | De-tautologized full-suite validation: lifecycle progressed but strict cleanup assertions failed again (`spec/*`, `bead/*`, worktrees remained). |
+| 2026-03-03 | PASS | 550 | 39 | 254.50s | Spec 058 fixes (DetectWorktreeContext last-match, focus propagation, plan scaffold). 41.0% fwd ratio (16 fwd / 23 retry). Retries from manual merge conflicts on `.mindspec/focus` (committed to both branches). |
+| 2026-03-03 | PASS | 423 | 28 | 189.29s | After sandbox .gitignore fix (added .mindspec/focus + session.json). **71.4% fwd ratio** (20 fwd / 8 retry). Zero merge conflicts — bead→spec merge at [312] clean. `approve impl` succeeded after auto-merge of unmerged bead branch at [311-312]. |
 
 ### TestLLM_AbandonSpec
 
@@ -475,7 +479,7 @@ Track each test run with: scenario, date, pass/fail, recorded events count, turn
 - PreToolUse enforcement hooks are installed but **no-op** because `config.yaml` has `agent_hooks: false` (non-enforcement scenarios work from main repo root, not a worktree)
 - Runs `bd init --sandbox --skip-hooks --server-port 0`
 - Installs recording shims in `.harness/bin/`
-- Adds `.beads/` and `.harness/` to `.gitignore`
+- Adds `.beads/`, `.harness/`, `.mindspec/session.json`, `.mindspec/focus`, `.mindspec/current-spec.json` to `.gitignore`
 
 ### Recording Shims (`recorder.go`)
 - Shell scripts in `.harness/bin/` that log to `events.jsonl` then delegate to real binary
@@ -559,6 +563,14 @@ Haiku in `claude -p` mode tends to be conversational unless strongly directed. R
 **Problem**: In implement mode with no recorded `activeWorktree`, agents could bypass lifecycle commands by creating spec/bead branches or worktrees manually, then get stuck in `complete`/`next` retries.
 **Workaround**: N/A (fixed in guidance + hook messaging).
 **Status (2026-03-02)**: Fixed by strengthening implement template handoff rules and pre-commit guardrail messaging for implement mode (including no-active-worktree branch commits). Added deterministic coverage in `internal/hooks/install_test.go` and `internal/complete/complete_test.go`. Targeted reruns now pass (`MultiBeadDeps`, `InterruptForBug`, and `SingleBead` regression check).
+
+### Sandbox .gitignore Missing Focus Entry (RESOLVED — 2026-03-03)
+**Problem**: `sandbox.go` overwrote `.gitignore` with only `.beads/` and `.harness/`, dropping `.mindspec/focus` and `.mindspec/session.json` entries. This caused `gitops.CommitAll()` (`git add -A`) to commit focus files to both spec and bead branches with different content, creating merge conflicts on every bead→spec merge in `mindspec complete`.
+**Status (2026-03-03)**: Fixed by adding `.mindspec/session.json`, `.mindspec/focus`, and `.mindspec/current-spec.json` to the sandbox `.gitignore`. SpecToIdle forward ratio improved from 41% to 71.4%, retries dropped from 23 to 8, and all merge conflicts eliminated.
+
+### DetectWorktreeContext First-Match Bug (RESOLVED — 2026-03-03)
+**Problem**: `workspace.DetectWorktreeContext()` returned on the FIRST `.worktrees` match in the path. For nested bead worktrees (`repo/.worktrees/worktree-spec-XXX/.worktrees/worktree-beadID/`), it matched the outer spec worktree and returned `WorktreeSpec` instead of `WorktreeBead`. This caused `mindspec complete` to hit the "you're in a spec worktree" hard error.
+**Status (2026-03-03)**: Fixed by changing to last-match semantics — the innermost worktree type wins. SingleBead and SpecToIdle both pass.
 
 ### Nested Worktrees
 **Status**: Git fully supports nested worktrees. `workspace.FindRoot()` correctly resolves them. The bead worktree is created inside the spec worktree: `.worktrees/worktree-spec-XXX/.worktrees/worktree-bead-YYY`. This is fine -- it reflects the merge hierarchy (bead -> spec -> main).
