@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mindspec/mindspec/internal/state"
+	"github.com/mindspec/mindspec/internal/phase"
 	"github.com/mindspec/mindspec/internal/workspace"
 )
 
@@ -179,27 +179,33 @@ func checkAcceptanceCriteria(r *Result, sections map[string]string) {
 	}
 }
 
-// checkLifecycleBinding warns if the spec lacks a lifecycle.yaml.
+// checkLifecycleBinding checks if the spec has a corresponding beads epic.
 func checkLifecycleBinding(r *Result, root, specID string) {
-	specDir := workspace.SpecDir(root, specID)
-	lc, err := state.ReadLifecycle(specDir)
+	_, err := phase.FindEpicBySpecID(specID)
 	if err != nil {
-		return // can't read → skip this check
+		r.AddWarning("lifecycle-binding", "spec has no beads epic; run spec approve to create one")
 	}
-	if lc == nil {
-		r.AddWarning("lifecycle-binding", "spec has no lifecycle.yaml; run spec-init to create one")
+
+	// Detect stale lifecycle.yaml files (ADR-0023 migration).
+	specDir := workspace.SpecDir(root, specID)
+	lcPath := filepath.Join(specDir, "lifecycle.yaml")
+	if _, statErr := os.Stat(lcPath); statErr == nil {
+		r.AddWarning("stale-lifecycle", "stale lifecycle.yaml detected; lifecycle state is now derived from beads")
 	}
 }
 
 func checkSpecApprovalGateConsistency(r *Result, root, specID string) {
-	// With lifecycle.yaml, gate consistency is checked by verifying
-	// that the lifecycle phase matches the spec frontmatter status.
-	specDir := workspace.SpecDir(root, specID)
-	lc, err := state.ReadLifecycle(specDir)
-	if err != nil || lc == nil {
-		r.AddWarning("gate-consistency", "no lifecycle.yaml; cannot check gate consistency")
+	// ADR-0023: derive phase from beads, not lifecycle.yaml.
+	epicID, err := phase.FindEpicBySpecID(specID)
+	if err != nil {
+		// No epic → can't check gate consistency
 		return
 	}
+	derivedPhase, err := phase.DerivePhase(epicID)
+	if err != nil {
+		return
+	}
+	_ = derivedPhase // Gate consistency could be checked against spec frontmatter if needed
 }
 
 // checkOpenQuestions verifies all open questions are resolved.

@@ -15,15 +15,9 @@ func setupCleanupTest(t *testing.T, specID string, mode string) string {
 	t.Helper()
 	root := t.TempDir()
 	os.MkdirAll(filepath.Join(root, ".mindspec"), 0755)
-
-	mc := &state.Focus{
-		Mode:       mode,
-		ActiveSpec: specID,
-		SpecBranch: state.SpecBranch(specID),
-	}
-	if err := state.WriteFocus(root, mc); err != nil {
-		t.Fatal(err)
-	}
+	// ADR-0023: no focus file written; state derived from beads.
+	_ = specID
+	_ = mode
 	return root
 }
 

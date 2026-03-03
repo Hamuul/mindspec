@@ -85,18 +85,19 @@ func TestResolveTarget_FocusDisambiguatesMultipleSpecs(t *testing.T) {
 		"epic-b": {{ID: "b2", Status: "open", IssueType: "task"}},
 	})
 
-	// Focus points to beta — should resolve without ambiguity
-	state.WriteFocus(root, &state.Focus{
-		Mode:       state.ModeSpec,
-		ActiveSpec: "039-beta",
-	})
-
-	got, err := ResolveTarget(root, "")
+	// ADR-0023: focus files eliminated. With multiple active specs and no
+	// explicit --spec flag, ResolveTarget should return an ambiguity error.
+	_, err := ResolveTarget(root, "")
+	if err == nil {
+		t.Fatal("expected ambiguity error with multiple active specs and no --spec flag")
+	}
+	// Verify explicit flag still works
+	got, err := ResolveTarget(root, "039-beta")
 	if err != nil {
-		t.Fatalf("ResolveTarget with focus should not error: %v", err)
+		t.Fatalf("explicit --spec should resolve: %v", err)
 	}
 	if got != "039-beta" {
-		t.Errorf("focus should disambiguate: got %q, want %q", got, "039-beta")
+		t.Errorf("explicit flag: got %q, want %q", got, "039-beta")
 	}
 }
 
@@ -169,61 +170,6 @@ func TestLegacyRepo_NoEpics(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "--spec") {
 		t.Errorf("error should suggest --spec flag, got: %v", err)
-	}
-}
-
-// --- Focus cursor tests (testing state package, kept for coverage) ---
-
-func TestFocusCursor_WritesReadBack(t *testing.T) {
-	root := t.TempDir()
-	os.MkdirAll(filepath.Join(root, ".mindspec"), 0755)
-
-	mc := &state.Focus{
-		Mode:       state.ModeImplement,
-		ActiveSpec: "038-test",
-		ActiveBead: "bead-1",
-	}
-	if err := state.WriteFocus(root, mc); err != nil {
-		t.Fatalf("WriteFocus failed: %v", err)
-	}
-
-	got, err := state.ReadFocus(root)
-	if err != nil {
-		t.Fatalf("ReadFocus failed: %v", err)
-	}
-	if got.Mode != state.ModeImplement {
-		t.Errorf("mode: got %q, want %q", got.Mode, state.ModeImplement)
-	}
-	if got.ActiveSpec != "038-test" {
-		t.Errorf("activeSpec: got %q, want %q", got.ActiveSpec, "038-test")
-	}
-	if got.ActiveBead != "bead-1" {
-		t.Errorf("activeBead: got %q, want %q", got.ActiveBead, "bead-1")
-	}
-}
-
-func TestFocusCursor_UpdateOnNext(t *testing.T) {
-	root := t.TempDir()
-	os.MkdirAll(filepath.Join(root, ".mindspec"), 0755)
-
-	state.WriteFocus(root, &state.Focus{
-		Mode:       state.ModeImplement,
-		ActiveSpec: "038-test",
-		ActiveBead: "bead-1",
-	})
-
-	state.WriteFocus(root, &state.Focus{
-		Mode:       state.ModeImplement,
-		ActiveSpec: "038-test",
-		ActiveBead: "bead-2",
-	})
-
-	got, err := state.ReadFocus(root)
-	if err != nil {
-		t.Fatalf("ReadFocus failed: %v", err)
-	}
-	if got.ActiveBead != "bead-2" {
-		t.Errorf("activeBead: got %q, want %q", got.ActiveBead, "bead-2")
 	}
 }
 

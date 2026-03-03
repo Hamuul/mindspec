@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/mindspec/mindspec/internal/config"
-	"github.com/mindspec/mindspec/internal/state"
 	"github.com/mindspec/mindspec/internal/workspace"
 )
 
@@ -152,10 +151,10 @@ func TestRunSetsState(t *testing.T) {
 		t.Errorf("expected branch spec/012-state-test, got %q", result.SpecBranch)
 	}
 
-	// No focus file should exist in the worktree
-	mc, _ := state.ReadFocus(result.WorktreePath)
-	if mc != nil {
-		t.Errorf("expected no focus file in worktree (ADR-0023), but found one with mode=%q", mc.Mode)
+	// No focus file should exist in the worktree (ADR-0023: focus files eliminated).
+	focusPath := filepath.Join(result.WorktreePath, ".mindspec", "focus")
+	if _, statErr := os.Stat(focusPath); statErr == nil {
+		t.Error("expected no focus file in worktree (ADR-0023)")
 	}
 }
 
@@ -234,8 +233,8 @@ func TestRunNoLifecycleFile(t *testing.T) {
 
 	// Per ADR-0023: no lifecycle.yaml should be created (eliminated).
 	specDir := workspace.SpecDir(result.WorktreePath, "014-lifecycle-test")
-	lc, _ := state.ReadLifecycle(specDir)
-	if lc != nil {
+	lcPath := filepath.Join(specDir, "lifecycle.yaml")
+	if _, statErr := os.Stat(lcPath); statErr == nil {
 		t.Error("expected no lifecycle.yaml (ADR-0023), but file was created")
 	}
 }

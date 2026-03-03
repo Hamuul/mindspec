@@ -21,57 +21,26 @@ var stateCmd = &cobra.Command{
 
 var stateSetCmd = &cobra.Command{
 	Use:   "set",
-	Short: "Set the current mode and active work",
-	Long:  `Update the focus cursor with the current mode, active spec, and active bead.`,
+	Short: "Set the current mode and active work (deprecated)",
+	Long:  `Deprecated: lifecycle state is now derived from beads (ADR-0023). This command is a no-op.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		mode, _ := cmd.Flags().GetString("mode")
-		spec, _ := cmd.Flags().GetString("spec")
-		bead, _ := cmd.Flags().GetString("bead")
-
-		if mode == "" {
-			return fmt.Errorf("--mode is required")
-		}
-
-		cwd, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("getting working directory: %w", err)
-		}
-
-		root, err := workspace.FindLocalRoot(cwd)
-		if err != nil {
-			return err
-		}
-
-		mc := &state.Focus{
-			Mode:       mode,
-			ActiveSpec: spec,
-			ActiveBead: bead,
-		}
-		if spec != "" {
-			mc.SpecBranch = state.SpecBranch(spec)
-			mc.ActiveWorktree = state.SpecWorktreePath(root, spec)
-		}
-		if err := state.WriteFocus(root, mc); err != nil {
-			return err
-		}
-
-		fmt.Printf("State updated: mode=%s", mode)
-		if spec != "" {
-			fmt.Printf(", spec=%s", spec)
-		}
-		if bead != "" {
-			fmt.Printf(", bead=%s", bead)
-		}
-		fmt.Println()
-
+		fmt.Println("state set is deprecated: lifecycle state is now derived from beads (ADR-0023)")
 		return nil
 	},
+}
+
+// stateOutput is the JSON output format for state show.
+type stateOutput struct {
+	Mode       string `json:"mode"`
+	ActiveSpec string `json:"activeSpec,omitempty"`
+	ActiveBead string `json:"activeBead,omitempty"`
+	SpecBranch string `json:"specBranch,omitempty"`
 }
 
 var stateShowCmd = &cobra.Command{
 	Use:   "show",
 	Short: "Show the current MindSpec state",
-	Long: `Show the current MindSpec state derived from lifecycle.yaml and focus.
+	Long: `Show the current MindSpec state derived from beads.
 Use --spec to target a specific spec.
 If multiple active specs exist and no --spec is given, shows the ambiguity.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -98,12 +67,12 @@ If multiple active specs exist and no --spec is given, shows the ambiguity.`,
 			if ctxErr != nil || ctx == nil {
 				return fmt.Errorf("no active state found")
 			}
-			mc := &state.Focus{
+			out := &stateOutput{
 				Mode:       ctx.Phase,
 				ActiveSpec: ctx.SpecID,
 				ActiveBead: ctx.BeadID,
 			}
-			data, _ := json.MarshalIndent(mc, "", "  ")
+			data, _ := json.MarshalIndent(out, "", "  ")
 			fmt.Println(string(data))
 			return nil
 		}
@@ -116,14 +85,14 @@ If multiple active specs exist and no --spec is given, shows the ambiguity.`,
 			activeBead = ctx.BeadID
 		}
 
-		mc := &state.Focus{
+		out := &stateOutput{
 			Mode:       mode,
 			ActiveSpec: specID,
 			ActiveBead: activeBead,
 			SpecBranch: state.SpecBranch(specID),
 		}
 
-		data, err := json.MarshalIndent(mc, "", "  ")
+		data, err := json.MarshalIndent(out, "", "  ")
 		if err != nil {
 			return fmt.Errorf("formatting state: %w", err)
 		}

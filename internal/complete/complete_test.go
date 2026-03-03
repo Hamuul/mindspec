@@ -155,8 +155,8 @@ func TestRun_HappyPath(t *testing.T) {
 	}
 
 	// ADR-0023: no focus file written — state derived from beads.
-	mc, readErr := state.ReadFocus(root)
-	if readErr == nil && mc != nil {
+	focusPath := filepath.Join(root, ".mindspec", "focus")
+	if _, statErr := os.Stat(focusPath); statErr == nil {
 		t.Error("expected no focus file to be written")
 	}
 }

@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mindspec/mindspec/internal/state"
 	"github.com/mindspec/mindspec/internal/workspace"
 )
 
@@ -41,8 +40,8 @@ func checkDocs(r *Report, root string) {
 	// Domain subdirectory checks
 	checkDomains(r, root, docsRel)
 
-	// Spec lifecycle checks (ADR-0020)
-	checkSpecLifecycles(r, root)
+	// Detect stale focus/lifecycle files (ADR-0023)
+	checkStaleFocusLifecycle(r, root)
 
 	// Migration metadata checks (only when migration artifacts are present).
 	checkMigrationMetadata(r, root)
@@ -101,36 +100,41 @@ func docsRootRel(root string) string {
 	return filepath.ToSlash(rel)
 }
 
-// checkSpecLifecycles warns on active spec directories that lack a lifecycle.yaml.
-func checkSpecLifecycles(r *Report, root string) {
+// checkStaleFocusLifecycle detects stale .mindspec/focus and lifecycle.yaml files (ADR-0023).
+func checkStaleFocusLifecycle(r *Report, root string) {
+	// Check for stale focus file
+	focusPath := filepath.Join(root, ".mindspec", "focus")
+	if fileExists(focusPath) {
+		r.Checks = append(r.Checks, Check{
+			Name:    "Stale focus file",
+			Status:  Warn,
+			Message: "stale .mindspec/focus detected; lifecycle state is now derived from beads (ADR-0023). Safe to delete.",
+		})
+	}
+
+	// Check for stale lifecycle.yaml files in spec directories
 	specsDir := filepath.Join(workspace.DocsDir(root), "specs")
 	entries, err := os.ReadDir(specsDir)
 	if err != nil {
-		return // specs dir missing is already reported
+		return
 	}
 
-	var missing []string
+	var stale []string
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
 		}
-		specDir := filepath.Join(specsDir, e.Name())
-		if !fileExists(filepath.Join(specDir, "spec.md")) {
-			continue
-		}
-		lc, err := state.ReadLifecycle(specDir)
-		if err != nil || lc == nil {
-			missing = append(missing, e.Name())
+		lcPath := filepath.Join(specsDir, e.Name(), "lifecycle.yaml")
+		if fileExists(lcPath) {
+			stale = append(stale, e.Name())
 		}
 	}
 
-	if len(missing) == 0 {
-		return
+	if len(stale) > 0 {
+		r.Checks = append(r.Checks, Check{
+			Name:    "Stale lifecycle.yaml files",
+			Status:  Warn,
+			Message: fmt.Sprintf("%d specs have stale lifecycle.yaml: %s. Lifecycle state is now derived from beads (ADR-0023).", len(stale), strings.Join(stale, ", ")),
+		})
 	}
-
-	r.Checks = append(r.Checks, Check{
-		Name:    "Spec lifecycle files",
-		Status:  Warn,
-		Message: fmt.Sprintf("%d specs missing lifecycle.yaml: %s", len(missing), strings.Join(missing, ", ")),
-	})
 }

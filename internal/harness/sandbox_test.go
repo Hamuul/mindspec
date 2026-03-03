@@ -110,42 +110,42 @@ func TestSandboxCommit(t *testing.T) {
 	}
 }
 
-func TestSandboxCommitAllowsMainInNonIdleSetup(t *testing.T) {
+func TestSandboxCommitAllowsMainInSetup(t *testing.T) {
 	s := NewSandbox(t)
 
-	// Simulate scenario setup that sets non-idle mode before committing.
-	s.WriteFocus(`{"mode":"implement","activeSpec":"001-test"}`)
 	s.WriteFile("setup.txt", "setup\n")
-	s.Commit("setup: non-idle commit")
+	s.Commit("setup: commit")
 
 	out, err := s.Run("git", "log", "--oneline", "-1")
 	if err != nil {
 		t.Fatalf("git log: %v", err)
 	}
 	if out == "" {
-		t.Error("no commit after non-idle setup Commit()")
+		t.Error("no commit after setup Commit()")
 	}
 }
 
-func TestSandboxWriteFocus(t *testing.T) {
+func TestSandboxWriteFocusIsNoOp(t *testing.T) {
 	s := NewSandbox(t)
 
+	// WriteFocus is a no-op after ADR-0023
 	s.WriteFocus(`{"mode":"spec","activeSpec":"001-test"}`)
 
-	content := s.ReadFile(".mindspec/focus")
-	if content == "" {
-		t.Error("focus file is empty")
+	// Focus file should NOT be created
+	if s.FileExists(".mindspec/focus") {
+		t.Error("focus file should not be created (ADR-0023)")
 	}
 }
 
-func TestSandboxWriteLifecycle(t *testing.T) {
+func TestSandboxWriteLifecycleIsNoOp(t *testing.T) {
 	s := NewSandbox(t)
 
+	// WriteLifecycle is a no-op after ADR-0023
 	s.WriteLifecycle("001-test", "phase: spec\nepic_id: mindspec-abc\n")
 
-	content := s.ReadFile(".mindspec/docs/specs/001-test/lifecycle.yaml")
-	if content == "" {
-		t.Error("lifecycle.yaml is empty")
+	// lifecycle.yaml should NOT be created
+	if s.FileExists(".mindspec/docs/specs/001-test/lifecycle.yaml") {
+		t.Error("lifecycle.yaml should not be created (ADR-0023)")
 	}
 }
 

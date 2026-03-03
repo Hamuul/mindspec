@@ -4,8 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/mindspec/mindspec/internal/state"
 )
 
 func TestValidatePlan_WellFormed(t *testing.T) {
@@ -150,53 +148,8 @@ func TestValidatePlan_NonexistentPlan(t *testing.T) {
 	}
 }
 
-func TestValidatePlan_ApprovedFrontmatterPlanPhaseWarns(t *testing.T) {
-	tmp := t.TempDir()
-	specDir := filepath.Join(tmp, "docs", "specs", "999-test")
-	os.MkdirAll(specDir, 0755)
-
-	// Write lifecycle.yaml still in "plan" phase — inconsistent with approved plan.
-	lc := &state.Lifecycle{Phase: state.ModePlan, EpicID: "epic-1"}
-	if err := state.WriteLifecycle(specDir, lc); err != nil {
-		t.Fatalf("write lifecycle: %v", err)
-	}
-
-	plan := `---
-status: Approved
-spec_id: "999-test"
-version: "1.0"
----
-
-# Plan
-
-## Bead 999-A: Test
-
-**Steps**:
-1. Step one
-2. Step two
-3. Step three
-
-**Verification**:
-- [ ] ` + "`go test ./...` passes" + `
-
-**Depends on**: nothing
-`
-	os.WriteFile(filepath.Join(specDir, "plan.md"), []byte(plan), 0644)
-
-	r := ValidatePlan(tmp, "999-test")
-	found := false
-	for _, issue := range r.Issues {
-		if issue.Name == "plan-gate-consistency" {
-			found = true
-			if issue.Severity != SevWarning {
-				t.Errorf("expected warning severity, got %s", issue.Severity)
-			}
-		}
-	}
-	if !found {
-		t.Error("expected plan-gate-consistency warning when plan is Approved but lifecycle is still in plan phase")
-	}
-}
+// TestValidatePlan_ApprovedFrontmatterPlanPhaseWarns removed:
+// ADR-0023 eliminated lifecycle.yaml; plan-gate-consistency check no longer applies.
 
 func TestParsePlanFrontmatter(t *testing.T) {
 	content := "---\nstatus: Approved\nspec_id: \"005-next\"\nversion: \"1.0\"\napproved_at: 2026-02-12\napproved_by: user\nbead_ids: [a, b]\nadr_citations:\n  - id: ADR-0003\n    sections: [\"CLI\"]\n---\n\n# Plan\n"

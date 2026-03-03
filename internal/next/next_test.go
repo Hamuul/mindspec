@@ -9,7 +9,6 @@ import (
 
 	"github.com/mindspec/mindspec/internal/bead"
 	"github.com/mindspec/mindspec/internal/config"
-	"github.com/mindspec/mindspec/internal/state"
 )
 
 // --- ParseBeadsJSON tests ---
@@ -497,9 +496,9 @@ func TestEnsureWorktree_NoFocusPropagation(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// No focus file should be written to the worktree.
-	mc, readErr := state.ReadFocus(wtPath)
-	if readErr == nil && mc != nil {
+	// No focus file should exist in the worktree (ADR-0023: focus files eliminated).
+	focusPath := filepath.Join(wtPath, ".mindspec", "focus")
+	if _, statErr := os.Stat(focusPath); statErr == nil {
 		t.Error("expected no focus file to be written to bead worktree")
 	}
 }
