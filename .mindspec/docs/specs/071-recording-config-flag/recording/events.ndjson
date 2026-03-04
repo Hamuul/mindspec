@@ -1,1 +1,2 @@
 {"ts":"2026-03-04T18:07:39.423142Z","event":"lifecycle.start","data":{"phase":"spec","spec_id":"071-recording-config-flag"}}
+{"ts":"2026-03-04T18:20:12.588338Z","event":"lifecycle.phase","data":{"from":"spec","spec_id":"071-recording-config-flag","to":"plan"}}
