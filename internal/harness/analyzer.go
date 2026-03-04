@@ -302,6 +302,11 @@ func (a *Analyzer) DetectWrongActions(events []ActionEvent) []WrongActionResult 
 // Returns a wrong action if code-modifying events appear before any `mindspec next`
 // AND the phase is not already `implement` (which implies a bead was pre-claimed).
 func detectSkipNext(events []ActionEvent) []WrongActionResult {
+	// Build a set of turns that contain lifecycle commands. Git commits in
+	// these turns are side-effects of the lifecycle operation (e.g. approve
+	// auto-commits state changes) and should not count as "agent wrote code."
+	lifecycleTurns := lifecycleTurnSet(events)
+
 	// Find the last approve command index. Code modifications before an
 	// approve are part of the approval flow (e.g. updating a spec file
 	// before approve) and don't require `mindspec next`. But code
@@ -328,6 +333,11 @@ func detectSkipNext(events []ActionEvent) []WrongActionResult {
 			if lastApproveIdx >= 0 && i <= lastApproveIdx {
 				continue // code edit is part of the approval flow
 			}
+			// Git commits in the same turn as a lifecycle command are
+			// side-effects, not agent implementation code.
+			if e.Command == "git" && lifecycleTurns[e.Turn] {
+				continue
+			}
 			return []WrongActionResult{{
 				Rule:   "skip_next",
 				Event:  e,
@@ -336,6 +346,27 @@ func detectSkipNext(events []ActionEvent) []WrongActionResult {
 		}
 	}
 	return nil
+}
+
+// lifecycleTurnSet returns the set of turn numbers that contain a mindspec
+// lifecycle command (spec-init, approve, complete). Commits in these turns
+// are side-effects of the lifecycle operation, not agent code.
+func lifecycleTurnSet(events []ActionEvent) map[int]bool {
+	turns := make(map[int]bool)
+	lifecycleVerbs := []string{"approve", "spec-init", "complete"}
+	for _, e := range events {
+		if e.Command != "mindspec" {
+			continue
+		}
+		args := eventArgsList(e)
+		for _, verb := range lifecycleVerbs {
+			if containsAll(args, verb) {
+				turns[e.Turn] = true
+				break
+			}
+		}
+	}
+	return turns
 }
 
 // detectSkipComplete checks if the agent ran `mindspec next` and wrote code
@@ -403,52 +434,11 @@ func isCodeModifyingEvent(e ActionEvent) bool {
 	}
 	if e.Command == "git" {
 		args := eventArgsList(e)
-		if containsAll(args, "commit") && !isLifecycleCommit(args) {
+		if containsAll(args, "commit") {
 			return true
 		}
 	}
 	return false
-}
-
-// isLifecycleCommit returns true if a git commit's message indicates it was
-// made by a lifecycle command (spec-init, approve, beads backup) rather than
-// by the agent writing implementation code. These commits are side-effects of
-// mindspec CLI operations and should not trigger skip_next violations.
-func isLifecycleCommit(args []string) bool {
-	msg := commitMessage(args)
-	if msg == "" {
-		return false
-	}
-	lower := strings.ToLower(msg)
-	lifecyclePrefixes := []string{
-		"chore: initialize spec",
-		"approve:",
-		"approve ",
-		"spec approval:",
-		"implementation approval:",
-		"bd: backup",
-		"bd: ",
-	}
-	for _, prefix := range lifecyclePrefixes {
-		if strings.HasPrefix(lower, prefix) {
-			return true
-		}
-	}
-	return false
-}
-
-// commitMessage extracts the -m message from git commit args.
-func commitMessage(args []string) string {
-	for i, a := range args {
-		if a == "-m" && i+1 < len(args) {
-			return args[i+1]
-		}
-		// Handle -m"message" (no space)
-		if strings.HasPrefix(a, "-m") && len(a) > 2 {
-			return a[2:]
-		}
-	}
-	return ""
 }
 
 // eventArgsList returns args as a list, using ArgsList if available, else flatArgs.
