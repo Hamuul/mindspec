@@ -121,8 +121,8 @@ func TestApproveImpl_WrongSpec(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for wrong spec")
 	}
-	if !strings.Contains(err.Error(), "active spec") {
-		t.Errorf("error should mention active spec mismatch: %v", err)
+	if !strings.Contains(err.Error(), "no epic found") {
+		t.Errorf("error should mention no epic found: %v", err)
 	}
 }
 
