@@ -1,0 +1,5 @@
+{"ts":"2026-03-04T00:13:54.422434Z","event":"lifecycle.start","data":{"phase":"spec","spec_id":"067-lifecycle-test-epic-leak"}}
+{"ts":"2026-03-04T00:17:19.665399Z","event":"lifecycle.phase","data":{"from":"spec","spec_id":"067-lifecycle-test-epic-leak","to":"plan"}}
+{"ts":"2026-03-04T00:17:54.412246Z","event":"lifecycle.phase","data":{"from":"plan","spec_id":"067-lifecycle-test-epic-leak","to":"plan-approved"}}
+{"ts":"2026-03-04T00:18:15.344657Z","event":"lifecycle.bead.start","data":{"bead_id":"mindspec-7yzq.1","spec_id":"067-lifecycle-test-epic-leak"}}
+{"ts":"2026-03-04T00:20:21.668166Z","event":"lifecycle.bead.complete","data":{"bead_id":"mindspec-7yzq.1","spec_id":"067-lifecycle-test-epic-leak"}}
