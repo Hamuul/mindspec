@@ -6,8 +6,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/mindspec/mindspec/internal/setup"
 )
@@ -21,6 +24,8 @@ type Sandbox struct {
 	ShimBinDir string
 	// EventLogPath is the JSONL file where shims log command invocations.
 	EventLogPath string
+	// DoltPort is the sandbox's dolt server port (0 if beads init failed).
+	DoltPort int
 	// mindspecBinDir is the project's bin/ directory (contains mindspec binary).
 	mindspecBinDir string
 
@@ -91,7 +96,7 @@ enforcement:
 	}
 	mustRun(t, root, "git", "add", ".gitignore")
 	mustRun(t, root, "git", "commit", "-m", "add gitignore")
-	initBeads(t, root)
+	doltPort := initBeads(t, root)
 
 	// Resolve project bin/ directory for mindspec binary
 	binDir := projectBinDir()
@@ -114,10 +119,17 @@ enforcement:
 		t.Logf("warning: shim install: %v", err)
 	}
 
+	// Overwrite the bd shim with a CWD-pinned version that forces .beads/
+	// resolution to the sandbox root, preventing leakage to the host project.
+	if err := WritePinnedShim(shimDir, logPath, "bd", root); err != nil {
+		t.Logf("warning: pinned bd shim: %v", err)
+	}
+
 	return &Sandbox{
 		Root:           root,
 		ShimBinDir:     shimDir,
 		EventLogPath:   logPath,
+		DoltPort:       doltPort,
 		mindspecBinDir: binDir,
 		t:              t,
 	}
@@ -321,25 +333,86 @@ func (s *Sandbox) WriteFocus(content string) {
 // initBeads runs bd init in sandbox mode within the given root directory.
 // Uses --server-port 0 so dolt picks a random free port (avoids collisions
 // between parallel test sandboxes and the main project's dolt server).
-// Kills orphan dolt servers first to avoid "too many dolt sql-server" errors.
-func initBeads(t *testing.T, root string) {
+// Returns the dolt server port (0 if init failed or port unreadable).
+// Registers t.Cleanup() to stop the sandbox's dolt server on test teardown.
+func initBeads(t *testing.T, root string) int {
 	t.Helper()
 	bdPath, err := exec.LookPath("bd")
 	if err != nil {
 		t.Logf("warning: bd not found, skipping beads init")
-		return
+		return 0
 	}
 
-	// Kill orphan dolt servers that may have leaked from previous test runs.
-	killCmd := exec.Command(bdPath, "dolt", "killall")
-	killCmd.Dir = root
-	_ = killCmd.Run() // best-effort
+	// NOTE: We intentionally do NOT call `bd dolt killall` here.
+	// It kills ALL dolt servers system-wide, including the host project's.
+	// Each sandbox gets its own server on a random port via --server-port 0.
 
 	cmd := exec.Command(bdPath, "init", "--sandbox", "--skip-hooks", "-q", "--server-port", "0")
 	cmd.Dir = root
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Logf("warning: bd init: %v\n%s", err, out)
+		return 0
+	}
+
+	// Read the dolt server port assigned to this sandbox.
+	port := readDoltPort(root)
+
+	// Register cleanup to stop this sandbox's dolt server on test teardown.
+	t.Cleanup(func() {
+		stopSandboxDolt(root)
+	})
+
+	return port
+}
+
+// readDoltPort reads the dolt server port from .beads/dolt-server.port.
+func readDoltPort(root string) int {
+	data, err := os.ReadFile(filepath.Join(root, ".beads", "dolt-server.port"))
+	if err != nil {
+		return 0
+	}
+	port, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		return 0
+	}
+	return port
+}
+
+// stopSandboxDolt stops the dolt server for a sandbox and waits for it to exit.
+func stopSandboxDolt(root string) {
+	// Read PID before stopping — we need it to wait for exit.
+	pidData, _ := os.ReadFile(filepath.Join(root, ".beads", "dolt-server.pid"))
+	pid, _ := strconv.Atoi(strings.TrimSpace(string(pidData)))
+
+	// Try graceful stop via bd dolt stop.
+	bdPath, err := exec.LookPath("bd")
+	if err != nil {
+		return
+	}
+	cmd := exec.Command(bdPath, "dolt", "stop")
+	cmd.Dir = root
+	_ = cmd.Run()
+
+	// Wait for the process to actually exit so t.TempDir() cleanup can
+	// remove the .beads/dolt directory without "directory not empty" errors.
+	if pid > 0 {
+		waitForProcessExit(pid, 5)
+	}
+}
+
+// waitForProcessExit polls until the given PID no longer exists, up to maxSeconds.
+func waitForProcessExit(pid, maxSeconds int) {
+	for i := 0; i < maxSeconds*10; i++ {
+		proc, err := os.FindProcess(pid)
+		if err != nil {
+			return
+		}
+		// On Unix, FindProcess always succeeds. Use Signal(0) to check existence.
+		if err := proc.Signal(syscall.Signal(0)); err != nil {
+			return // process gone
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
