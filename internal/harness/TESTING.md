@@ -11,7 +11,6 @@ This is the most effective way to validate that the mindspec workflow actually w
 ### Prerequisites
 ```bash
 make build                    # Rebuild mindspec binary (CRITICAL -- tests use ./bin/mindspec)
-bd dolt killall 2>/dev/null   # Kill orphan dolt servers from previous runs
 ```
 
 ### Running Individual LLM Tests
@@ -38,9 +37,9 @@ env -u CLAUDECODE go test ./internal/harness/ -v -run TestLLM_SingleBead -timeou
 ### Critical Gotchas
 1. **`env -u CLAUDECODE`** -- MUST unset this env var or nested claude sessions won't launch
 2. **`make build`** -- MUST rebuild after changing any `cmd/mindspec/` or `internal/` code. The shims delegate to `./bin/mindspec`
-3. **Dolt orphans** -- Previous test runs leak dolt sql-server processes. Run `bd dolt killall` before testing, or the sandbox `bd init` will fail with "too many dolt sql-server processes"
+3. **Dolt isolation** -- Each sandbox gets its own dolt server on a random port (Spec 070). No need to kill orphans before testing
 4. **Timeout** -- SpecToIdle needs 15min timeout; simpler tests need 10min
-5. **Don't run multiple LLM tests in parallel** -- they share dolt server slots and can interfere
+5. **Parallel tests** -- Each sandbox has its own dolt server, but parallel LLM tests still compete for LLM API quota
 
 ## Test Design Principles
 
@@ -184,7 +183,7 @@ command "mindspec" with arg "complete" was not found in events   <-- FAIL
 - Add auto-chdir or relax guards for agent use
 
 **Infrastructure:**
-- Always run `bd dolt killall` before/during sandbox setup
+
 - Use `--server-port 0` for dolt (random port avoids collisions)
 - Add `.beads/` and `.harness/` to `.gitignore` in sandbox
 
@@ -629,10 +628,10 @@ Haiku in `claude -p` mode tends to be conversational unless strongly directed. R
 
 ## Known Issues & Workarounds
 
-### Dolt Server Orphans
+### Dolt Server Orphans (RESOLVED — 2026-03-04)
 **Problem**: Each sandbox `bd init` starts a dolt sql-server. If the test crashes or the process isn't cleaned up, orphan servers accumulate and block new ones (max 3).
-**Workaround**: `initBeads()` calls `bd dolt killall` before `bd init`. Also run `bd dolt killall` manually before test sessions.
-**Permanent fix needed**: Per-sandbox dolt cleanup in `t.Cleanup()`.
+**Workaround**: N/A (fixed).
+**Status (2026-03-04)**: Fixed by Spec 070. Each sandbox gets its own dolt server on a random port (`--server-port 0`) with graceful `t.Cleanup()` teardown. No global `bd dolt killall` needed.
 
 ### Setup Commits Blocked on Main (REGRESSION — 2026-03-01)
 **Problem**: Many scenarios call `sandbox.Commit()` after setting non-idle mode state. Current guard rules reject commits on `main` in spec/plan/implement/review, so setup fails before agent execution.
