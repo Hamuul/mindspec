@@ -63,6 +63,7 @@ Never report completion unless required files exist and `mindspec complete` succ
 - Completing a bead without proof and doc-sync
 - Making changes outside the assigned worktree
 - Creating worktrees via raw tooling (`bd worktree create`, `git worktree add`) instead of `mindspec next`
+- Manually closing the lifecycle epic — `mindspec impl approve` handles epic closure automatically
 
 ## Obligations
 

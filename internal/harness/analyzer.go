@@ -302,14 +302,18 @@ func (a *Analyzer) DetectWrongActions(events []ActionEvent) []WrongActionResult 
 // Returns a wrong action if code-modifying events appear before any `mindspec next`
 // AND the phase is not already `implement` (which implies a bead was pre-claimed).
 func detectSkipNext(events []ActionEvent) []WrongActionResult {
-	// If an `approve` command appears anywhere, this scenario is an approval
-	// flow (not a code-writing flow), so skip_next does not apply.
-	for _, e := range events {
+	// Find the last approve command index. Code modifications before an
+	// approve are part of the approval flow (e.g. updating a spec file
+	// before approve) and don't require `mindspec next`. But code
+	// modifications AFTER the last approve still need `next`.
+	lastApproveIdx := -1
+	for i, e := range events {
 		if e.Command == "mindspec" && containsAll(eventArgsList(e), "approve") {
-			return nil
+			lastApproveIdx = i
 		}
 	}
-	for _, e := range events {
+
+	for i, e := range events {
 		if e.Blocked {
 			continue
 		}
@@ -318,8 +322,12 @@ func detectSkipNext(events []ActionEvent) []WrongActionResult {
 			return nil
 		}
 		// Code modification before next — but only if not already in implement
-		// phase (setup may have pre-claimed a bead).
+		// phase (setup may have pre-claimed a bead) and not before an approve
+		// command (approval flows don't require next).
 		if isCodeModifyingEvent(e) && e.Phase != "implement" {
+			if lastApproveIdx >= 0 && i <= lastApproveIdx {
+				continue // code edit is part of the approval flow
+			}
 			return []WrongActionResult{{
 				Rule:   "skip_next",
 				Event:  e,

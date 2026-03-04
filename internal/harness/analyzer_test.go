@@ -246,6 +246,35 @@ func TestSkipNext_DocEditsIgnored(t *testing.T) {
 	}
 }
 
+func TestSkipNext_ApproveFlowExempt(t *testing.T) {
+	// Code edits before an approve command are part of the approval flow.
+	events := []ActionEvent{
+		{Phase: "spec", ActionType: "tool_invoke", ToolName: "Write", Args: map[string]string{"file_path": "internal/foo.go"}},
+		{ActionType: "command", Command: "mindspec", ArgsList: []string{"spec", "approve", "010-test"}},
+	}
+
+	results := detectSkipNext(events)
+	if len(results) != 0 {
+		t.Errorf("expected no violation for code edits before approve, got %d: %v", len(results), results)
+	}
+}
+
+func TestSkipNext_ApproveFlowMixedViolation(t *testing.T) {
+	// Code edits AFTER approve but before next should still trigger.
+	events := []ActionEvent{
+		{ActionType: "command", Command: "mindspec", ArgsList: []string{"spec", "approve", "010-test"}},
+		{Phase: "plan", ActionType: "tool_invoke", ToolName: "Write", Args: map[string]string{"file_path": "internal/bar.go"}},
+	}
+
+	results := detectSkipNext(events)
+	if len(results) != 1 {
+		t.Fatalf("expected 1 violation for code after approve without next, got %d", len(results))
+	}
+	if results[0].Rule != "skip_next" {
+		t.Errorf("rule = %q, want skip_next", results[0].Rule)
+	}
+}
+
 func TestSkipComplete_NoViolation(t *testing.T) {
 	events := []ActionEvent{
 		{ActionType: "command", Command: "mindspec", ArgsList: []string{"next"}},
