@@ -10,7 +10,8 @@ import (
 // shimScript is the template for a recording shim. It logs the invocation
 // to a JSONL file, then delegates to the real binary.
 // Placeholders: %s = log path, %s = real binary path, %s = command name,
-//               %s = mindspec binary path, %s = original PATH (without shim dir).
+//
+//	%s = mindspec binary path, %s = original PATH (without shim dir).
 const shimScript = `#!/bin/sh
 # Recording shim for %[3]s — logs invocations to JSONL before delegating.
 LOG_PATH="%[1]s"
@@ -64,7 +65,8 @@ exit $EXIT_CODE
 // before executing the real binary. Used for bd to ensure .beads/ resolution
 // always finds the sandbox's database, not the host project's.
 // Placeholders: %s = log path, %s = real binary path, %s = command name,
-//               %s = pinned CWD, %s = mindspec binary path, %s = original PATH.
+//
+//	%s = pinned CWD, %s = mindspec binary path, %s = original PATH.
 const shimScriptPinCWD = `#!/bin/sh
 # Recording shim for %[3]s — CWD-pinned to sandbox root for .beads/ isolation.
 LOG_PATH="%[1]s"
@@ -128,11 +130,9 @@ func InstallShims(binDir, logPath string) error {
 		return fmt.Errorf("creating shim dir: %w", err)
 	}
 
-	// Find mindspec binary once — all shims use it for phase queries.
-	mindspecPath, err := findRealBinary("mindspec", binDir)
-	if err != nil {
-		return fmt.Errorf("mindspec binary required for phase recording: %w", err)
-	}
+	// Find mindspec binary for phase queries. If not found (e.g. CI without
+	// ./bin/mindspec), shims still work but phase will be empty.
+	mindspecPath, _ := findRealBinary("mindspec", binDir)
 
 	// Compute PATH without shim dir — phase queries use this to bypass shims
 	// so mindspec's internal bd/git calls go directly to real binaries.
@@ -169,10 +169,7 @@ func WritePinnedShim(binDir, logPath, cmdName, pinCWD string) error {
 	if err != nil {
 		return err
 	}
-	mindspecPath, err := findRealBinary("mindspec", binDir)
-	if err != nil {
-		return fmt.Errorf("mindspec binary required for phase recording: %w", err)
-	}
+	mindspecPath, _ := findRealBinary("mindspec", binDir)
 	origPath := pathWithout(binDir)
 	script := fmt.Sprintf(shimScriptPinCWD, logPath, realPath, cmdName, pinCWD, mindspecPath, origPath)
 	shimPath := filepath.Join(binDir, cmdName)
