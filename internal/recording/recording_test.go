@@ -10,6 +10,18 @@ import (
 	"github.com/mindspec/mindspec/internal/bench"
 )
 
+// enableRecording writes a config that enables recording in the temp root.
+func enableRecording(t *testing.T, root string) {
+	t.Helper()
+	dir := filepath.Join(root, ".mindspec")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("recording:\n  enabled: true\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestManifestRoundTrip(t *testing.T) {
 	root := t.TempDir()
 	specID := "001-test-spec"
@@ -77,6 +89,7 @@ func TestHasRecording(t *testing.T) {
 
 func TestEmitMarker(t *testing.T) {
 	root := t.TempDir()
+	enableRecording(t, root)
 	specID := "001-test-spec"
 
 	// Create recording dir and manifest
@@ -136,6 +149,7 @@ func TestEmitMarkerNoRecording(t *testing.T) {
 
 func TestEmitPhaseMarker(t *testing.T) {
 	root := t.TempDir()
+	enableRecording(t, root)
 	specID := "001-test-spec"
 
 	if err := os.MkdirAll(RecordingDir(root, specID), 0755); err != nil {
@@ -173,6 +187,7 @@ func TestEmitPhaseMarker(t *testing.T) {
 
 func TestEmitBeadMarker(t *testing.T) {
 	root := t.TempDir()
+	enableRecording(t, root)
 	specID := "001-test-spec"
 
 	if err := os.MkdirAll(RecordingDir(root, specID), 0755); err != nil {
@@ -207,6 +222,7 @@ func TestEmitBeadMarker(t *testing.T) {
 
 func TestEnsureOTLPIdempotent(t *testing.T) {
 	root := t.TempDir()
+	enableRecording(t, root)
 
 	// Create .claude directory
 	if err := os.MkdirAll(filepath.Join(root, ".claude"), 0755); err != nil {
@@ -254,6 +270,7 @@ func TestEnsureOTLPIdempotent(t *testing.T) {
 
 func TestEnsureOTLPPreservesExisting(t *testing.T) {
 	root := t.TempDir()
+	enableRecording(t, root)
 	settingsDir := filepath.Join(root, ".claude")
 	if err := os.MkdirAll(settingsDir, 0755); err != nil {
 		t.Fatal(err)
@@ -299,6 +316,7 @@ func TestEnsureOTLPPreservesExisting(t *testing.T) {
 
 func TestUpdatePhase(t *testing.T) {
 	root := t.TempDir()
+	enableRecording(t, root)
 	specID := "001-test-spec"
 
 	if err := os.MkdirAll(RecordingDir(root, specID), 0755); err != nil {
@@ -338,6 +356,7 @@ func TestUpdatePhase(t *testing.T) {
 
 func TestAddBeadToPhase(t *testing.T) {
 	root := t.TempDir()
+	enableRecording(t, root)
 	specID := "001-test-spec"
 
 	if err := os.MkdirAll(RecordingDir(root, specID), 0755); err != nil {

@@ -14,6 +14,12 @@ type Config struct {
 	MergeStrategy     string      `yaml:"merge_strategy"`
 	WorktreeRoot      string      `yaml:"worktree_root"`
 	Enforcement       Enforcement `yaml:"enforcement"`
+	Recording         Recording   `yaml:"recording"`
+}
+
+// Recording controls whether spec recording is active.
+type Recording struct {
+	Enabled bool `yaml:"enabled"`
 }
 
 // Enforcement controls which enforcement layers are active.

@@ -4,11 +4,25 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	"github.com/mindspec/mindspec/internal/config"
 )
+
+// IsEnabled checks the project config to determine if recording is active.
+func IsEnabled(root string) bool {
+	cfg, err := config.Load(root)
+	if err != nil {
+		return false
+	}
+	return cfg.Recording.Enabled
+}
 
 // StartRecording creates the recording directory, starts the collector,
 // and emits the lifecycle.start marker.
 func StartRecording(root, specID string) error {
+	if !IsEnabled(root) {
+		return nil
+	}
 	dir := RecordingDir(root, specID)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("creating recording dir: %w", err)
@@ -43,6 +57,9 @@ func StartRecording(root, specID string) error {
 // StopRecording emits the lifecycle.end marker, stops the collector,
 // and finalizes the manifest.
 func StopRecording(root, specID string) error {
+	if !IsEnabled(root) {
+		return nil
+	}
 	if !HasRecording(root, specID) {
 		return nil // no-op
 	}
@@ -56,6 +73,9 @@ func StopRecording(root, specID string) error {
 
 // UpdatePhase closes the current phase and opens a new one in the manifest.
 func UpdatePhase(root, specID, from, to string) error {
+	if !IsEnabled(root) {
+		return nil
+	}
 	if !HasRecording(root, specID) {
 		return nil
 	}
@@ -86,6 +106,9 @@ func UpdatePhase(root, specID, from, to string) error {
 
 // AddBeadToPhase adds a bead ID to the current phase in the manifest.
 func AddBeadToPhase(root, specID, beadID string) error {
+	if !IsEnabled(root) {
+		return nil
+	}
 	if !HasRecording(root, specID) {
 		return nil
 	}
