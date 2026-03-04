@@ -30,6 +30,9 @@ func TestDefaultConfig(t *testing.T) {
 	if !cfg.Enforcement.AgentHooks {
 		t.Error("expected agent_hooks=true")
 	}
+	if cfg.Recording.Enabled {
+		t.Error("expected recording.enabled=false by default")
+	}
 }
 
 func TestLoadMissing(t *testing.T) {
@@ -80,6 +83,30 @@ enforcement:
 	}
 	if cfg.Enforcement.CLIGuards {
 		t.Error("expected cli_guards=false")
+	}
+}
+
+func TestRecordingEnabled(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, ".mindspec")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	content := `
+recording:
+  enabled: true
+`
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(root)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.Recording.Enabled {
+		t.Error("expected recording.enabled=true")
 	}
 }
 

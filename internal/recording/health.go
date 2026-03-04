@@ -13,6 +13,9 @@ const (
 
 // HealthCheck checks if the collector process is alive.
 func HealthCheck(root, specID string) (HealthStatus, error) {
+	if !IsEnabled(root) {
+		return HealthNoRecording, nil
+	}
 	if !HasRecording(root, specID) {
 		return HealthNoRecording, nil
 	}

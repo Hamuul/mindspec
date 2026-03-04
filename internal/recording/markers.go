@@ -11,6 +11,9 @@ import (
 
 // EmitMarker appends a lifecycle marker event to events.ndjson.
 func EmitMarker(root, specID, event string, data map[string]any) error {
+	if !IsEnabled(root) {
+		return nil
+	}
 	if !HasRecording(root, specID) {
 		return nil // no-op if no recording exists
 	}

@@ -40,6 +40,11 @@ var recordStatusCmd = &cobra.Command{
 			specID = ctx.SpecID
 		}
 
+		if !recording.IsEnabled(root) {
+			fmt.Println("Recording disabled (set recording.enabled: true in .mindspec/config.yaml to enable)")
+			return nil
+		}
+
 		if !recording.HasRecording(root, specID) {
 			fmt.Printf("No recording found for spec %s\n", specID)
 			return nil

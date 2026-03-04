@@ -14,6 +14,9 @@ const defaultRecordingPort = 4318 // AgentMind OTLP port (unified collector)
 // If already present with a different endpoint, warns and does not override.
 // Returns true if new config was written (first-run), false otherwise.
 func EnsureOTLP(root string) (bool, error) {
+	if !IsEnabled(root) {
+		return false, nil
+	}
 	settingsPath := filepath.Join(root, ".claude", "settings.local.json")
 
 	// Read existing settings
