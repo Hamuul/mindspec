@@ -39,6 +39,42 @@ printf '{"timestamp":"%%s","action_type":"command","command":"%[3]s","args_list"
 exit $EXIT_CODE
 `
 
+// shimScriptPinCWD is like shimScript but forces CWD to a fixed directory
+// before executing the real binary. Used for bd to ensure .beads/ resolution
+// always finds the sandbox's database, not the host project's.
+// Placeholders: %s = log path, %s = real binary path, %s = command name, %s = pinned CWD.
+const shimScriptPinCWD = `#!/bin/sh
+# Recording shim for %[3]s — CWD-pinned to sandbox root for .beads/ isolation.
+LOG_PATH="%[1]s"
+REAL_BIN="%[2]s"
+CMD_NAME="%[3]s"
+PIN_CWD="%[4]s"
+ORIG_CWD=$(pwd)
+cd "$PIN_CWD"
+START_NS=$(date +%%s%%N 2>/dev/null || python3 -c "import time; print(int(time.time()*1e9))" 2>/dev/null || echo 0)
+"$REAL_BIN" "$@"
+EXIT_CODE=$?
+END_NS=$(date +%%s%%N 2>/dev/null || python3 -c "import time; print(int(time.time()*1e9))" 2>/dev/null || echo 0)
+if [ "$START_NS" != "0" ] && [ "$END_NS" != "0" ]; then
+  DURATION_MS=$(( (END_NS - START_NS) / 1000000 ))
+else
+  DURATION_MS=0
+fi
+ARGS=$(printf '%%s\n' "$@" | python3 -c "
+import sys, json
+args = [line.rstrip() for line in sys.stdin]
+print(json.dumps(args))
+" 2>/dev/null || echo '[]')
+printf '{"timestamp":"%%s","action_type":"command","command":"%[3]s","args_list":%%s,"cwd":"%%s","exit_code":%%d,"duration_ms":%%d}\n' \
+  "$(date -u +%%Y-%%m-%%dT%%H:%%M:%%SZ 2>/dev/null || echo unknown)" \
+  "$ARGS" \
+  "$ORIG_CWD" \
+  "$EXIT_CODE" \
+  "$DURATION_MS" \
+  >> "$LOG_PATH"
+exit $EXIT_CODE
+`
+
 // DefaultShimCommands is the list of commands that get recording shims.
 var DefaultShimCommands = []string{"mindspec", "git", "bd", "gh"}
 
@@ -66,6 +102,22 @@ func InstallShims(binDir, logPath string) error {
 // writeShim creates a single shim script.
 func writeShim(binDir, logPath, cmdName, realPath string) error {
 	script := fmt.Sprintf(shimScript, logPath, realPath, cmdName)
+	shimPath := filepath.Join(binDir, cmdName)
+	if err := os.WriteFile(shimPath, []byte(script), 0o755); err != nil {
+		return err
+	}
+	return nil
+}
+
+// WritePinnedShim creates a CWD-pinned recording shim for a command.
+// The shim changes to pinCWD before executing the real binary, ensuring
+// .beads/ resolution stays within the sandbox regardless of agent CWD drift.
+func WritePinnedShim(binDir, logPath, cmdName, pinCWD string) error {
+	realPath, err := findRealBinary(cmdName, binDir)
+	if err != nil {
+		return err
+	}
+	script := fmt.Sprintf(shimScriptPinCWD, logPath, realPath, cmdName, pinCWD)
 	shimPath := filepath.Join(binDir, cmdName)
 	if err := os.WriteFile(shimPath, []byte(script), 0o755); err != nil {
 		return err

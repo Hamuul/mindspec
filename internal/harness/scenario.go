@@ -162,10 +162,15 @@ ends in review mode. Do not close beads directly with bd commands.`,
 			// Agent should have run mindspec complete
 			assertCommandRan(t, events, "mindspec", "complete")
 
-			// Commit message follows impl(<beadID>): convention
+			// Commit message follows impl(<beadID>): convention.
+			// mindspec complete auto-commits with this format when given a message.
+			// If the agent ran complete without a message, the commit may not exist —
+			// use Errorf (non-fatal) since the real proof is that complete ran.
 			assertCommitMessage(t, sandbox, `impl\(`)
 
-			// Bead branch was merged into spec branch (merge topology)
+			// Bead branch was merged into spec branch (merge topology).
+			// After impl approve, the spec branch may be deleted — assertMergeTopology
+			// falls back to --all to find merge commits on main.
 			assertMergeTopology(t, sandbox, "spec/001-greeting")
 
 			// Bead was closed by mindspec complete
@@ -2065,22 +2070,31 @@ func assertBeadsState(t testing.TB, sandbox *Sandbox, epicID string, expectedSta
 }
 
 // assertMergeTopology checks that at least one merge commit from a bead/ branch
-// exists on the given specBranch after a bead→spec merge.
+// exists on the given specBranch (or on any branch if specBranch was already
+// deleted by impl approve) after a bead→spec merge.
 func assertMergeTopology(t testing.TB, sandbox *Sandbox, specBranch string) {
 	t.Helper()
+	// Try the specified branch first; fall back to --all if it no longer exists
+	// (impl approve deletes the spec branch after merging).
 	cmd := exec.Command("git", "log", "--merges", "--oneline", specBranch)
 	cmd.Dir = sandbox.Root
 	out, err := cmd.Output()
 	if err != nil {
-		t.Errorf("git log --merges on %s: %v", specBranch, err)
-		return
+		// Branch may have been deleted by impl approve — search all refs.
+		cmd = exec.Command("git", "log", "--merges", "--oneline", "--all")
+		cmd.Dir = sandbox.Root
+		out, err = cmd.Output()
+		if err != nil {
+			t.Errorf("git log --merges --all: %v", err)
+			return
+		}
 	}
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		if strings.Contains(line, "bead/") {
 			return
 		}
 	}
-	t.Errorf("no merge commit from a bead/ branch found on %s; merges: %s", specBranch, strings.TrimSpace(string(out)))
+	t.Errorf("no merge commit from a bead/ branch found on %s (or --all); merges: %s", specBranch, strings.TrimSpace(string(out)))
 }
 
 // assertCommitMessage checks that at least one commit in git log --oneline matches
