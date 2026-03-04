@@ -232,7 +232,7 @@ Create formatter_test.go with tests.
 1. Create types.go with a Message struct (fields: From, To, Body string)
 2. Create formatter.go with FormatMessage(m Message) string
 3. Create formatter_test.go that tests FormatMessage
-Run 'mindspec complete' after each bead.`,
+Finish each bead through the MindSpec lifecycle before starting the next one.`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
 			// Workflow adherence: the agent must progress through at least one
 			// multi-bead handoff using mindspec next from dependency-ordered work.
@@ -295,7 +295,7 @@ func main() {
 		Prompt: `You are implementing a feature bead. While working, you notice
 main.go has a critical bug — the main function doesn't print anything.
 Fix main.go to add fmt.Println("hello") and commit the fix, then continue your feature work
-by creating feature.go with a Feature() function. Run 'mindspec complete' when done.`,
+by creating feature.go with a Feature() function. Finish the bead when done.`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
 			featureObserved := sandbox.FileExists("feature.go") || fileExistsInWorktrees(sandbox.Root, "feature.go")
 			if !featureObserved {
@@ -376,7 +376,7 @@ func Process() {
 		},
 		Prompt: `You are resuming after a session crash. The project is in implement mode with
 a bead in progress. There's a partial.go file with an incomplete Process function.
-Complete the Process function (make it return "processed") and run 'mindspec complete'.`,
+Complete the Process function (make it return "processed") and finish the bead through the MindSpec lifecycle.`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
 			// partial.go should exist somewhere (may have been merged to spec branch)
 			partialObserved := sandbox.FileExists("partial.go") || fileExistsInWorktrees(sandbox.Root, "partial.go")
@@ -1052,7 +1052,7 @@ Create widget.go with a Widget function.
 		},
 		Prompt: `You are resuming work in implement mode. The state references a worktree that may not exist.
 Your task: create a file called widget.go with a function Widget() string that returns "widget".
-Then run 'mindspec complete' to finish the bead.`,
+Finish the bead through the MindSpec lifecycle when done.`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
 			// Agent should have created the file
 			if !sandbox.FileExists("widget.go") {
@@ -1167,7 +1167,7 @@ func Greet(name string) string { return "Hello, " + name + "!" }
 
 You are in implement mode. The implementation is already complete and committed in the bead worktree.
 Your CWD may be the spec worktree, not the bead worktree.
-Run 'mindspec complete' to close the bead and finish implementation.
+Close the bead and finish implementation.
 If it fails, diagnose the issue and find a way to complete successfully.`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
 			// Agent should have run mindspec complete successfully (exit code 0)
@@ -1565,7 +1565,7 @@ Create extension.go that uses Core().
 		Prompt: `IMPORTANT: Do NOT respond conversationally. Execute immediately.
 
 Create a file called core.go with a function Core() string that returns "core".
-Then finish the currently claimed bead using mindspec complete.`,
+Then finish the currently claimed bead through the MindSpec lifecycle.`,
 		Assertions: func(t *testing.T, sandbox *Sandbox, events []ActionEvent) {
 			// Agent ran mindspec complete
 			assertCommandRan(t, events, "mindspec", "complete")
