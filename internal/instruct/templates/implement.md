@@ -30,14 +30,14 @@ idle ── spec ── plan ──── >>> implement ── review ── idl
 Execute the active bead in an isolated worktree. Stay within scope.
 
 ## Worktree Bootstrap — MANDATORY
-
-**CRITICAL: Run `mindspec next` before writing ANY code.** This is the ONLY way to enter a bead worktree. Do NOT skip this step. Do NOT create files, edit code, or run `git commit` until `mindspec next` has succeeded.
-
 {{- if .ActiveWorktree}}
+
 **Active Worktree**: `{{.ActiveWorktree}}`
-You MUST `cd` into this worktree and work there. All code changes go in the worktree, not the main repo.
+
+Your bead worktree is ready. `cd {{.ActiveWorktree}}` and work there. All code changes go in the worktree, not the main repo.
 {{- else}}
-**No active worktree.** Run `mindspec next` NOW — before any other action.
+
+**No active worktree.** Run `mindspec next` NOW — before any other action. Do NOT create files, edit code, or run `git commit` until `mindspec next` has succeeded.
 {{- end}}
 
 Do NOT create manual workflow branches/worktrees in implement mode.
