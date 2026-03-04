@@ -75,7 +75,7 @@ func ApproveImpl(root, specID string, opts ...ImplOpts) (*ImplResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("deriving phase for spec %s: %w", specID, err)
 	}
-	if epicPhase != state.ModeReview {
+	if epicPhase != state.ModeReview && epicPhase != state.ModeDone {
 		return nil, fmt.Errorf("expected review mode, got %q", epicPhase)
 	}
 	if epicID != "" {
@@ -93,16 +93,17 @@ func ApproveImpl(root, specID string, opts ...ImplOpts) (*ImplResult, error) {
 
 	// Derive spec branch from convention.
 	specBranch := state.SpecBranch(specID)
+	specBranchExists := branchExistsFn(specBranch)
 
 	// Preflight: verify spec branch has actual implementation content.
-	if specBranch != "" {
+	if specBranchExists {
 		if err := verifyImplContent(root, specBranch, specID); err != nil {
 			return nil, fmt.Errorf("preflight check failed: %w", err)
 		}
 	}
 
 	// Push spec branch to remote if available, then clean up locally.
-	if specBranch != "" {
+	if specBranchExists {
 		result.SpecBranch = specBranch
 
 		// Gather pre-push stats (best-effort).

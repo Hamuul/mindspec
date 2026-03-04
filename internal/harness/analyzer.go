@@ -302,6 +302,13 @@ func (a *Analyzer) DetectWrongActions(events []ActionEvent) []WrongActionResult 
 // Returns a wrong action if code-modifying events appear before any `mindspec next`
 // AND the phase is not already `implement` (which implies a bead was pre-claimed).
 func detectSkipNext(events []ActionEvent) []WrongActionResult {
+	// If an `approve` command appears anywhere, this scenario is an approval
+	// flow (not a code-writing flow), so skip_next does not apply.
+	for _, e := range events {
+		if e.Command == "mindspec" && containsAll(eventArgsList(e), "approve") {
+			return nil
+		}
+	}
 	for _, e := range events {
 		if e.Blocked {
 			continue
