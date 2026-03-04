@@ -8,12 +8,18 @@ import (
 
 // shimScript is the template for a recording shim. It logs the invocation
 // to a JSONL file, then delegates to the real binary.
-// Placeholders: %s = log path, %s = real binary path, %s = command name.
+// Placeholders: %s = log path, %s = real binary path, %s = command name, %s = mindspec binary path.
 const shimScript = `#!/bin/sh
 # Recording shim for %[3]s — logs invocations to JSONL before delegating.
 LOG_PATH="%[1]s"
 REAL_BIN="%[2]s"
 CMD_NAME="%[3]s"
+MINDSPEC_BIN="%[4]s"
+# Internal phase queries set MINDSPEC_SHIM_NOLOG to avoid recursive logging.
+if [ -n "$MINDSPEC_SHIM_NOLOG" ]; then
+  "$REAL_BIN" "$@"
+  exit $?
+fi
 START_NS=$(date +%%s%%N 2>/dev/null || python3 -c "import time; print(int(time.time()*1e9))" 2>/dev/null || echo 0)
 "$REAL_BIN" "$@"
 EXIT_CODE=$?
@@ -29,12 +35,14 @@ import sys, json
 args = [line.rstrip() for line in sys.stdin]
 print(json.dumps(args))
 " 2>/dev/null || echo '[]')
-printf '{"timestamp":"%%s","action_type":"command","command":"%[3]s","args_list":%%s,"cwd":"%%s","exit_code":%%d,"duration_ms":%%d}\n' \
+PHASE=$(MINDSPEC_SHIM_NOLOG=1 "$MINDSPEC_BIN" state show --json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('mode',''))" 2>/dev/null || echo "")
+printf '{"timestamp":"%%s","action_type":"command","command":"%[3]s","args_list":%%s,"cwd":"%%s","exit_code":%%d,"duration_ms":%%d,"phase":"%%s"}\n' \
   "$(date -u +%%Y-%%m-%%dT%%H:%%M:%%SZ 2>/dev/null || echo unknown)" \
   "$ARGS" \
   "$CWD_PATH" \
   "$EXIT_CODE" \
   "$DURATION_MS" \
+  "$PHASE" \
   >> "$LOG_PATH"
 exit $EXIT_CODE
 `
@@ -42,14 +50,21 @@ exit $EXIT_CODE
 // shimScriptPinCWD is like shimScript but forces CWD to a fixed directory
 // before executing the real binary. Used for bd to ensure .beads/ resolution
 // always finds the sandbox's database, not the host project's.
-// Placeholders: %s = log path, %s = real binary path, %s = command name, %s = pinned CWD.
+// Placeholders: %s = log path, %s = real binary path, %s = command name, %s = pinned CWD, %s = mindspec binary path.
 const shimScriptPinCWD = `#!/bin/sh
 # Recording shim for %[3]s — CWD-pinned to sandbox root for .beads/ isolation.
 LOG_PATH="%[1]s"
 REAL_BIN="%[2]s"
 CMD_NAME="%[3]s"
 PIN_CWD="%[4]s"
+MINDSPEC_BIN="%[5]s"
 ORIG_CWD=$(pwd)
+# Internal phase queries set MINDSPEC_SHIM_NOLOG to avoid recursive logging.
+if [ -n "$MINDSPEC_SHIM_NOLOG" ]; then
+  cd "$PIN_CWD"
+  "$REAL_BIN" "$@"
+  exit $?
+fi
 cd "$PIN_CWD"
 START_NS=$(date +%%s%%N 2>/dev/null || python3 -c "import time; print(int(time.time()*1e9))" 2>/dev/null || echo 0)
 "$REAL_BIN" "$@"
@@ -65,12 +80,14 @@ import sys, json
 args = [line.rstrip() for line in sys.stdin]
 print(json.dumps(args))
 " 2>/dev/null || echo '[]')
-printf '{"timestamp":"%%s","action_type":"command","command":"%[3]s","args_list":%%s,"cwd":"%%s","exit_code":%%d,"duration_ms":%%d}\n' \
+PHASE=$(MINDSPEC_SHIM_NOLOG=1 "$MINDSPEC_BIN" state show --json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('mode',''))" 2>/dev/null || echo "")
+printf '{"timestamp":"%%s","action_type":"command","command":"%[3]s","args_list":%%s,"cwd":"%%s","exit_code":%%d,"duration_ms":%%d,"phase":"%%s"}\n' \
   "$(date -u +%%Y-%%m-%%dT%%H:%%M:%%SZ 2>/dev/null || echo unknown)" \
   "$ARGS" \
   "$ORIG_CWD" \
   "$EXIT_CODE" \
   "$DURATION_MS" \
+  "$PHASE" \
   >> "$LOG_PATH"
 exit $EXIT_CODE
 `
@@ -80,10 +97,17 @@ var DefaultShimCommands = []string{"mindspec", "git", "bd", "gh"}
 
 // InstallShims creates recording shim scripts in binDir for each command.
 // Each shim logs to logPath and delegates to the real binary found via PATH
-// (excluding binDir itself).
+// (excluding binDir itself). Each shim also queries the current lifecycle
+// phase via the real mindspec binary and records it in the JSONL output.
 func InstallShims(binDir, logPath string) error {
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
 		return fmt.Errorf("creating shim dir: %w", err)
+	}
+
+	// Find mindspec binary once — all shims use it for phase queries.
+	mindspecPath, err := findRealBinary("mindspec", binDir)
+	if err != nil {
+		return fmt.Errorf("mindspec binary required for phase recording: %w", err)
 	}
 
 	for _, cmd := range DefaultShimCommands {
@@ -92,7 +116,7 @@ func InstallShims(binDir, logPath string) error {
 			// If the real binary isn't found, skip (e.g. bd not installed in test env)
 			continue
 		}
-		if err := writeShim(binDir, logPath, cmd, realPath); err != nil {
+		if err := writeShim(binDir, logPath, cmd, realPath, mindspecPath); err != nil {
 			return fmt.Errorf("writing shim for %s: %w", cmd, err)
 		}
 	}
@@ -100,8 +124,8 @@ func InstallShims(binDir, logPath string) error {
 }
 
 // writeShim creates a single shim script.
-func writeShim(binDir, logPath, cmdName, realPath string) error {
-	script := fmt.Sprintf(shimScript, logPath, realPath, cmdName)
+func writeShim(binDir, logPath, cmdName, realPath, mindspecPath string) error {
+	script := fmt.Sprintf(shimScript, logPath, realPath, cmdName, mindspecPath)
 	shimPath := filepath.Join(binDir, cmdName)
 	if err := os.WriteFile(shimPath, []byte(script), 0o755); err != nil {
 		return err
@@ -117,7 +141,11 @@ func WritePinnedShim(binDir, logPath, cmdName, pinCWD string) error {
 	if err != nil {
 		return err
 	}
-	script := fmt.Sprintf(shimScriptPinCWD, logPath, realPath, cmdName, pinCWD)
+	mindspecPath, err := findRealBinary("mindspec", binDir)
+	if err != nil {
+		return fmt.Errorf("mindspec binary required for phase recording: %w", err)
+	}
+	script := fmt.Sprintf(shimScriptPinCWD, logPath, realPath, cmdName, pinCWD, mindspecPath)
 	shimPath := filepath.Join(binDir, cmdName)
 	if err := os.WriteFile(shimPath, []byte(script), 0o755); err != nil {
 		return err
