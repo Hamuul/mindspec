@@ -1,59 +1,74 @@
 ---
-status: Draft
-approved_at: ""
-approved_by: ""
+approved_at: "2026-03-04T11:38:35Z"
+approved_by: user
+status: Approved
 ---
-# Spec 068-lifecycle-yaml-cleanup: Lifecycle Yaml Cleanup
+# Remove Dead lifecycle.yaml References
 
 ## Goal
 
-<Brief description of what this spec achieves and the target user outcome>
+Remove all dead `lifecycle.yaml` writes and stale comments from the codebase. ADR-0023 eliminated lifecycle.yaml — state is derived from beads. But 16 `WriteFile` calls in `scenario.go` still write this dead file, and comments across the codebase reference it as if active.
 
 ## Background
 
-<Context, motivation, and any relevant prior decisions>
+ADR-0023 replaced file-based lifecycle state with beads-derived state. Runtime code already queries beads, but test scaffolding and comments were never cleaned up.
 
 ## Impacted Domains
 
-- <domain-1>: <how it is impacted>
+- harness: Remove dead lifecycle.yaml writes from scenario setup
+- workspace: Remove `LifecyclePath()` helper if unused at runtime
 
 ## ADR Touchpoints
 
-- [ADR-NNNN](../../adr/ADR-NNNN.md): <why this ADR is relevant>
+- [ADR-0023](../../adr/ADR-0023.md): Eliminated lifecycle.yaml in favor of beads-derived state
 
 ## Requirements
 
-1. <Requirement 1>
-2. <Requirement 2>
+1. Remove all `sandbox.WriteFile(...lifecycle.yaml...)` calls in scenario.go
+2. Update stale comments referencing lifecycle.yaml across code files
+3. Keep doctor/validate detection code (useful for brownfield repos)
+4. Keep ADR/spec docs unchanged (historical)
 
 ## Scope
 
 ### In Scope
-- <File or component 1>
+- `internal/harness/scenario.go` — 16 dead WriteFile calls
+- `internal/harness/sandbox.go` — dead WriteLifecycle no-op comment
+- `internal/harness/TESTING.md` — stale references
+- `cmd/mindspec/instruct.go` — stale Long description
+- `cmd/mindspec/next.go` — stale comment
+- `cmd/mindspec/bead.go` — stale deprecation messages
+- `internal/complete/complete.go` — stale comments
+- `internal/phase/derive.go` — stale package comment
+- `internal/resolve/resolve.go` — stale comments
+- `internal/validate/spec.go`, `plan.go` — stale comments
+- `internal/next/beads.go` — stale comment
+- `internal/workspace/workspace.go` — `LifecyclePath()` if unused
 
 ### Out of Scope
-- <Explicitly excluded items>
+- ADR and spec documentation (historical)
+- Doctor/validate stale-detection code (still useful)
 
 ## Non-Goals
 
-- <What this spec intentionally does not address>
+- Changing any runtime behavior
+- Modifying test assertions that verify lifecycle.yaml is NOT created
 
 ## Acceptance Criteria
 
-- [ ] <Specific, measurable criterion 1>
-- [ ] <Specific, measurable criterion 2>
+- [ ] `grep -r 'lifecycle\.yaml' internal/harness/scenario.go` returns no results
+- [ ] `make build` succeeds
+- [ ] `go test ./internal/harness/ -short -v` passes
+- [ ] `go test ./... -short` passes
 
 ## Validation Proofs
 
-- <command 1>: <Expected outcome>
-
-## Open Questions
-
-- [ ] <Question that must be resolved before planning>
+- `grep -rn 'lifecycle.yaml' --include='*.go' | grep -v '_test.go' | grep -v docs/ | grep -v doctor/ | grep -v validate/'`: Should show no remaining stale references
+- `make build && go test ./... -short`: All pass
 
 ## Approval
 
-- **Status**: DRAFT
-- **Approved By**: -
-- **Approval Date**: -
-- **Notes**: -
+- **Status**: APPROVED
+- **Approved By**: user
+- **Approval Date**: 2026-03-04
+- **Notes**: Approved via mindspec approve spec
