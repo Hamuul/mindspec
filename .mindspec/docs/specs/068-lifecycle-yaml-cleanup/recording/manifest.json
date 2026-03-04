@@ -1,0 +1,24 @@
+{
+  "spec_id": "068-lifecycle-yaml-cleanup",
+  "started_at": "2026-03-04T11:36:46Z",
+  "collector_pid": 0,
+  "collector_port": 4318,
+  "process_name": "mindspec",
+  "status": "recording",
+  "phases": [
+    {
+      "phase": "spec",
+      "started_at": "2026-03-04T11:36:46Z",
+      "ended_at": "2026-03-04T11:38:37Z"
+    },
+    {
+      "phase": "plan",
+      "started_at": "2026-03-04T11:38:37Z",
+      "ended_at": "2026-03-04T11:39:09Z"
+    },
+    {
+      "phase": "plan-approved",
+      "started_at": "2026-03-04T11:39:09Z"
+    }
+  ]
+}
