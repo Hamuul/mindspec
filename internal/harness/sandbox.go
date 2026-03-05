@@ -77,6 +77,9 @@ enforcement:
 	// Resolve project bin/ directory for mindspec binary — needed BEFORE initial
 	// commit so the pre-commit hook shim can find `mindspec hook pre-commit`.
 	binDir := projectBinDir()
+	if binDir == "" && testing.Short() {
+		t.Skip("skipping sandbox test: no mindspec binary (run make build)")
+	}
 
 	// Set up Claude Code integration: CLAUDE.md, slash commands, and hooks
 	// (SessionStart runs mindspec instruct)
@@ -214,7 +217,7 @@ func mustRun(t *testing.T, dir string, name string, args ...string) string { //n
 
 // mustRunWithBin is like mustRun but prepends binDir to PATH so that
 // git hooks (e.g. pre-commit shim) can resolve the mindspec binary.
-func mustRunWithBin(t *testing.T, dir, binDir string, name string, args ...string) string {
+func mustRunWithBin(t *testing.T, dir, binDir string, name string, args ...string) { //nolint:unparam // name kept for call-site clarity
 	t.Helper()
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
@@ -225,7 +228,6 @@ func mustRunWithBin(t *testing.T, dir, binDir string, name string, args ...strin
 	if err != nil {
 		t.Fatalf("%s %s failed: %v\n%s", name, strings.Join(args, " "), err, out)
 	}
-	return string(out)
 }
 
 // Env returns the environment variables for running commands in the sandbox,
