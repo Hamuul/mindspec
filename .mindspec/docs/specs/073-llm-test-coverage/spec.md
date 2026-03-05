@@ -1,7 +1,7 @@
 ---
-status: Draft
-approved_at: ""
-approved_by: ""
+approved_at: "2026-03-05T09:11:53Z"
+approved_by: user
+status: Approved
 ---
 # Spec 073-llm-test-coverage: Improve LLM test coverage and iteration
 
@@ -101,7 +101,7 @@ SingleBead, SpecInit, SpecApprove, PlanApprove, ImplApprove, SpecStatus, Approve
 
 ## Approval
 
-- **Status**: DRAFT
-- **Approved By**: -
-- **Approval Date**: -
-- **Notes**: Exploratory spec — scope may narrow during planning based on initial investigation
+- **Status**: APPROVED
+- **Approved By**: user
+- **Approval Date**: 2026-03-05
+- **Notes**: Approved via mindspec approve spec
