@@ -1062,6 +1062,7 @@ Finish the bead through the MindSpec lifecycle when done.`,
 //
 // After:  agent successfully runs mindspec complete (bead closed, worktree removed)
 func ScenarioCompleteFromSpecWorktree() Scenario {
+	var epicID, beadID string
 	return Scenario{
 		Name:        "complete_from_spec_worktree",
 		Description: "Agent closes bead when CWD is spec worktree, not bead worktree",
@@ -1071,8 +1072,8 @@ func ScenarioCompleteFromSpecWorktree() Scenario {
 			specID := "001-greeting"
 
 			// Create epic + bead
-			epicID := sandbox.CreateSpecEpic(specID)
-			beadID := sandbox.CreateBead("["+specID+"] Implement greeting", "task", epicID)
+			epicID = sandbox.CreateSpecEpic(specID)
+			beadID = sandbox.CreateBead("["+specID+"] Implement greeting", "task", epicID)
 			sandbox.ClaimBead(beadID)
 
 			// Create spec + bead worktrees via shared helper
@@ -1123,6 +1124,11 @@ If it fails, diagnose the issue and find a way to complete successfully.`,
 			// Agent must use mindspec complete (not bd close) — complete handles
 			// merge topology, worktree cleanup, branch deletion, and state advance.
 			assertCommandSucceeded(t, events, "mindspec", "complete")
+
+			// Verify bead actually closed
+			assertBeadsState(t, sandbox, epicID, map[string]string{
+				beadID: "closed",
+			})
 		},
 	}
 }
@@ -1517,13 +1523,15 @@ Then finish the currently claimed bead through the MindSpec lifecycle.`,
 			// Agent ran mindspec complete
 			assertCommandRan(t, events, "mindspec", "complete")
 
-			// Focus should be plan (not implement) because bead-2 is blocked
-
 			// Bead-1 closed, bead-2 still open
 			assertBeadsState(t, sandbox, epicID, map[string]string{
 				bead1: "closed",
 				bead2: "open",
 			})
+
+			// Core spirit: mode should be plan (not implement) because bead-2 is blocked.
+			// This catches the bd close shortcut — bd close skips state transitions.
+			assertMindspecMode(t, sandbox, "plan")
 		},
 	}
 }
