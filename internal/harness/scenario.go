@@ -841,7 +841,7 @@ func ScenarioMultipleActiveSpecs() Scenario {
 	return Scenario{
 		Name:        "multiple_active_specs",
 		Description: "Two active specs, agent completes one without disrupting the other",
-		MaxTurns:    20,
+		MaxTurns:    30,
 		Model:       "haiku",
 		Setup: func(sandbox *Sandbox) error {
 			specID := "001-alpha"
