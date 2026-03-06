@@ -1,15 +1,17 @@
 ---
+name: llm-test
 description: Enter the iterative LLM test harness loop (test -> observe -> fix -> retest)
 ---
 
 # LLM Test Harness Mode
 
-You are entering the iterative LLM testing mode. Read `internal/harness/TESTING.md` for the full operational guide — it contains improvement history, failure taxonomy, and architecture notes. You MUST update TESTING.md during this session.
+You are entering the iterative LLM testing mode. You MUST update HISTORY.md during this session.
 
 ## Step 1: Context
 
 Read these files to understand current state:
-- `internal/harness/TESTING.md` — operational guide and improvement history
+- `internal/harness/TESTING.md` — operational guide (how to run, design principles, failure taxonomy)
+- `internal/harness/HISTORY.md` — improvement history tables, session summaries, coverage analysis, known issues
 - `internal/harness/scenario.go` — all scenario definitions
 - `internal/harness/scenario_test.go` — test runner and observability logging
 
@@ -23,6 +25,7 @@ Present these options:
 4. **Improve a scenario** — modify prompts, turn budgets, assertions, or sandbox setup
 5. **Add a new scenario** — create a new test for an untested workflow
 6. **Review history** — show the improvement history tables and trends
+7. **Review a scenario** — use `/llm-test-review <scenario>` for a deep-dive audit
 
 Ask which scenario if they choose option 1 or 4.
 
@@ -59,9 +62,9 @@ After each test run:
 5. Retest the same scenario
 6. After fixing a complex scenario, also retest SingleBead to check for regressions
 
-## Step 5: Update TESTING.md
+## Step 5: Update HISTORY.md
 
-**MANDATORY**: After every test session (even if no code changed), update `internal/harness/TESTING.md`:
+**MANDATORY**: After every test session (even if no code changed), update `internal/harness/HISTORY.md`:
 
 ### Improvement History Tables
 Add a row to the relevant scenario's table with: Date, Result, Events, Turns, Time, Change.

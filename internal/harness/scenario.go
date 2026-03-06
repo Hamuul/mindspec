@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -822,31 +823,32 @@ status: Approved
 	}
 }
 
-// ScenarioMultipleActiveSpecs tests that the agent can work when two specs are active
-// simultaneously. CLI commands like `mindspec instruct`, `mindspec next`, and
-// `mindspec complete` fail with "multiple active specs found; use --spec to target one"
-// when more than one spec is active. The agent must discover the --spec flag from the
-// CLI error message and use it to disambiguate.
+// ScenarioMultipleActiveSpecs tests that the agent can implement a bead when
+// two specs are active simultaneously without disrupting the other spec.
+// The bead worktree provides enough context for the CLI to auto-resolve the
+// target spec, so --spec disambiguation is not required (worktree path
+// resolution supersedes the ambiguity check).
 //
 // Before: Two specs active (001-alpha in implement mode, 002-beta in plan mode),
 //
 //	one bead claimed for 001-alpha, agent is asked to implement the bead
 //
-// After:  Agent successfully implements the bead and runs complete despite
+// After:  Agent implements the bead and completes 001-alpha into review mode;
 //
-//	multiple active specs requiring --spec disambiguation
+//	002-beta's epic remains untouched
 func ScenarioMultipleActiveSpecs() Scenario {
+	var epicAlpha, beadAlpha, epicBeta string
 	return Scenario{
 		Name:        "multiple_active_specs",
-		Description: "Two active specs, agent must discover --spec flag from CLI errors",
+		Description: "Two active specs, agent completes one without disrupting the other",
 		MaxTurns:    30,
 		Model:       "haiku",
 		Setup: func(sandbox *Sandbox) error {
 			specID := "001-alpha"
 
 			// --- Spec 001-alpha: implement mode with a claimed bead ---
-			epicAlpha := sandbox.CreateSpecEpic("001-alpha")
-			beadAlpha := sandbox.CreateBead("[001-alpha] Implement greeting", "task", epicAlpha)
+			epicAlpha = sandbox.CreateSpecEpic("001-alpha")
+			beadAlpha = sandbox.CreateBead("[001-alpha] Implement greeting", "task", epicAlpha)
 			sandbox.ClaimBead(beadAlpha)
 
 			sandbox.WriteFile(".mindspec/docs/specs/001-alpha/spec.md", `---
@@ -866,7 +868,7 @@ Create greeting.go with a Greet function.
 `)
 
 			// --- Spec 002-beta: plan mode (no beads yet) ---
-			_ = sandbox.CreateSpecEpic("002-beta")
+			epicBeta = sandbox.CreateSpecEpic("002-beta")
 			sandbox.WriteFile(".mindspec/docs/specs/002-beta/spec.md", `---
 title: Beta Feature
 status: Approved
@@ -882,14 +884,9 @@ spec_id: 002-beta
 TBD
 `)
 
-			// Establish spec + nested bead worktree for 001-alpha so implementation
-			// does not start on main, while still requiring --spec disambiguation.
 			sandbox.Commit("setup: two active specs")
 			setupWorktrees(sandbox, specID, beadAlpha, "implement")
 
-			// Focus: implement mode with activeBead but NO activeSpec.
-			// This forces disambiguation across multiple active specs so the
-			// agent must use --spec on complete.
 			sandbox.Commit("setup: two active specs with active worktree")
 			return nil
 		},
@@ -917,10 +914,24 @@ while 002-beta remains unchanged. Do not close beads directly with bd commands.`
 			if !greetingObserved {
 				t.Error("greeting.go was not created")
 			}
+
 			// Agent should have run mindspec complete
 			assertCommandRan(t, events, "mindspec", "complete")
-			// Agent should have discovered and used --spec disambiguation.
-			assertCommandUsedFlag(t, events, "mindspec", "complete", "--spec")
+
+			// Bead was closed by mindspec complete
+			assertBeadsState(t, sandbox, epicAlpha, map[string]string{
+				beadAlpha: "closed",
+			})
+
+			// Bead branch was merged into spec branch
+			assertMergeTopology(t, sandbox, "spec/001-alpha")
+
+			// 002-beta epic should have no children (agent didn't touch it)
+			betaChildren, _ := sandbox.runBD("list", "--json", "--parent", epicBeta)
+			bc := strings.TrimSpace(betaChildren)
+			if bc != "" && bc != "[]" && bc != "null" {
+				t.Errorf("002-beta epic should have no children, got: %s", bc)
+			}
 		},
 	}
 }
@@ -1585,7 +1596,16 @@ If mindspec next fails, read the error message carefully and follow its instruct
 // mustRunGit runs a git command in the sandbox root, fataling on error.
 func mustRunGit(sandbox *Sandbox, args ...string) {
 	sandbox.t.Helper()
-	mustRun(sandbox.t, sandbox.Root, "git", args...)
+	// Setup commits bypass pre-commit guards (which block commits on spec/bead
+	// branches in certain modes). All mustRunGit calls are scenario setup, not
+	// agent behavior, so the escape hatch is appropriate.
+	cmd := exec.Command("git", args...)
+	cmd.Dir = sandbox.Root
+	cmd.Env = append(os.Environ(), "MINDSPEC_ALLOW_MAIN=1")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		sandbox.t.Fatalf("git %s failed: %v\n%s", strings.Join(args, " "), err, out)
+	}
 }
 
 // worktreePaths holds the paths returned by setupWorktrees.
