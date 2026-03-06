@@ -55,8 +55,8 @@ func (a *ClaudeCodeAgent) Run(ctx context.Context, sandbox *Sandbox, prompt stri
 	cmd.Dir = sandbox.Root
 
 	// Merge sandbox env (recording shims) with any extra opts.Env.
-	// Filter out CLAUDECODE to allow launching from within a Claude Code session.
-	env := filterEnv(sandbox.Env(), "CLAUDECODE")
+	// Filter out all Claude Code vars to allow launching a clean nested session.
+	env := filterEnvPrefix(sandbox.Env(), "CLAUDECODE=", "CLAUDE_CODE_")
 	env = append(env, opts.Env...)
 	cmd.Env = env
 
@@ -112,6 +112,25 @@ func filterEnv(env []string, keys ...string) []string {
 		skip := false
 		for _, k := range keys {
 			if strings.HasPrefix(e, k+"=") {
+				skip = true
+				break
+			}
+		}
+		if !skip {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// filterEnvPrefix removes environment variables whose name starts with any of
+// the given prefixes (e.g. "CLAUDE_CODE_" matches CLAUDE_CODE_SSE_PORT=...).
+func filterEnvPrefix(env []string, prefixes ...string) []string {
+	out := make([]string, 0, len(env))
+	for _, e := range env {
+		skip := false
+		for _, p := range prefixes {
+			if strings.HasPrefix(e, p) {
 				skip = true
 				break
 			}
