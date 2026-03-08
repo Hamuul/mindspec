@@ -24,9 +24,9 @@ type BeadInfo struct {
 
 // Package-level function variables for testability.
 var (
-	runBDFn    = bead.RunBD
+	runBDFn     = bead.RunBD
 	runBDCombFn = bead.RunBDCombined
-	listJSONFn = bead.ListJSON
+	listJSONFn  = bead.ListJSON
 )
 
 // QueryReady discovers ready work via global bd ready.
