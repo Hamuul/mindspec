@@ -9,7 +9,7 @@ import (
 
 	"github.com/mrmaxsteel/mindspec/internal/bead"
 	"github.com/mrmaxsteel/mindspec/internal/config"
-	"github.com/mrmaxsteel/mindspec/internal/gitops"
+	"github.com/mrmaxsteel/mindspec/internal/gitutil"
 	"github.com/mrmaxsteel/mindspec/internal/phase"
 	"github.com/mrmaxsteel/mindspec/internal/state"
 	"github.com/mrmaxsteel/mindspec/internal/workspace"
@@ -35,9 +35,9 @@ var (
 	worktreeList    = bead.WorktreeList
 	worktreeCreate  = bead.WorktreeCreate
 	loadConfigFn    = config.Load
-	createBranchFn  = gitops.CreateBranch
-	branchExistsFn  = gitops.BranchExists
-	ensureGitignore = gitops.EnsureGitignoreEntry
+	createBranchFn  = gitutil.CreateBranch
+	branchExistsFn  = gitutil.BranchExists
+	ensureGitignore = gitutil.EnsureGitignoreEntry
 )
 
 // QueryReady discovers ready work via global bd ready.

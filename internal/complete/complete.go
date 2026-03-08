@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/mrmaxsteel/mindspec/internal/bead"
-	"github.com/mrmaxsteel/mindspec/internal/gitops"
+	"github.com/mrmaxsteel/mindspec/internal/gitutil"
 	"github.com/mrmaxsteel/mindspec/internal/next"
 	"github.com/mrmaxsteel/mindspec/internal/phase"
 	"github.com/mrmaxsteel/mindspec/internal/recording"
@@ -27,9 +27,9 @@ var (
 	runBDFn             = bead.RunBD
 	listJSONFn          = bead.ListJSON
 	execCommandFn       = exec.Command
-	mergeIntoFn         = gitops.MergeInto
-	deleteBranchFn      = gitops.DeleteBranch
-	commitAllFn         = gitops.CommitAll
+	mergeIntoFn         = gitutil.MergeInto
+	deleteBranchFn      = gitutil.DeleteBranch
+	commitAllFn         = gitutil.CommitAll
 	resolveTargetFn     = resolve.ResolveTarget
 	resolveActiveBeadFn = next.ResolveActiveBead
 	findLocalRootFn     = defaultFindLocalRoot
@@ -364,7 +364,7 @@ func findRecentClosed(specID string) (string, error) {
 	// Return the first closed bead that still has a bead branch (unmerged).
 	for _, item := range items {
 		id := strings.TrimSpace(item.ID)
-		if id != "" && gitops.BranchExists("bead/"+id) {
+		if id != "" && gitutil.BranchExists("bead/"+id) {
 			return id, nil
 		}
 	}

@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/mrmaxsteel/mindspec/internal/bead"
-	"github.com/mrmaxsteel/mindspec/internal/gitops"
+	"github.com/mrmaxsteel/mindspec/internal/gitutil"
 	"github.com/mrmaxsteel/mindspec/internal/phase"
 	"github.com/mrmaxsteel/mindspec/internal/recording"
 	"github.com/mrmaxsteel/mindspec/internal/state"
@@ -21,18 +21,18 @@ import (
 var (
 	implRunBDCombinedFn = bead.RunBDCombined
 	implRunBDFn         = bead.RunBD
-	mergeBranchFn       = gitops.MergeBranch
-	deleteBranchFn      = gitops.DeleteBranch
+	mergeBranchFn       = gitutil.MergeBranch
+	deleteBranchFn      = gitutil.DeleteBranch
 	worktreeRemoveFn    = bead.WorktreeRemove
 	worktreeListFn      = bead.WorktreeList
-	hasRemoteFn         = gitops.HasRemote
-	pushBranchFn        = gitops.PushBranch
-	diffStatFn          = gitops.DiffStat
-	commitCountFn       = gitops.CommitCount
-	isAncestorFn        = gitops.IsAncestor
-	branchExistsFn      = gitops.BranchExists
+	hasRemoteFn         = gitutil.HasRemote
+	pushBranchFn        = gitutil.PushBranch
+	diffStatFn          = gitutil.DiffStat
+	commitCountFn       = gitutil.CommitCount
+	isAncestorFn        = gitutil.IsAncestor
+	branchExistsFn      = gitutil.BranchExists
 	findLocalRootFn     = defaultFindLocalRoot
-	commitAllFn         = gitops.CommitAll
+	commitAllFn         = gitutil.CommitAll
 )
 
 func defaultFindLocalRoot() (string, error) {

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/mrmaxsteel/mindspec/internal/bead"
-	"github.com/mrmaxsteel/mindspec/internal/gitops"
+	"github.com/mrmaxsteel/mindspec/internal/gitutil"
 	"github.com/mrmaxsteel/mindspec/internal/phase"
 	"github.com/mrmaxsteel/mindspec/internal/recording"
 	"github.com/mrmaxsteel/mindspec/internal/state"
@@ -97,7 +97,7 @@ func ApproveSpec(root, specID, approvedBy string) (*SpecResult, error) {
 	// Step 3c: Auto-commit approval changes so downstream branches see them.
 	specWtPath := state.SpecWorktreePath(root, specID)
 	commitMsg := fmt.Sprintf("chore: approve spec %s", specID)
-	if err := gitops.CommitAll(specWtPath, commitMsg); err != nil {
+	if err := gitutil.CommitAll(specWtPath, commitMsg); err != nil {
 		result.Warnings = append(result.Warnings, fmt.Sprintf("could not auto-commit spec approval: %v", err))
 	}
 
