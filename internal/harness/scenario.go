@@ -1725,7 +1725,7 @@ func assertCommandRan(t *testing.T, events []ActionEvent, command string, argSub
 
 // commandRanSuccessfully returns true if the command ran with exit code 0
 // and all argSubstr found in its args (non-asserting version of assertCommandRan).
-func commandRanSuccessfully(events []ActionEvent, command string, argSubstr ...string) bool {
+func commandRanSuccessfully(events []ActionEvent, command string, argSubstr ...string) bool { //nolint:unparam // command may vary in future scenarios
 	for _, e := range events {
 		if e.Command != command || e.ExitCode != 0 {
 			continue
@@ -1769,7 +1769,7 @@ func assertCommandRanEither(t *testing.T, events []ActionEvent, command string, 
 	t.Errorf("command %q was not found with exit code 0 for any expected arg patterns %v", command, patterns)
 }
 
-func assertCommandContains(t *testing.T, events []ActionEvent, command, substr string) {
+func assertCommandContains(t *testing.T, events []ActionEvent, command, substr string) { //nolint:unparam // command may vary in future scenarios
 	t.Helper()
 	for _, e := range events {
 		if e.Command != command {
