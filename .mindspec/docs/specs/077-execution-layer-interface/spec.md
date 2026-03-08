@@ -1,7 +1,7 @@
 ---
-status: Draft
-approved_at: ""
-approved_by: ""
+approved_at: "2026-03-08T18:35:30Z"
+approved_by: user
+status: Approved
 ---
 # Spec 077-execution-layer-interface: Separate Enforcement Layer from Execution Layer
 
@@ -22,8 +22,9 @@ Enforcement:  plan approve → populate epic with beads → HandoffEpic()
 Execution:    dispatch beads, manage workspaces, merge code
               (GitExecutor: mindspec next/complete — manual)
               (GastownExecutor: mail mayor → autonomous)
-              ─── enforcement re-engages ───
-Enforcement:  impl approve → verify all beads closed → FinalizeEpic()
+Execution:    finalize when all beads closed
+              (GitExecutor: requires human `impl approve` by default, configurable)
+              (GastownExecutor: auto-finalizes — convoy resolves, refinery merges)
 ```
 
 With `GastownExecutor`, the handoff is mail-based. `HandoffEpic()` sends a `task` message to the mayor with the epic ID, bead IDs, and suggestions (branch off `spec/<specID>`, adopt epic as convoy). The mayor dispatches on its own schedule. Mindspec doesn't call Gastown directly.
@@ -67,9 +68,9 @@ With `GitExecutor`, `HandoffEpic()` is a no-op. The user manually runs `mindspec
 
 ### Enforcement boundaries
 
-4. `plan approve` calls `HandoffEpic()` as its last step — the only executor call between plan approval and impl approval
+4. `plan approve` calls `HandoffEpic()` as its last step — enforcement's last action until finalization
 5. `mindspec next` and `mindspec complete` call `DispatchBead`/`CompleteBead` directly as CLI commands, not through enforcement
-6. `impl approve` calls `FinalizeEpic()` after verifying all beads are closed
+6. Finalization is an execution concern. `GitExecutor` requires an explicit `mindspec impl approve` by default (configurable via `auto_finalize: true`). `GastownExecutor` auto-finalizes when all beads close — no human gate needed since Gastown's refinery already runs quality gates
 
 ### Implementation
 
@@ -106,6 +107,8 @@ With `GitExecutor`, `HandoffEpic()` is a no-op. The user manually runs `mindspec
 - [ ] `internal/gitops/` renamed to `internal/gitutil/`, no `gitops` references remain
 - [ ] No enforcement package imports `internal/gitutil` directly
 - [ ] `plan approve` calls `HandoffEpic()`, enforcement does not call `DispatchBead`/`CompleteBead`
+- [ ] `mindspec impl approve` calls `FinalizeEpic()` as a CLI command (execution), not an enforcement gate
+- [ ] `GitExecutor` defaults to requiring `impl approve`; configurable via `auto_finalize`
 - [ ] A mock `Executor` can run enforcement logic without git operations
 - [ ] `go test ./...` passes with no behavioral changes
 
@@ -118,7 +121,7 @@ With `GitExecutor`, `HandoffEpic()` is a no-op. The user manually runs `mindspec
 
 ## Approval
 
-- **Status**: DRAFT
-- **Approved By**: -
-- **Approval Date**: -
-- **Notes**: Motivated by enterprise vision (`~/enterprise-knowledge/vision-enterprise-knowledge.md`). Enables Gastown adoption without replacing mindspec.
+- **Status**: APPROVED
+- **Approved By**: user
+- **Approval Date**: 2026-03-08
+- **Notes**: Approved via mindspec approve spec
