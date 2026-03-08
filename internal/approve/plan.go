@@ -250,7 +250,7 @@ func createImplementationBeads(planPath, specID, parentID string) ([]string, err
 			"--type", "task",
 			"--parent", parentID,
 			"--description", workChunk,
-			"--acceptance-criteria", acceptanceCriteria,
+			"--acceptance", acceptanceCriteria,
 			"--design", design,
 			"--metadata", metadataJSON,
 			"--json",
