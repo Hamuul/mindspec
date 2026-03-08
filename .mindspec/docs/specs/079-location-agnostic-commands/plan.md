@@ -3,14 +3,14 @@ adr_citations:
     - id: ADR-0023
       sections:
         - §3
-approved_at: "2026-03-08T23:30:50Z"
+approved_at: "2026-03-08T23:47:29Z"
 approved_by: user
 bead_ids:
-    - mindspec-83zn.1
-    - mindspec-83zn.2
-    - mindspec-83zn.3
-    - mindspec-83zn.4
-    - mindspec-83zn.5
+    - mindspec-83zn.6
+    - mindspec-83zn.7
+    - mindspec-83zn.8
+    - mindspec-83zn.9
+    - mindspec-83zn.10
 last_updated: "2026-03-08"
 spec_id: 079-location-agnostic-commands
 status: Approved
@@ -59,9 +59,14 @@ Bead 5: Domain docs — workflow/execution separation    ← depends on 3, 4
    - `ResolveSpecPrefix("077-execution-layer-interface")` → passthrough
    - `ResolveSpecPrefix("999")` → error (no match)
 
+**Acceptance Criteria**
+- [ ] `ResolveSpecPrefix("077")` returns the full spec ID matching prefix `077`
+- [ ] `ResolveSpecPrefix("077-execution-layer-interface")` passes through unchanged
+- [ ] `ResolveSpecPrefix("999")` returns an error when no spec matches
+- [ ] `ResolveTarget(root, "077")` resolves the prefix before returning
+
 **Verification**
-- [ ] `go test ./internal/resolve/` passes
-- [ ] `--spec=077` resolves correctly in integration
+- [ ] `go test ./internal/resolve/` passes with new prefix resolution tests in `target_test.go`
 
 **Depends on**: None
 
@@ -81,9 +86,12 @@ Bead 5: Domain docs — workflow/execution separation    ← depends on 3, 4
 
 3. Add test to `internal/executor/git_test.go`: verify `CompleteBead` calls worktree remove after chdir by mocking `WorktreeRemoveFn` to capture the CWD at invocation time and asserting it equals `g.Root`.
 
+**Acceptance Criteria**
+- [ ] `CompleteBead()` calls `WorktreeRemoveFn` with CWD at repo root, not inside the bead worktree
+- [ ] Bug mindspec-qh1w is closed
+
 **Verification**
-- [ ] `go test ./internal/executor/` passes
-- [ ] `mindspec complete` succeeds when CWD is inside the bead worktree
+- [ ] `go test ./internal/executor/` passes with a test in `git_test.go` verifying CWD during worktree removal
 
 **Depends on**: None
 
@@ -133,12 +141,15 @@ Bead 5: Domain docs — workflow/execution separation    ← depends on 3, 4
 
 5. **Update unmerged-bead guard message** (line 366): change recovery instruction from `--spec=<specID>` to `mindspec complete <bead-id>`.
 
+**Acceptance Criteria**
+- [ ] `mindspec next` succeeds when CWD is main repo root (with one active spec)
+- [ ] `mindspec next` with multiple active specs and no `--spec` emits a numbered list and exits non-zero
+- [ ] `mindspec next --spec=079` targets spec 079 even when CWD is inside a different spec worktree
+- [ ] Running from a bead worktree emits an informational note (not a hard error)
+
 **Verification**
 - [ ] `go build ./cmd/mindspec/` succeeds
-- [ ] `go test ./cmd/mindspec/` passes (if cmd tests exist)
-- [ ] `mindspec next` from main with one active spec: claims bead, creates worktree
-- [ ] `mindspec next` from main with multiple specs (no `--spec`): numbered list, exit 1
-- [ ] `mindspec next --spec=079` from inside a different spec worktree: targets 079
+- [ ] `go test ./cmd/mindspec/` passes (if cmd-level tests exist)
 
 **Depends on**: Bead 1
 
@@ -220,13 +231,16 @@ Bead 5: Domain docs — workflow/execution separation    ← depends on 3, 4
    ```
    Key fix: use `listJSONFn("--parent", epicID, "--status=open")` instead of `runBDFn("search", implPrefix, ...)` to check for remaining open beads. The search-by-title approach was fragile and didn't respect parent scoping.
 
+**Acceptance Criteria**
+- [ ] `mindspec complete <bead-id> "msg"` succeeds when CWD is main repo root
+- [ ] `mindspec complete <bead-id>` succeeds when CWD is inside the bead worktree being completed
+- [ ] `mindspec complete` with no positional arg errors with usage guidance
+- [ ] `mindspec complete <bead-id>` on a non-impl bead errors with phase guidance
+- [ ] After completing the last unblocked bead with blocked siblings, state advances to `plan` (not `implement`)
+- [ ] Bugs mindspec-qh1w and mindspec-tzh8 are closed
+
 **Verification**
-- [ ] `mindspec complete <bead-id> "msg"` from main: closes bead, merges, removes worktree
-- [ ] `mindspec complete <bead-id>` from inside bead worktree: succeeds
-- [ ] `mindspec complete` with no args: error with usage
-- [ ] `mindspec complete <bead-id>` on non-impl bead: error with guidance
-- [ ] Completing last unblocked bead with blocked siblings: advances to `plan`, not `implement`
-- [ ] `go test ./internal/complete/` passes
+- [ ] `go test ./internal/complete/` passes with updated tests for required bead ID, impl-only guard, and state advancement
 
 **Depends on**: Bead 1, Bead 2
 
@@ -256,11 +270,13 @@ Bead 5: Domain docs — workflow/execution separation    ← depends on 3, 4
 
 3. **Update AGENTS.md**: Add a section documenting the two-layer architecture and the import boundary rule (`approve/`, `complete/`, `next/` → `executor.Executor`, never `gitutil` directly).
 
+**Acceptance Criteria**
+- [ ] `execution` domain exists at `.mindspec/docs/domains/execution/` with `overview.md`, `architecture.md`, `interfaces.md`
+- [ ] `workflow` domain docs no longer claim ownership of worktree/git operations
+- [ ] AGENTS.md documents the workflow/execution layer boundary and the import rule
+
 **Verification**
-- [ ] `execution` domain has `overview.md`, `architecture.md`, `interfaces.md`
-- [ ] `workflow` domain docs updated, no references to owning worktree/git operations
-- [ ] AGENTS.md references the layer boundary
-- [ ] `go test ./internal/doctor/` passes (doctor validates domain docs)
+- [ ] `go test ./internal/doctor/` passes (doctor validates domain doc structure)
 
 **Depends on**: Bead 3, Bead 4 (docs should reflect final implementation)
 
