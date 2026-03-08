@@ -13,7 +13,7 @@ import (
 	"github.com/mrmaxsteel/mindspec/internal/adr"
 	"github.com/mrmaxsteel/mindspec/internal/bead"
 	"github.com/mrmaxsteel/mindspec/internal/contextpack"
-	"github.com/mrmaxsteel/mindspec/internal/gitops"
+	"github.com/mrmaxsteel/mindspec/internal/gitutil"
 	"github.com/mrmaxsteel/mindspec/internal/phase"
 	"github.com/mrmaxsteel/mindspec/internal/recording"
 	"github.com/mrmaxsteel/mindspec/internal/state"
@@ -111,7 +111,7 @@ func ApprovePlan(root, specID, approvedBy string) (*PlanResult, error) {
 	// worktrees that branch from spec/<id> contain the approved artifacts.
 	specWtPath := state.SpecWorktreePath(root, specID)
 	commitMsg := fmt.Sprintf("chore: approve plan for %s", specID)
-	if err := gitops.CommitAll(specWtPath, commitMsg); err != nil {
+	if err := gitutil.CommitAll(specWtPath, commitMsg); err != nil {
 		result.Warnings = append(result.Warnings, fmt.Sprintf("could not auto-commit plan approval: %v", err))
 	}
 

@@ -9,7 +9,7 @@ import (
 
 	"github.com/mrmaxsteel/mindspec/internal/bead"
 	"github.com/mrmaxsteel/mindspec/internal/config"
-	"github.com/mrmaxsteel/mindspec/internal/gitops"
+	"github.com/mrmaxsteel/mindspec/internal/gitutil"
 	"github.com/mrmaxsteel/mindspec/internal/hooks"
 	"github.com/mrmaxsteel/mindspec/internal/recording"
 	"github.com/mrmaxsteel/mindspec/internal/templates"
@@ -24,10 +24,10 @@ var (
 	runBDFn          = bead.RunBD
 	runBDCombined    = bead.RunBDCombined
 	loadConfigFn     = config.Load
-	createBranchFn   = gitops.CreateBranch
-	branchExistsFn   = gitops.BranchExists
+	createBranchFn   = gitutil.CreateBranch
+	branchExistsFn   = gitutil.BranchExists
 	worktreeCreateFn = bead.WorktreeCreate
-	ensureGitignore  = gitops.EnsureGitignoreEntry
+	ensureGitignore  = gitutil.EnsureGitignoreEntry
 )
 
 // Result holds the output of a spec-init operation.
@@ -113,7 +113,7 @@ func Run(root, specID, title string) (*Result, error) {
 	// --- Phase 3: Auto-commit spec files to the branch ---
 	// Note: Epic creation moved to `spec approve` per ADR-0023 (epic = approval gate).
 	commitMsg := fmt.Sprintf("chore: initialize spec %s", specID)
-	if err := gitops.CommitAll(wtPath, commitMsg); err != nil {
+	if err := gitutil.CommitAll(wtPath, commitMsg); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not auto-commit spec files: %v\n", err)
 	}
 

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/mrmaxsteel/mindspec/internal/bead"
-	"github.com/mrmaxsteel/mindspec/internal/gitops"
+	"github.com/mrmaxsteel/mindspec/internal/gitutil"
 	"github.com/mrmaxsteel/mindspec/internal/phase"
 	"github.com/mrmaxsteel/mindspec/internal/state"
 	"github.com/mrmaxsteel/mindspec/internal/workspace"
@@ -15,7 +15,7 @@ import (
 // Package-level function variables for testability.
 var (
 	worktreeRemoveFn = bead.WorktreeRemove
-	deleteBranchFn   = gitops.DeleteBranch
+	deleteBranchFn   = gitutil.DeleteBranch
 	findLocalRootFn  = defaultFindLocalRoot
 )
 
@@ -55,7 +55,7 @@ func Run(root, specID string, force bool) (*Result, error) {
 	}
 
 	// Check if branch still exists locally.
-	if !gitops.BranchExists(specBranch) {
+	if !gitutil.BranchExists(specBranch) {
 		fmt.Fprintf(os.Stderr, "Branch %s already deleted.\n", specBranch)
 	}
 
@@ -69,7 +69,7 @@ func Run(root, specID string, force bool) (*Result, error) {
 	}
 
 	// Delete branch (best-effort).
-	if gitops.BranchExists(specBranch) {
+	if gitutil.BranchExists(specBranch) {
 		if err := deleteBranchFn(specBranch); err != nil {
 			result.Warnings = append(result.Warnings, fmt.Sprintf("could not delete branch: %v", err))
 		} else {
@@ -90,7 +90,7 @@ func forceCleanup(result *Result, wtName, branch string) (*Result, error) {
 		result.WorktreeRemoved = true
 	}
 
-	if gitops.BranchExists(branch) {
+	if gitutil.BranchExists(branch) {
 		if err := deleteBranchFn(branch); err != nil {
 			result.Warnings = append(result.Warnings, fmt.Sprintf("could not delete branch: %v", err))
 		} else {
