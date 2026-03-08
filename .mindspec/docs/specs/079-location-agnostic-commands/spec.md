@@ -1,7 +1,7 @@
 ---
-status: Draft
-approved_at: ""
-approved_by: ""
+approved_at: "2026-03-08T22:17:46Z"
+approved_by: user
+status: Approved
 ---
 # Spec 079-location-agnostic-commands: Location Agnostic Commands
 
@@ -158,7 +158,7 @@ All of this runs via `withWorkingDir(root, ...)` — which is why `approve impl`
 
 ## Approval
 
-- **Status**: DRAFT
-- **Approved By**: -
-- **Approval Date**: -
-- **Notes**: -
+- **Status**: APPROVED
+- **Approved By**: user
+- **Approval Date**: 2026-03-08
+- **Notes**: Approved via mindspec approve spec
