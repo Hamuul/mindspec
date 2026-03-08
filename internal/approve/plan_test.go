@@ -441,10 +441,10 @@ None
 		}
 	}
 
-	// Verify --acceptance-criteria from spec
-	ac := findFlag("--acceptance-criteria")
+	// Verify --acceptance from spec
+	ac := findFlag("--acceptance")
 	if ac == "" {
-		t.Error("--acceptance-criteria flag not passed")
+		t.Error("--acceptance flag not passed")
 	} else {
 		if !strings.Contains(ac, "Widget frobs correctly") {
 			t.Error("acceptance criteria should contain spec AC")
