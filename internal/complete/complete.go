@@ -167,12 +167,8 @@ func FormatResult(r *Result) string {
 	}
 	switch r.NextMode {
 	case state.ModeImplement:
-		fmt.Fprintf(&sb, "Next bead: %s (mode: implement)\n", r.NextBead)
-		if r.WorktreeRemoved && r.SpecWorktree != "" {
-			fmt.Fprintf(&sb, "Run: `cd %s && mindspec next`\n", r.SpecWorktree)
-		} else {
-			sb.WriteString("Run `mindspec next` to claim and start.\n")
-		}
+		fmt.Fprintf(&sb, "Next bead ready: %s\n", r.NextBead)
+		fmt.Fprintf(&sb, "Mode: implement (spec: %s)\n", r.NextSpec)
 	case state.ModePlan:
 		fmt.Fprintf(&sb, "Remaining beads are blocked. Mode: plan (spec: %s)\n", r.NextSpec)
 		if r.WorktreeRemoved && r.SpecWorktree != "" {
