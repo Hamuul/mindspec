@@ -21,8 +21,10 @@ func TestValidatePlan_WellFormed(t *testing.T) {
 
 	// The plan is well-formed structurally — should not have structural errors
 	// Note: 005-next is an approved plan, so new Spec 039 checks are skipped
+	// Note: 005-next is a pre-080 plan without per-bead AC (grandfathered)
+	allowedErrors := map[string]bool{"bead-id-missing": true, "bead-acceptance-criteria": true}
 	for _, issue := range r.Issues {
-		if issue.Severity == SevError && issue.Name != "bead-id-missing" {
+		if issue.Severity == SevError && !allowedErrors[issue.Name] {
 			t.Errorf("unexpected structural error: [%s] %s: %s", issue.Severity, issue.Name, issue.Message)
 		}
 	}
