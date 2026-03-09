@@ -207,6 +207,11 @@ Unit tests in scenario_test.go validate all transitions via go test.
 - [ ] State transitions work correctly
 - [ ] Invalid transitions rejected
 
+**Acceptance Criteria**
+
+- [ ] Core state transitions function correctly
+- [ ] Invalid transitions are rejected
+
 **Depends on**
 
 None
@@ -224,6 +229,11 @@ None
 - [ ] `+"`go test ./internal/lifecycle/`"+` passes
 - [ ] Full lifecycle tested end-to-end
 - [ ] Edge cases covered
+
+**Acceptance Criteria**
+
+- [ ] End-to-end lifecycle works correctly
+- [ ] Edge cases are handled
 
 **Depends on**
 

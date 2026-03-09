@@ -389,9 +389,10 @@ func checkBeadSection(r *Result, bs BeadSection, isApproved bool) {
 		checkVerificationTestability(r, bs)
 	}
 
-	// Spec 078: warn on missing per-bead acceptance criteria
-	if bs.AcceptanceCriteria == "" && !isApproved {
-		r.AddWarning("bead-acceptance-criteria", fmt.Sprintf("%s: no per-bead acceptance criteria — each bead should have criteria scoped to its own work", bs.Heading))
+	// Spec 080: per-bead acceptance criteria is a structural requirement (error, not warning).
+	// Applies regardless of approval status — plans must always have per-bead AC.
+	if bs.AcceptanceCriteria == "" {
+		r.AddError("bead-acceptance-criteria", fmt.Sprintf("%s: missing per-bead acceptance criteria — each bead must have an **Acceptance Criteria** section", bs.Heading))
 	}
 
 	if !bs.HasDependsOn {
