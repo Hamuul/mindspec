@@ -2086,7 +2086,7 @@ func assertBeadsMinCount(t testing.TB, sandbox *Sandbox, epicID string, minCount
 // and asserts each matches the expected status. Uses per-bead queries instead
 // of `bd list --json --parent` which has a known bug where --json is ignored
 // when combined with --parent/--status filters.
-func assertBeadsState(t testing.TB, sandbox *Sandbox, epicID string, expectedStatuses map[string]string) {
+func assertBeadsState(t testing.TB, sandbox *Sandbox, _ string, expectedStatuses map[string]string) {
 	t.Helper()
 	for id, want := range expectedStatuses {
 		out, err := sandbox.runBD("show", id, "--json")
