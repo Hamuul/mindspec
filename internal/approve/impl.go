@@ -67,20 +67,11 @@ func ApproveImpl(root, specID string, exec executor.Executor, opts ...ImplOpts) 
 				result.Warnings = append(result.Warnings, fmt.Sprintf("could not close lifecycle epic %s: %v", epicID, err))
 			}
 		}
-		doneMetadata := `{"mindspec_done":true}`
-		if out, err := implRunBDFn("show", epicID, "--json"); err == nil {
-			var items []struct {
-				Metadata map[string]interface{} `json:"metadata"`
-			}
-			if json.Unmarshal(out, &items) == nil && len(items) > 0 && items[0].Metadata != nil {
-				merged := items[0].Metadata
-				merged["mindspec_done"] = true
-				if b, err := json.Marshal(merged); err == nil {
-					doneMetadata = string(b)
-				}
-			}
-		}
-		if _, err := implRunBDCombinedFn("update", epicID, "--metadata", doneMetadata); err != nil {
+		// Spec 080: write mindspec_phase: done + legacy mindspec_done: true
+		if err := bead.MergeMetadata(epicID, map[string]interface{}{
+			"mindspec_phase": "done",
+			"mindspec_done":  true,
+		}); err != nil {
 			result.Warnings = append(result.Warnings, fmt.Sprintf("could not set done marker on epic %s: %v", epicID, err))
 		}
 	}

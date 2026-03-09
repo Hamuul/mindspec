@@ -63,11 +63,16 @@ func ApproveSpec(root, specID, approvedBy string, exec executor.Executor) (*Spec
 		if existingEpicID != "" {
 			// Epic already exists — skip creation (idempotent).
 			result.Warnings = append(result.Warnings, fmt.Sprintf("lifecycle epic already exists: %s", existingEpicID))
+			// Spec 080: ensure mindspec_phase is set for existing epics
+			if err := bead.MergeMetadata(existingEpicID, map[string]interface{}{"mindspec_phase": "plan"}); err != nil {
+				result.Warnings = append(result.Warnings, fmt.Sprintf("could not write phase metadata: %v", err))
+			}
 		} else {
 			if err := phase.CheckSpecNumberCollision(specNum); err != nil {
 				return nil, fmt.Errorf("spec number collision: %w", err)
 			}
-			metadata := fmt.Sprintf(`{"spec_num":%d,"spec_title":"%s"}`, specNum, titleFromSpecID(specID))
+			// Spec 080: include mindspec_phase in initial epic metadata
+			metadata := fmt.Sprintf(`{"spec_num":%d,"spec_title":"%s","mindspec_phase":"plan"}`, specNum, titleFromSpecID(specID))
 			epicTitle := fmt.Sprintf("[SPEC %s] %s", specID, titleFromSpecID(specID))
 			out, epicErr := specRunBDFn("create", "--title", epicTitle, "--type=epic", "--metadata", metadata, "--json")
 			if epicErr != nil {

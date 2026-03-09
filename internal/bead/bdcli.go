@@ -206,6 +206,42 @@ func ListJSON(args ...string) ([]byte, error) {
 	return json.Marshal(results)
 }
 
+// MergeMetadata reads an issue's existing metadata, merges in the given key-value
+// pairs, and writes the merged metadata back. This is the standard pattern for
+// updating metadata without losing existing fields (Spec 080).
+func MergeMetadata(issueID string, updates map[string]interface{}) error {
+	merged := make(map[string]interface{})
+
+	// Read existing metadata
+	out, err := tracedOutput("show", []string{"show", issueID, "--json"})
+	if err == nil {
+		var items []struct {
+			Metadata map[string]interface{} `json:"metadata"`
+		}
+		if json.Unmarshal(out, &items) == nil && len(items) > 0 && items[0].Metadata != nil {
+			for k, v := range items[0].Metadata {
+				merged[k] = v
+			}
+		}
+	}
+
+	// Apply updates
+	for k, v := range updates {
+		merged[k] = v
+	}
+
+	metaJSON, err := json.Marshal(merged)
+	if err != nil {
+		return fmt.Errorf("marshaling metadata: %w", err)
+	}
+
+	_, err = tracedCombined("update", []string{"update", issueID, "--metadata", string(metaJSON)})
+	if err != nil {
+		return fmt.Errorf("bd update --metadata failed for %s: %w", issueID, err)
+	}
+	return nil
+}
+
 // tracedOutput runs a bd command via cmd.Output() with trace instrumentation.
 func tracedOutput(op string, args []string) ([]byte, error) {
 	start := time.Now()
