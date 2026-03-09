@@ -482,3 +482,234 @@ func TestResolveContextFromDir_BeadWorktree(t *testing.T) {
 		t.Errorf("expected bead ID mindspec-abc123, got %q", ctx.BeadID)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Spec 080: Metadata-first phase derivation
+// ---------------------------------------------------------------------------
+
+func TestDerivePhaseWithStatus_MetadataPresent(t *testing.T) {
+	// Epic with mindspec_phase metadata → returns stored phase directly
+	restoreList := SetListJSONForTest(func(args ...string) ([]byte, error) {
+		// queryChildren: return in_progress child (would derive "implement")
+		return []byte(`[{"id":"b1","title":"bead","status":"in_progress","issue_type":"task"}]`), nil
+	})
+	defer restoreList()
+	restore := SetRunBDForTest(func(args ...string) ([]byte, error) {
+		if args[0] == "show" {
+			// Stored phase says "plan" but children say "implement"
+			return []byte(`[{"id":"epic-1","title":"test","status":"open","issue_type":"epic","metadata":{"mindspec_phase":"plan","spec_num":1,"spec_title":"test"}}]`), nil
+		}
+		return []byte("[]"), nil
+	})
+	defer restore()
+
+	got, err := DerivePhaseWithStatus("epic-1", "open")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Stored phase wins over child-derived phase
+	if got != state.ModePlan {
+		t.Errorf("DerivePhaseWithStatus(metadata=plan) = %q, want %q", got, state.ModePlan)
+	}
+}
+
+func TestDerivePhaseWithStatus_MetadataAbsent_FallsBackToChildren(t *testing.T) {
+	// Epic without mindspec_phase → falls back to child-based derivation
+	restoreList := SetListJSONForTest(func(args ...string) ([]byte, error) {
+		return []byte(`[{"id":"b1","title":"bead","status":"in_progress","issue_type":"task"}]`), nil
+	})
+	defer restoreList()
+	restore := SetRunBDForTest(func(args ...string) ([]byte, error) {
+		if args[0] == "show" {
+			// No mindspec_phase in metadata
+			return []byte(`[{"id":"epic-1","title":"test","status":"open","issue_type":"epic","metadata":{"spec_num":1,"spec_title":"test"}}]`), nil
+		}
+		return []byte("[]"), nil
+	})
+	defer restore()
+
+	got, err := DerivePhaseWithStatus("epic-1", "open")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != state.ModeImplement {
+		t.Errorf("DerivePhaseWithStatus(no metadata) = %q, want %q", got, state.ModeImplement)
+	}
+}
+
+func TestDerivePhaseWithStatus_MetadataInvalid_FallsBackToChildren(t *testing.T) {
+	// Epic with invalid mindspec_phase → falls back to child-based derivation
+	restoreList := SetListJSONForTest(func(args ...string) ([]byte, error) {
+		return []byte(`[{"id":"b1","title":"bead","status":"open","issue_type":"task"}]`), nil
+	})
+	defer restoreList()
+	restore := SetRunBDForTest(func(args ...string) ([]byte, error) {
+		if args[0] == "show" {
+			return []byte(`[{"id":"epic-1","title":"test","status":"open","issue_type":"epic","metadata":{"mindspec_phase":"bogus"}}]`), nil
+		}
+		return []byte("[]"), nil
+	})
+	defer restore()
+
+	got, err := DerivePhaseWithStatus("epic-1", "open")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != state.ModePlan {
+		t.Errorf("DerivePhaseWithStatus(invalid metadata) = %q, want %q", got, state.ModePlan)
+	}
+}
+
+func TestDerivePhaseWithStatus_MetadataDone(t *testing.T) {
+	// Epic with mindspec_phase: done → returns done directly
+	restoreList := SetListJSONForTest(func(args ...string) ([]byte, error) {
+		return []byte(`[{"id":"b1","title":"bead","status":"closed","issue_type":"task"}]`), nil
+	})
+	defer restoreList()
+	restore := SetRunBDForTest(func(args ...string) ([]byte, error) {
+		if args[0] == "show" {
+			return []byte(`[{"id":"epic-1","title":"test","status":"closed","issue_type":"epic","metadata":{"mindspec_phase":"done","mindspec_done":true}}]`), nil
+		}
+		return []byte("[]"), nil
+	})
+	defer restore()
+
+	got, err := DerivePhaseWithStatus("epic-1", "closed")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != state.ModeDone {
+		t.Errorf("DerivePhaseWithStatus(metadata=done) = %q, want %q", got, state.ModeDone)
+	}
+}
+
+func TestHasDoneMarker_MindspecPhase(t *testing.T) {
+	// hasDoneMarker should recognize mindspec_phase: done (Spec 080)
+	restore := SetRunBDForTest(func(args ...string) ([]byte, error) {
+		return []byte(`[{"id":"epic-1","title":"test","status":"closed","issue_type":"epic","metadata":{"mindspec_phase":"done"}}]`), nil
+	})
+	defer restore()
+
+	if !hasDoneMarker("epic-1") {
+		t.Error("hasDoneMarker should return true for mindspec_phase=done")
+	}
+}
+
+func TestHasDoneMarker_LegacyMindspecDone(t *testing.T) {
+	// hasDoneMarker should still recognize legacy mindspec_done: true
+	restore := SetRunBDForTest(func(args ...string) ([]byte, error) {
+		return []byte(`[{"id":"epic-1","title":"test","status":"closed","issue_type":"epic","metadata":{"mindspec_done":true}}]`), nil
+	})
+	defer restore()
+
+	if !hasDoneMarker("epic-1") {
+		t.Error("hasDoneMarker should return true for legacy mindspec_done=true")
+	}
+}
+
+func TestHasDoneMarker_NoMarker(t *testing.T) {
+	restore := SetRunBDForTest(func(args ...string) ([]byte, error) {
+		return []byte(`[{"id":"epic-1","title":"test","status":"closed","issue_type":"epic","metadata":{}}]`), nil
+	})
+	defer restore()
+
+	if hasDoneMarker("epic-1") {
+		t.Error("hasDoneMarker should return false when no marker is set")
+	}
+}
+
+func TestExtractPhaseFromMetadata(t *testing.T) {
+	tests := []struct {
+		name string
+		epic EpicInfo
+		want string
+	}{
+		{
+			name: "valid phase in metadata",
+			epic: EpicInfo{Metadata: map[string]interface{}{"mindspec_phase": "implement"}},
+			want: "implement",
+		},
+		{
+			name: "no metadata",
+			epic: EpicInfo{},
+			want: "",
+		},
+		{
+			name: "no mindspec_phase key",
+			epic: EpicInfo{Metadata: map[string]interface{}{"spec_num": float64(1)}},
+			want: "",
+		},
+		{
+			name: "invalid phase value",
+			epic: EpicInfo{Metadata: map[string]interface{}{"mindspec_phase": "bogus"}},
+			want: "",
+		},
+		{
+			name: "non-string phase value",
+			epic: EpicInfo{Metadata: map[string]interface{}{"mindspec_phase": 42}},
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractPhaseFromMetadata(tt.epic)
+			if got != tt.want {
+				t.Errorf("extractPhaseFromMetadata() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDiscoverActiveSpecs_MetadataPhase(t *testing.T) {
+	// Epic with mindspec_phase metadata → uses it directly, skips child query
+	restore := SetListJSONForTest(func(args ...string) ([]byte, error) {
+		for _, a := range args {
+			if a == "--type=epic" {
+				return []byte(`[{"id":"epic-1","title":"[SPEC 001-test] Test","status":"open","issue_type":"epic","metadata":{"spec_num":1,"spec_title":"test","mindspec_phase":"implement"}}]`), nil
+			}
+		}
+		return []byte("[]"), nil
+	})
+	defer restore()
+	restoreRun := SetRunBDForTest(func(args ...string) ([]byte, error) {
+		return []byte("[]"), nil
+	})
+	defer restoreRun()
+
+	specs, err := DiscoverActiveSpecs()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(specs) != 1 {
+		t.Fatalf("expected 1 spec, got %d", len(specs))
+	}
+	if specs[0].Phase != state.ModeImplement {
+		t.Errorf("expected phase implement, got %q", specs[0].Phase)
+	}
+}
+
+func TestDiscoverActiveSpecs_MetadataDone_Excluded(t *testing.T) {
+	// Epic with mindspec_phase: done → excluded from active specs
+	restore := SetListJSONForTest(func(args ...string) ([]byte, error) {
+		for _, a := range args {
+			if a == "--type=epic" {
+				return []byte(`[{"id":"epic-1","title":"[SPEC 001-test] Test","status":"closed","issue_type":"epic","metadata":{"spec_num":1,"spec_title":"test","mindspec_phase":"done"}}]`), nil
+			}
+		}
+		return []byte("[]"), nil
+	})
+	defer restore()
+	restoreRun := SetRunBDForTest(func(args ...string) ([]byte, error) {
+		return []byte("[]"), nil
+	})
+	defer restoreRun()
+
+	specs, err := DiscoverActiveSpecs()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(specs) != 0 {
+		t.Errorf("expected 0 specs (done excluded), got %d", len(specs))
+	}
+}
