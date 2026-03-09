@@ -4,6 +4,7 @@ package phase
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -98,15 +99,27 @@ func DerivePhase(epicID string) (string, error) {
 
 // DerivePhaseWithStatus determines the lifecycle phase, using a pre-fetched epic status
 // if available (to avoid redundant queries). If epicStatus is empty, it is looked up.
+//
+// Spec 080: metadata-first approach. If the epic has a valid mindspec_phase in metadata,
+// that is returned directly. Child-based derivation runs as a consistency check; if it
+// disagrees, a warning is emitted to stderr but the stored phase is trusted.
 func DerivePhaseWithStatus(epicID, epicStatus string) (string, error) {
+	// Spec 080: check metadata-stored phase first (O(1)).
+	if storedPhase := readStoredPhase(epicID); storedPhase != "" {
+		// Run child-based derivation as consistency check.
+		childPhase := deriveFromChildrenOrStatus(epicID, epicStatus)
+		if childPhase != "" && childPhase != storedPhase {
+			fmt.Fprintf(os.Stderr, "warning: epic %s: stored phase %q disagrees with child-derived phase %q (trusting stored phase)\n",
+				epicID, storedPhase, childPhase)
+		}
+		return storedPhase, nil
+	}
+
+	// Fallback for pre-080 epics: derive from children/status (backward compat).
 	if epicStatus == "" {
 		epicStatus = queryEpicStatus(epicID)
 	}
 	if strings.EqualFold(epicStatus, "closed") {
-		// Check for explicit done marker set by impl approve.
-		// Without this marker, a closed epic means beads auto-closed it
-		// when the last child was closed (molecule completion). In that case,
-		// derive phase from children: all closed = review (pending impl approve).
 		if hasDoneMarker(epicID) {
 			return state.ModeDone, nil
 		}
@@ -115,6 +128,48 @@ func DerivePhaseWithStatus(epicID, epicStatus string) (string, error) {
 	}
 	children := queryChildren(epicID)
 	return DerivePhaseFromChildren(children), nil
+}
+
+// readStoredPhase reads the mindspec_phase metadata field from an epic.
+// Returns "" if the field is missing, empty, or not a valid mode.
+func readStoredPhase(epicID string) string {
+	out, err := runBDFn("show", epicID, "--json")
+	if err != nil {
+		return ""
+	}
+	var items []EpicInfo
+	if err := json.Unmarshal(out, &items); err != nil || len(items) == 0 {
+		return ""
+	}
+	if items[0].Metadata == nil {
+		return ""
+	}
+	raw, ok := items[0].Metadata["mindspec_phase"]
+	if !ok {
+		return ""
+	}
+	phase, ok := raw.(string)
+	if !ok || !state.IsValidMode(phase) {
+		return ""
+	}
+	return phase
+}
+
+// deriveFromChildrenOrStatus runs child-based phase derivation for consistency checking.
+// Returns the derived phase, or "" if derivation fails.
+func deriveFromChildrenOrStatus(epicID, epicStatus string) string {
+	if epicStatus == "" {
+		epicStatus = queryEpicStatus(epicID)
+	}
+	if strings.EqualFold(epicStatus, "closed") {
+		if hasDoneMarker(epicID) {
+			return state.ModeDone
+		}
+		children := queryChildren(epicID)
+		return DerivePhaseFromChildren(children)
+	}
+	children := queryChildren(epicID)
+	return DerivePhaseFromChildren(children)
 }
 
 // DerivePhaseFromChildren implements the pure logic of phase derivation.
@@ -170,7 +225,21 @@ func DiscoverActiveSpecs() ([]ActiveSpec, error) {
 
 		specID := SpecIDFromMetadata(specNum, specTitle)
 
-		// Query children once and reuse for both phase derivation and orphan check.
+		// Spec 080: check metadata-stored phase first.
+		if storedPhase := extractPhaseFromMetadata(epic); storedPhase != "" {
+			if storedPhase == state.ModeDone {
+				continue // spec lifecycle complete
+			}
+			active = append(active, ActiveSpec{
+				SpecID:  specID,
+				EpicID:  epic.ID,
+				Phase:   storedPhase,
+				SpecNum: specNum,
+			})
+			continue
+		}
+
+		// Fallback for pre-080 epics: derive from children.
 		children := queryChildren(epic.ID)
 
 		// Check done marker for closed epics before deriving phase.
@@ -309,9 +378,9 @@ func FindEpicBySpecID(specID string) (string, error) {
 
 // --- Internal helpers ---
 
-// hasDoneMarker checks if an epic has the mindspec_done metadata flag,
-// which is set by impl approve to distinguish explicitly finalized specs
-// from epics auto-closed by beads molecule completion.
+// hasDoneMarker checks if an epic has been explicitly finalized.
+// Checks both mindspec_phase: done (Spec 080) and legacy mindspec_done: true
+// for backward compatibility.
 func hasDoneMarker(epicID string) bool {
 	out, err := runBDFn("show", epicID, "--json")
 	if err != nil {
@@ -324,12 +393,36 @@ func hasDoneMarker(epicID string) bool {
 	if items[0].Metadata == nil {
 		return false
 	}
+	// Spec 080: check mindspec_phase: done
+	if phase, ok := items[0].Metadata["mindspec_phase"]; ok {
+		if s, ok := phase.(string); ok && s == state.ModeDone {
+			return true
+		}
+	}
+	// Legacy: check mindspec_done: true
 	done, ok := items[0].Metadata["mindspec_done"]
 	if !ok {
 		return false
 	}
 	b, ok := done.(bool)
 	return ok && b
+}
+
+// extractPhaseFromMetadata reads mindspec_phase from an already-loaded epic's metadata.
+// Returns "" if the field is missing or invalid.
+func extractPhaseFromMetadata(epic EpicInfo) string {
+	if epic.Metadata == nil {
+		return ""
+	}
+	raw, ok := epic.Metadata["mindspec_phase"]
+	if !ok {
+		return ""
+	}
+	phase, ok := raw.(string)
+	if !ok || !state.IsValidMode(phase) {
+		return ""
+	}
+	return phase
 }
 
 func queryEpics() ([]EpicInfo, error) {

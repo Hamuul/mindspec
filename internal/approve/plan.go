@@ -107,6 +107,13 @@ func ApprovePlan(root, specID, approvedBy string, exec executor.Executor) (*Plan
 		result.Warnings = append(result.Warnings, "no epic found for spec via beads metadata; skipping bead auto-creation")
 	}
 
+	// Step 3c (Spec 080): Write mindspec_phase: implement to epic metadata.
+	if parentID != "" {
+		if err := bead.MergeMetadata(parentID, map[string]interface{}{"mindspec_phase": "implement"}); err != nil {
+			result.Warnings = append(result.Warnings, fmt.Sprintf("could not write phase metadata: %v", err))
+		}
+	}
+
 	// Step 4: Auto-commit plan approval + bead_ids so implementation
 	// worktrees that branch from spec/<id> contain the approved artifacts.
 	specWtPath := state.SpecWorktreePath(root, specID)
