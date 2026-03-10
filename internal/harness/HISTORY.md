@@ -885,3 +885,17 @@ Haiku in `claude -p` mode tends to be conversational unless strongly directed. R
 ### Worktree CWD Sensitivity (RESOLVED — 2026-03-02)
 **Problem**: Running `git worktree add` from inside an existing worktree can create the new worktree relative to CWD, causing recursive `.worktrees/.../.worktrees/...` nesting and cleanup leakage.
 **Status (2026-03-02)**: Fixed in `internal/next/beads.go`: `mindspec next` now anchors worktree creation to the spec worktree (when active) or main root, independent of caller CWD. Added deterministic unit coverage in `internal/next/next_test.go` and validated with LLM reruns (`SpecToIdle` pass, `CompleteFromSpecWorktree` regression check pass).
+
+### TestLLM_StopAfterComplete (NEW — Spec 081)
+
+| Date | Result | Events | Turns | Time | Model | Change |
+|------|--------|--------|-------|------|-------|--------|
+| 2026-03-10 | FAIL | ~1500 | 40 | ~8m | Haiku | Baseline: Haiku ran `mindspec next` after completing bead (SOP violation). Also closed bead-2 instead of bead-1. |
+| 2026-03-10 | FAIL | ~3500 | 40 | ~8m | Opus | Switched to Opus. Agent still ran `mindspec next` after `mindspec complete`. Issue: `mindspec complete` failed (exit=1) on some beads, agent never saw STOP output. Also, assertion was too broad (caught pre-completion `mindspec next`). |
+| 2026-03-10 | **PASS** | 1671 | 19 | 4m35s | Opus | Fixed temporal assertion (only flag `mindspec next` after first bead closure), strengthened CLI STOP message ("STOP HERE. Do NOT run `mindspec next`..."), removed ambiguous "/clear then mindspec next" hint. 94.7% fwd ratio. |
+
+### TestLLM_StopDoesNotBlockApproveImpl (NEW — Spec 081)
+
+| Date | Result | Events | Turns | Time | Model | Change |
+|------|--------|--------|-------|------|-------|--------|
+| 2026-03-10 | **PASS** | 1871 | 23 | 5m2s | Opus | Baseline: agent completed bead, then correctly continued to `approve impl` (not blocked by STOP instruction). 95.7% fwd ratio. |
