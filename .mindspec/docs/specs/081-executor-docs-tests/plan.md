@@ -151,18 +151,26 @@ Review all 18 scenarios for correctness. Document findings in HISTORY.md. Fix an
 5. Write "Test Audit (Spec 081)" section in `internal/harness/HISTORY.md` with per-scenario findings
 6. Fix any broken test expectations
 7. Run `TestLLM_SingleBead` as smoke test
+8. **Create stop-behavior LLM test scenarios** — new tests that verify:
+   - After `mindspec approve plan`, agent STOPS (does not auto-implement or write code)
+   - After `mindspec complete`, agent STOPS (does not auto-claim or run `mindspec next`)
+   - Agent uses `mindspec next` to create bead worktree (not working on spec branch directly)
+   These tests are expected to **fail before Bead 5** (which fixes the guidance). Run them to establish the baseline, document failures in HISTORY.md. Bead 5 re-runs them as verification.
 
 **Acceptance Criteria**
 
 - [ ] HISTORY.md contains "Test Audit (Spec 081)" section with findings for all 18 scenarios
 - [ ] Any outdated test expectations fixed
 - [ ] `TestLLM_SingleBead` smoke test passes
+- [ ] Stop-behavior test scenarios created (`TestLLM_StopAfterPlanApprove`, `TestLLM_StopAfterComplete`)
+- [ ] Baseline results documented in HISTORY.md (expected failures before Bead 5)
 
 **Verification**
 
 - [ ] HISTORY.md contains "Test Audit (Spec 081)" section covering all 18 scenarios
 - [ ] Any outdated expectations fixed (if found)
 - [ ] `env -u CLAUDECODE go test ./internal/harness/ -v -run TestLLM_SingleBead -timeout 10m` → passes
+- [ ] Stop-behavior tests exist and run (failures expected — baseline captured)
 
 **Depends on**
 
@@ -187,6 +195,7 @@ Fix observed failure: agent auto-proceeded after plan approval and worked on the
 - [ ] `mindspec complete` output includes STOP instruction when next bead is ready
 - [ ] `--no-next` flag removed from `approve.go`
 - [ ] `make build` succeeds and `go test ./cmd/mindspec/... -v` passes
+- [ ] Stop-behavior LLM tests pass (created in Bead 4, expected to fail before this bead)
 
 **Verification**
 
@@ -196,10 +205,12 @@ Fix observed failure: agent auto-proceeded after plan approval and worked on the
 - [ ] `go test ./cmd/mindspec/... -v` → all pass
 - [ ] `go vet ./...` → clean
 - [ ] Manual review: `./bin/mindspec approve plan --help` no longer shows `--no-next`
+- [ ] `env -u CLAUDECODE go test ./internal/harness/ -v -run TestLLM_StopAfterPlanApprove -timeout 10m` → passes
+- [ ] `env -u CLAUDECODE go test ./internal/harness/ -v -run TestLLM_StopAfterComplete -timeout 10m` → passes
 
 **Depends on**
 
-None (independent of renames)
+Bead 4 (stop-behavior tests must exist before this bead fixes the guidance)
 
 ## Provenance
 
@@ -219,4 +230,6 @@ None (independent of renames)
 | Plan approve output has emphatic STOP | Bead 5 verification |
 | `mindspec complete` output has STOP for next bead | Bead 5 verification |
 | Dead `--no-next` flag removed | Bead 5 verification |
+| Stop-behavior tests created (baseline) | Bead 4 verification |
+| Stop-behavior tests pass (after fix) | Bead 5 verification |
 | `next`/`complete` classified as execution layer | Bead 3 verification |
