@@ -78,6 +78,24 @@ Spec 077 introduced the Executor interface separating workflow enforcement from 
 4. Update `.mindspec/docs/domains/workflow/` docs to describe the workflow layer's responsibility for plan quality
 5. Reference the decomposition research (arXiv:2512.08296) where appropriate
 
+### R4: Harden phase-transition stop behavior
+
+Observed failure mode: after `mindspec approve plan`, the agent auto-proceeded to implement bead 1 on the spec branch instead of stopping, running `/clear`, and using `mindspec next` to create a proper bead worktree. Two root causes:
+
+1. **`plan.md` instruct template is outdated** — still says "This will approve the plan AND automatically claim the first bead" (false since Spec 080)
+2. **Plan approve output is not emphatic enough** — agent ignored the "Run /clear" guidance
+3. **`mindspec complete` output says "Next bead ready: X"** which implicitly invites continuation
+
+Fixes:
+
+1. **Fix `plan.md` template** — remove the "auto-claim" lie. Clearly state: after plan approval, STOP. Run `/clear` or start a fresh agent, then `mindspec next`.
+2. **Strengthen plan approve CLI output** — make the STOP instruction unmissable. Use a clear separator/banner.
+3. **Strengthen `mindspec complete` CLI output** — after reporting "Next bead ready", add explicit STOP instruction: "Run `/clear`, then `mindspec next` to claim it."
+4. **Remove dead `--no-next` flag** from `approve.go` — it's unused and misleading.
+5. **Classify `mindspec next` and `mindspec complete` as execution layer commands** in documentation — they create/destroy worktrees and manage branch topology, which is execution, not workflow.
+
+Note: `mindspec next` already correctly branches from the spec branch via `exec.DispatchBead(beadID, specID)`. No new `--base-branch` parameter needed — the specID already determines the base. The problem was the agent skipping `mindspec next` entirely.
+
 ### R3: LLM test scenario audit
 
 Review all 18 scenarios in `internal/harness/scenario.go` and `scenario_test.go`:
@@ -110,6 +128,11 @@ Review all 18 scenarios in `internal/harness/scenario.go` and `scenario_test.go`
 - `internal/harness/scenario.go` — test scenario review and fixes
 - `internal/harness/scenario_test.go` — test function review and fixes
 - `internal/harness/HISTORY.md` — test audit findings
+- `internal/instruct/templates/plan.md` — fix outdated auto-claim guidance
+- `internal/instruct/templates/implement.md` — strengthen STOP after complete
+- `cmd/mindspec/plan_cmd.go` — strengthen plan approve output
+- `cmd/mindspec/complete.go` or `internal/complete/complete.go` — strengthen complete output
+- `cmd/mindspec/approve.go` — remove dead `--no-next` flag
 - Auto-memory files referencing old naming
 
 ### Out of Scope
@@ -145,6 +168,11 @@ Review all 18 scenarios in `internal/harness/scenario.go` and `scenario_test.go`
 - [ ] All 18 LLM test scenarios reviewed — findings documented in HISTORY.md
 - [ ] Any outdated test expectations fixed
 - [ ] `go test ./internal/harness/ -run TestLLM_SingleBead -timeout 10m` passes (smoke test)
+- [ ] `plan.md` template no longer claims auto-claim behavior
+- [ ] Plan approve output includes emphatic STOP + `/clear` + `mindspec next` instructions
+- [ ] `mindspec complete` output includes STOP + `/clear` instruction when next bead is ready
+- [ ] Dead `--no-next` flag removed from `approve.go`
+- [ ] Documentation classifies `mindspec next` and `mindspec complete` as execution layer commands
 
 ## Validation Proofs
 

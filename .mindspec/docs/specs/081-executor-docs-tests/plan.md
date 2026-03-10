@@ -6,6 +6,7 @@ bead_ids:
     - mindspec-4ya5.2
     - mindspec-4ya5.3
     - mindspec-4ya5.4
+    - mindspec-qszb
 last_updated: "2026-03-10"
 spec_id: 081-executor-docs-tests
 status: Approved
@@ -23,6 +24,7 @@ version: 1
 - Beads 1-2 (renames): `make build` + `go test ./...` + `go vet ./...` catch all breakage
 - Bead 3 (docs): Grep-based validation proofs confirm no stale terminology
 - Bead 4 (test audit): Run `TestLLM_SingleBead` as smoke test; document all 18 scenario findings
+- Bead 5 (stop behavior): Fix instruct templates + CLI output to prevent agent auto-proceeding
 
 ## Bead 1: Rename GitExecutor → MindspecExecutor + purge gitops
 
@@ -109,7 +111,9 @@ Rewrite documentation to clearly articulate the two-layer architecture and refle
 
 6. **`.mindspec/docs/domains/workflow/architecture.md`**: Add plan quality responsibility section — workflow layer ensures beads are well-decomposed, reviewed, have clear acceptance criteria before handoff to execution engine
 
-7. **Auto-memory** (`MEMORY.md`): Update `GitExecutor` → `MindspecExecutor`, `specinit` → `spec`
+7. **Classify `mindspec next` and `mindspec complete` as execution layer commands** in AGENTS.md and domain docs — they create/destroy worktrees and manage branch topology, which is execution concern. The workflow layer (approve commands) decides *when* transitions happen; the execution layer (next/complete) performs them.
+
+8. **Auto-memory** (`MEMORY.md`): Update `GitExecutor` → `MindspecExecutor`, `specinit` → `spec`
 
 **Acceptance Criteria**
 
@@ -164,6 +168,39 @@ Review all 18 scenarios for correctness. Document findings in HISTORY.md. Fix an
 
 Beads 1-2 (code references in scenarios should use new names if applicable)
 
+## Bead 5: Harden phase-transition stop behavior
+
+Fix observed failure: agent auto-proceeded after plan approval and worked on the spec branch instead of using `mindspec next` to create a bead worktree. Root causes: outdated instruct template, insufficiently emphatic CLI output.
+
+**Steps**
+
+1. **Fix `internal/instruct/templates/plan.md`**: Remove false claim "This will approve the plan AND automatically claim the first bead." Replace with clear guidance: after plan approval, STOP, run `/clear`, then `mindspec next`.
+2. **Strengthen plan approve output in `cmd/mindspec/plan_cmd.go`**: Make STOP instruction unmissable with clear separator (e.g., `⛔ STOP` or `---` banner). Emphasize: do NOT proceed, run `/clear` first, then `mindspec next`.
+3. **Strengthen `mindspec complete` output in `internal/complete/complete.go` `FormatResult()`**: When reporting "Next bead ready: X", append explicit instruction: "STOP. Run `/clear`, then `mindspec next` to claim it."
+4. **Remove dead `--no-next` flag** from `cmd/mindspec/approve.go`.
+5. **Update `implement.md` template** if needed — verify STOP guidance is clear and consistent with the CLI output changes.
+
+**Acceptance Criteria**
+
+- [ ] `plan.md` template no longer says "automatically claim the first bead"
+- [ ] Plan approve output includes emphatic STOP + `/clear` + `mindspec next` instructions
+- [ ] `mindspec complete` output includes STOP instruction when next bead is ready
+- [ ] `--no-next` flag removed from `approve.go`
+- [ ] `make build` succeeds and `go test ./cmd/mindspec/... -v` passes
+
+**Verification**
+
+- [ ] `grep "auto.*claim" internal/instruct/templates/plan.md` → zero hits
+- [ ] `grep "no-next" cmd/mindspec/approve.go` → zero hits
+- [ ] `make build` → exit 0
+- [ ] `go test ./cmd/mindspec/... -v` → all pass
+- [ ] `go vet ./...` → clean
+- [ ] Manual review: `./bin/mindspec approve plan --help` no longer shows `--no-next`
+
+**Depends on**
+
+None (independent of renames)
+
 ## Provenance
 
 | Acceptance Criterion | Verified By |
@@ -178,3 +215,8 @@ Beads 1-2 (code references in scenarios should use new names if applicable)
 | 18 LLM test scenarios reviewed in HISTORY.md | Bead 4 verification |
 | Outdated test expectations fixed | Bead 4 verification |
 | SingleBead smoke test passes | Bead 4 verification |
+| `plan.md` template no longer claims auto-claim | Bead 5 verification |
+| Plan approve output has emphatic STOP | Bead 5 verification |
+| `mindspec complete` output has STOP for next bead | Bead 5 verification |
+| Dead `--no-next` flag removed | Bead 5 verification |
+| `next`/`complete` classified as execution layer | Bead 3 verification |
