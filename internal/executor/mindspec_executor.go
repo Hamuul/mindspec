@@ -230,6 +230,15 @@ func (g *MindspecExecutor) CompleteBead(beadID, specBranch, msg string) error {
 		}
 	}
 
+	// Safety check: verify bead branch is merged into spec branch before cleanup.
+	// This prevents data loss if the merge above failed silently.
+	if g.BranchExistsFn(beadBranch) {
+		isAnc, ancErr := g.IsAncestorFn(g.Root, beadBranch, specBranch)
+		if ancErr != nil || !isAnc {
+			return fmt.Errorf("bead branch %s is NOT merged into %s — aborting cleanup to prevent data loss", beadBranch, specBranch)
+		}
+	}
+
 	// Remove worktree and delete branch from repo root (not from inside the
 	// worktree being removed). Matches the pattern in FinalizeEpic().
 	if err := withWorkingDir(g.Root, func() error {
