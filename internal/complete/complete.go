@@ -18,14 +18,14 @@ import (
 
 // Package-level function variables for testability.
 var (
-	closeBeadFn        = bead.Close
-	worktreeListFn     = bead.WorktreeList
-	runBDFn            = bead.RunBD
-	listJSONFn         = bead.ListJSON
-	resolveTargetFn    = resolve.ResolveTarget
-	findLocalRootFn    = defaultFindLocalRoot
-	fetchBeadByIDFn    = next.FetchBeadByID
-	findEpicForBeadFn  = phase.FindEpicForBead
+	closeBeadFn       = bead.Close
+	worktreeListFn    = bead.WorktreeList
+	runBDFn           = bead.RunBD
+	listJSONFn        = bead.ListJSON
+	resolveTargetFn   = resolve.ResolveTarget
+	findLocalRootFn   = defaultFindLocalRoot
+	fetchBeadByIDFn   = next.FetchBeadByID
+	findEpicForBeadFn = phase.FindEpicForBead
 )
 
 // Result summarizes what mindspec complete did.
