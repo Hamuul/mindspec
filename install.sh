@@ -101,7 +101,7 @@ detect_arch() {
 # Get latest release version from GitHub
 get_latest_version() {
     if command -v curl >/dev/null 2>&1; then
-        curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | \
+        curl --proto '=https' --tlsv1.2 -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | \
             grep '"tag_name":' | \
             sed 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/'
     elif command -v wget >/dev/null 2>&1; then
@@ -119,7 +119,7 @@ download() {
     output="$2"
     
     if command -v curl >/dev/null 2>&1; then
-        curl -fsSL -o "$output" "$url"
+        curl --proto '=https' --tlsv1.2 -fsSL -o "$output" "$url"
     elif command -v wget >/dev/null 2>&1; then
         wget -q -O "$output" "$url"
     else
@@ -282,10 +282,10 @@ Got:      $ACTUAL_CHECKSUM"
         info "IMPORTANT: MindSpec requires additional dependencies:"
         echo ""
         echo "  1. Beads (issue tracker):"
-        echo "     curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash"
+        echo "     curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash"
         echo ""
         echo "  2. Dolt (database for Beads):"
-        echo "     sudo bash -c 'curl -L https://github.com/dolthub/dolt/releases/latest/download/install.sh | bash'"
+        echo "     sudo bash -c \"curl --proto '=https' --tlsv1.2 -L https://github.com/dolthub/dolt/releases/latest/download/install.sh | bash\""
         echo ""
         echo "  Verify installation with: bd --version && dolt version"
         echo ""

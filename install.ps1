@@ -23,6 +23,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Enforce TLS 1.2 minimum - equivalent to curl --tlsv1.2
+# Prevents downgrade attacks on older .NET/PowerShell versions
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+
 # Configuration
 $Repo = "mrmaxsteel/mindspec"
 $BinaryName = "mindspec.exe"
@@ -82,7 +86,22 @@ function Write-Error {
     exit 1
 }
 
-function Get-Architecture {
+function Invoke-SecureRequest {
+    param(
+        [string]$Uri,
+        [string]$OutFile = $null
+    )
+    # Enforce HTTPS-only - equivalent to curl --proto '=https'
+    if ($Uri -notmatch '^https://') {
+        Write-Error "Refusing non-HTTPS URL: $Uri"
+    }
+    if ($OutFile) {
+        Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing -MaximumRedirection 5
+    }
+    else {
+        Invoke-RestMethod -Uri $Uri -UseBasicParsing -MaximumRedirection 5
+    }
+}
     $arch = $env:PROCESSOR_ARCHITECTURE
     switch ($arch) {
         "AMD64" { return "amd64" }
@@ -94,7 +113,7 @@ function Get-Architecture {
 function Get-LatestVersion {
     try {
         $apiUrl = "https://api.github.com/repos/$Repo/releases/latest"
-        $response = Invoke-RestMethod -Uri $apiUrl -UseBasicParsing
+        $response = Invoke-SecureRequest -Uri $apiUrl
         return $response.tag_name
     }
     catch {
@@ -218,7 +237,7 @@ function Install-MindSpec {
         Write-Info "Downloading $archiveName..."
         
         try {
-            Invoke-WebRequest -Uri $downloadUrl -OutFile $archivePath -UseBasicParsing
+            Invoke-SecureRequest -Uri $downloadUrl -OutFile $archivePath
         }
         catch {
             Write-Error "Failed to download: $_"
@@ -230,7 +249,7 @@ function Install-MindSpec {
         $checksumPath = Join-Path $tempDir "checksums.txt"
         
         try {
-            Invoke-WebRequest -Uri $checksumUrl -OutFile $checksumPath -UseBasicParsing
+            Invoke-SecureRequest -Uri $checksumUrl -OutFile $checksumPath
             
             # Extract expected checksum for our archive
             $checksumContent = Get-Content $checksumPath
