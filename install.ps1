@@ -289,6 +289,18 @@ function Install-MindSpec {
             Write-Info "Run 'mindspec --help' to get started"
             Write-Log "Installation completed successfully: version $Version"
             
+            Write-Host ""
+            Write-Info "IMPORTANT: MindSpec requires additional dependencies:"
+            Write-Host ""
+            Write-Host "  1. Beads (issue tracker):"
+            Write-Host "     irm https://raw.githubusercontent.com/steveyegge/beads/main/install.ps1 | iex"
+            Write-Host ""
+            Write-Host "  2. Dolt (database for Beads):"
+            Write-Host "     Download and install: https://github.com/dolthub/dolt/releases/latest/download/dolt-windows-amd64.msi"
+            Write-Host ""
+            Write-Host "  Verify installation with: bd --version; dolt version"
+            Write-Host ""
+            
             if (-not $pathUpdated) {
                 Write-Info "Installation directory already in PATH"
             }
